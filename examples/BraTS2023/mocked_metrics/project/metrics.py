@@ -3,6 +3,7 @@ import numpy as np
 import yaml
 import os
 import SimpleITK as sitk
+import json
 
 
 def check_image_dims(path):
@@ -37,20 +38,17 @@ def check_for_segmentation(labels, predictions):
 def check_for_synthesis(labels, predictions, parameters):
     modalities = parameters["segmentation_modalities"]
     original_data_in_labels = parameters["original_data_in_labels"]
-
+    missing_modality_json = parameters["missing_modality_json"]
+    missing_modality_dict = json.load(open(os.path.join(labels, missing_modality_json)))
     folder_id_len = len("xxxxx-xxx")
-    modality_len = len("MMM.nii.gz")
-    ext_len = len(".nii.gz")
 
     expected_pred_ids = []
     for folder in os.listdir(os.path.join(labels, original_data_in_labels)):
         folder_id = folder[-folder_id_len:]
         folder = os.path.join(labels, original_data_in_labels, folder)
-
-        existing_modalities = [
-            file[-modality_len:-ext_len] for file in os.listdir(folder)
+        missing_modality = missing_modality_dict[
+            os.path.basename(os.path.normpath(folder))
         ]
-        missing_modality = list(set(modalities).difference(existing_modalities))[0]
 
         expected_pred_ids.append(f"{folder_id}-{missing_modality}.nii.gz")
 
