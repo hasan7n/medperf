@@ -139,7 +139,7 @@ def create_test_dataset(
     dataset = data_creation.dataset
 
     # prepare/check dataset
-    DataCreation.run(dataset.generated_uid)
+    DataPreparation.run(dataset.generated_uid)
 
     # update dataset generated_uid
     old_path = dataset.path
