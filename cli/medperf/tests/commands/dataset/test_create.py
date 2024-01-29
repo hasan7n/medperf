@@ -155,13 +155,13 @@ class TestWithDefaultUID:
             side_effect=lambda id: MockCube(True, id),
         )
         run_prepare_spy = mocker.patch(
-            PATCH_DATAPREP.format("DataPreparation.run_prepare")
+            PATCH_DATAPREP.format("DataCreation.run_prepare")
         )
         run_sanity_check_spy = mocker.patch(
-            PATCH_DATAPREP.format("DataPreparation.run_sanity_check")
+            PATCH_DATAPREP.format("DataCreation.run_sanity_check")
         )
         run_statistics_spy = mocker.patch(
-            PATCH_DATAPREP.format("DataPreparation.run_statistics")
+            PATCH_DATAPREP.format("DataCreation.run_statistics")
         )
         get_stat_spy = mocker.patch(
             PATCH_DATAPREP.format("DataPreparation.get_statistics"),
@@ -177,7 +177,7 @@ class TestWithDefaultUID:
         )
 
         # Act
-        DataPreparation.run("", "", "", "")
+        DataCreation.run("", "", "", "")
 
         # Assert
         validate_spy.assert_called_once()
@@ -315,9 +315,9 @@ def test_run_returns_generated_uid(mocker, comms, ui, uid):
         cls.generated_uid = uid
 
     mocker.patch(PATCH_DATAPREP.format("DataPreparation.validate"))
-    mocker.patch(PATCH_DATAPREP.format("DataPreparation.run_prepare"))
-    mocker.patch(PATCH_DATAPREP.format("DataPreparation.run_sanity_check"))
-    mocker.patch(PATCH_DATAPREP.format("DataPreparation.run_statistics"))
+    mocker.patch(PATCH_DATAPREP.format("DataCreation.run_prepare"))
+    mocker.patch(PATCH_DATAPREP.format("DataCreation.run_sanity_check"))
+    mocker.patch(PATCH_DATAPREP.format("DataCreation.run_statistics"))
     mocker.patch(
         PATCH_DATAPREP.format("DataPreparation.get_statistics"),
     )
@@ -338,7 +338,7 @@ def test_run_returns_generated_uid(mocker, comms, ui, uid):
     )
 
     # Act
-    returned_uid = DataPreparation.run("", 1, "", "")
+    returned_uid = DataCreation.run("", 1, "", "")
 
     # Assert
     assert returned_uid == uid

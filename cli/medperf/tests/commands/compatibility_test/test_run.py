@@ -252,7 +252,7 @@ class TestPrepareDataset:
         mocker.patch(PATCH_RUN.format("Dataset.get"))
         self.new_data_uid = "new prepared data uid"
         self.prepare_spy = mocker.patch(
-            PATCH_RUN.format("DataPreparation.run"), return_value=self.new_data_uid
+            PATCH_RUN.format("DataCreation.run"), return_value=self.new_data_uid
         )
 
     def test_data_preparation_is_not_run_when_prepared_data_is_provided(self):
