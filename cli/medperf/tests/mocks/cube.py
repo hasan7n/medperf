@@ -15,7 +15,7 @@ class MockCube:
     def valid(self):
         return self.is_valid
 
-    def run(self):
+    def run(self, *args, **kwargs):
         pass
 
     def get_default_output(self, *args, **kwargs):
