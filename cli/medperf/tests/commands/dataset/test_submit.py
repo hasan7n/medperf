@@ -1,6 +1,6 @@
 import os
 import medperf.config as config
-from medperf.exceptions import InvalidArgumentError
+from medperf.exceptions import InvalidArgumentError, CleanExit
 import pytest
 from unittest.mock import call
 
@@ -131,70 +131,12 @@ class TestWithDefaultUID:
         else:
             preparation.validate()
 
-    def test_todict_calls_get_stats_sets_statistics(self, mocker, preparation, fs):
-        # Arrange
-        contents = "stats: 123"
-        exp_contents = {"stats": 123}
-        fs.create_file(STATISTICS_PATH, contents=contents)
-
-        # Act
-        preparation.get_statistics()
-
-        # Assert
-        assert preparation.generated_metadata == exp_contents
-
-    @pytest.mark.parametrize("out_path", ["./test", "~/.medperf", "./workspace"])
-    @pytest.mark.parametrize("uid", [858, 2770, 2052])
-    def test_to_permanent_path_moves_output_path(
-        self, mocker, out_path, uid, preparation
-    ):
-        # Arrange
-        mocker.patch("os.rename")
-        mocker.patch("os.path.exists", return_value=False)
-        preparation.generated_uid = str(uid)
-        preparation.out_path = out_path
-        expected_path = os.path.join(config.datasets_folder, str(uid))
-
-        # Act
-        preparation.to_permanent_path({})
-
-        # Assert
-        assert preparation.out_path == expected_path
-
-    @pytest.mark.parametrize(
-        "out_path", ["test", "out", "out_path", "~/.medperf/data/tmp_0"]
-    )
-    @pytest.mark.parametrize(
-        "new_path", ["test", "new", "new_path", "~/.medperf/data/34"]
-    )
-    @pytest.mark.parametrize("exists", [True, False])
-    def test_to_permanent_path_renames_folder_correctly(
-        self, mocker, out_path, new_path, preparation, exists
-    ):
-        # Arrange
-        rename_spy = mocker.patch("os.rename")
-        cleanup_spy = mocker.patch(PATCH_DATAPREP.format("remove_path"))
-        mocker.patch("os.path.exists", return_value=exists)
-        mocker.patch("os.path.join", return_value=new_path)
-        preparation.generated_uid = "hash0"
-        preparation.out_path = out_path
-
-        # Act
-        preparation.to_permanent_path()
-
-        # Assert
-        cleanup_spy.assert_called_once_with(new_path)
-        rename_spy.assert_called_once_with(out_path, new_path)
-
     def test_write_calls_dataset_write(self, mocker, preparation):
         # Arrange
         data_dict = TestDataset().todict()
-        mocker.patch(
-            PATCH_DATAPREP.format("DataPreparation.todict"), return_value=data_dict
-        )
         spy = mocker.patch(PATCH_DATAPREP.format("Dataset.write"))
         # Act
-        preparation.write()
+        preparation.write(data_dict)
 
         # Assert
         spy.assert_called_once()
@@ -223,3 +165,55 @@ def test_run_returns_generated_uid(mocker, comms, ui, uid):
 
     # Assert
     assert returned_uid == uid
+
+
+@pytest.mark.parametrize("approved", [True, False])
+class TestWithApproval:
+    def test_run_uploads_dataset_if_approved(
+        self, mocker, comms, ui, preparation, approved
+    ):
+        # Arrange
+        mocker.patch(
+            PATCH_DATAPREP.format("approval_prompt"), return_value=approved,
+        )
+        dataset = TestDataset()
+        mocker.patch(PATCH_DATAPREP.format("Dataset"), return_value=dataset)
+        mocker.patch(PATCH_DATAPREP.format("Dataset.write"))
+        spy = mocker.patch.object(dataset, "upload")
+        mocker.patch("os.rename")
+
+        # Act
+        if approved:
+            DataCreation.run("", 1, *[""] * 7, False)
+
+            # Assert
+            spy.assert_called_once()
+        else:
+            with pytest.raises(CleanExit):
+                DataCreation.run("", 1, *[""] * 2)
+
+            spy.assert_not_called()
+
+    def test_skips_request_approval_if_preapproved(
+        self, mocker, comms, ui, approved
+    ):
+        # Arrange
+        spy = mocker.patch(PATCH_DATAPREP.format("approval_prompt"), return_value=True,)
+        mocker.patch(PATCH_DATAPREP.format("Dataset.write"))
+        mocker.patch("os.rename")
+        dataset = TestDataset()
+        mocker.patch.object(dataset, "set_raw_paths")
+        mocker.patch(PATCH_DATAPREP.format("Dataset"), return_value=dataset)
+        mocker.patch(
+            PATCH_DATAPREP.format("Cube.get"),
+            side_effect=lambda id: MockCube(True, id),
+        )
+
+        # Act
+        DataCreation.run("", 1, *[""] * 2, approved=approved)
+
+        # Assert
+        if approved:
+            spy.assert_not_called()
+        else:
+            spy.assert_called_once()
