@@ -46,7 +46,9 @@ def preparation(mocker, comms, ui):
         False,
         IS_PREPARED,
     )
-    mocker.patch(PATCH_DATAPREP.format("Cube.get"), return_value=TestCube(is_valid=True))
+    mocker.patch(
+        PATCH_DATAPREP.format("Cube.get"), return_value=TestCube(is_valid=True)
+    )
     preparation.data_path = DATA_PATH
     preparation.labels_path = LABELS_PATH
     preparation.out_datapath = OUT_DATAPATH
@@ -198,7 +200,8 @@ class TestWithApproval:
     ):
         # Arrange
         mocker.patch(
-            PATCH_DATAPREP.format("approval_prompt"), return_value=approved,
+            PATCH_DATAPREP.format("approval_prompt"),
+            return_value=approved,
         )
         dataset = TestDataset()
         mocker.patch(PATCH_DATAPREP.format("Dataset"), return_value=dataset)
@@ -218,11 +221,12 @@ class TestWithApproval:
 
             spy.assert_not_called()
 
-    def test_skips_request_approval_if_preapproved(
-        self, mocker, comms, ui, approved
-    ):
+    def test_skips_request_approval_if_preapproved(self, mocker, comms, ui, approved):
         # Arrange
-        spy = mocker.patch(PATCH_DATAPREP.format("approval_prompt"), return_value=True,)
+        spy = mocker.patch(
+            PATCH_DATAPREP.format("approval_prompt"),
+            return_value=True,
+        )
         mocker.patch(PATCH_DATAPREP.format("Dataset.write"))
         mocker.patch("os.rename")
         dataset = TestDataset()

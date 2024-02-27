@@ -182,7 +182,8 @@ class TestPrepareCubes:
 
         overriding_uids = [self.new_prep_uid, self.new_model_uid, self.new_eval_uid]
         self.prepare_spy = mocker.patch(
-            PATCH_RUN.format("prepare_cube"), side_effect=overriding_uids,
+            PATCH_RUN.format("prepare_cube"),
+            side_effect=overriding_uids,
         )
 
         self.exec_instance = CompatibilityTestExecution(
@@ -300,11 +301,7 @@ class TestPrepareDataset:
 
         # Assert
         self.prepare_spy.assert_called_once_with(
-            data_path,
-            labels_path,
-            None,
-            ANY,
-            False
+            data_path, labels_path, None, ANY, False
         )
         assert self.exec_instance.data_uid == self.new_data_uid
 
@@ -329,11 +326,7 @@ class TestPrepareDataset:
 
         # Assert
         self.prepare_spy.assert_called_once_with(
-            data_path,
-            labels_path,
-            metadata_path,
-            ANY,
-            False
+            data_path, labels_path, metadata_path, ANY, False
         )
         download_demo_spy.assert_called_once_with(demo_url, demo_hash)
         assert self.exec_instance.data_uid == self.new_data_uid

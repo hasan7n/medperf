@@ -191,7 +191,7 @@ inline_parameters = [
     "platform",
     "gpus",
     "cleanup",
-    "container_loglevel"
+    "container_loglevel",
 ]
 configurable_parameters = inline_parameters + [
     "server",

@@ -1,4 +1,4 @@
-# 
+#
 #     @pytest.mark.parametrize(
 #         "in_path",
 #         [
@@ -23,11 +23,11 @@
 #         preparation.labels_path = in_path[1]
 #         preparation.out_datapath = out_path[0]
 #         preparation.out_labelspath = out_path[1]
-# 
+#
 #         # Act
 #         preparation.generate_uids()
-# 
+#
 #         # Assert
 #         assert preparation.in_uid == in_path
 #         assert preparation.generated_uid == out_path
-# 
+#
