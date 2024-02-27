@@ -4,10 +4,11 @@ from medperf.exceptions import InvalidArgumentError, CleanExit
 import pytest
 from unittest.mock import call
 
-from medperf.tests.mocks import MockCube
+from medperf.tests.mocks import TestCube
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.dataset import TestDataset
 from medperf.commands.dataset.submit import DataCreation
+from medperf.entities.dataset import Dataset
 
 PATCH_DATAPREP = "medperf.commands.dataset.submit.{}"
 OUT_PATH = "out_path"
@@ -45,7 +46,7 @@ def preparation(mocker, comms, ui):
         False,
         IS_PREPARED,
     )
-    mocker.patch(PATCH_DATAPREP.format("Cube.get"), return_value=MockCube(True))
+    mocker.patch(PATCH_DATAPREP.format("Cube.get"), return_value=TestCube(is_valid=True))
     preparation.data_path = DATA_PATH
     preparation.labels_path = LABELS_PATH
     preparation.out_datapath = OUT_DATAPATH
@@ -86,7 +87,7 @@ class TestWithDefaultUID:
     ):
         # Arrange
         spy = mocker.patch(
-            PATCH_DATAPREP.format("Cube.get"), return_value=MockCube(True)
+            PATCH_DATAPREP.format("Cube.get"), return_value=TestCube(is_valid=True)
         )
 
         # Act
@@ -104,7 +105,7 @@ class TestWithDefaultUID:
         benchmark = TestBenchmark(data_preparation_mlcube=cube_uid)
         mocker.patch(PATCH_DATAPREP.format("Benchmark.get"), return_value=benchmark)
         spy = mocker.patch(
-            PATCH_DATAPREP.format("Cube.get"), return_value=MockCube(True)
+            PATCH_DATAPREP.format("Cube.get"), return_value=TestCube(is_valid=True)
         )
 
         # Act
@@ -141,6 +142,29 @@ class TestWithDefaultUID:
         # Assert
         spy.assert_called_once()
 
+    @pytest.mark.parametrize("exists", [True, False])
+    @pytest.mark.parametrize("uid", [858, 2770, 2052])
+    @pytest.mark.parametrize("old_uid", ["generated_uid", "3749badff"])
+    def test_to_permanent_path_renames_folder_correctly(
+        self, mocker, preparation, exists, old_uid, uid
+    ):
+        # Arrange
+        old_dset = TestDataset(id=None, generated_uid=old_uid)
+        new_dset = TestDataset(id=uid)
+        rename_spy = mocker.patch("os.rename")
+        cleanup_spy = mocker.patch(PATCH_DATAPREP.format("remove_path"))
+        mocker.patch("os.path.exists", return_value=exists)
+        preparation.dataset = old_dset
+        old_path = Dataset(**old_dset.todict()).path
+        new_path = Dataset(**new_dset.todict()).path
+
+        # Act
+        preparation.to_permanent_path(new_dset.todict())
+
+        # Assert
+        cleanup_spy.assert_called_once_with(new_path)
+        rename_spy.assert_called_once_with(old_path, new_path)
+
 
 @pytest.mark.parametrize("uid", [67342, 236, 1570])
 def test_run_returns_generated_uid(mocker, comms, ui, uid):
@@ -157,7 +181,7 @@ def test_run_returns_generated_uid(mocker, comms, ui, uid):
     )
     mocker.patch(
         PATCH_DATAPREP.format("Cube.get"),
-        side_effect=lambda id: MockCube(True, id),
+        side_effect=lambda id: TestCube(is_valid=True, id=id),
     )
 
     # Act
@@ -206,7 +230,7 @@ class TestWithApproval:
         mocker.patch(PATCH_DATAPREP.format("Dataset"), return_value=dataset)
         mocker.patch(
             PATCH_DATAPREP.format("Cube.get"),
-            side_effect=lambda id: MockCube(True, id),
+            side_effect=lambda id: TestCube(is_valid=True, id=id),
         )
 
         # Act

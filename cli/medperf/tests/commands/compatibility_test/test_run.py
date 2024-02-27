@@ -1,7 +1,7 @@
 from unittest.mock import ANY, call
 from medperf.exceptions import InvalidArgumentError
 from medperf.tests.mocks.report import TestTestReport
-from medperf.tests.mocks.cube import MockCube
+from medperf.tests.mocks.cube import TestCube
 import pytest
 
 from medperf.commands.compatibility_test.run import CompatibilityTestExecution
@@ -250,7 +250,7 @@ class TestPrepareDataset:
     @pytest.fixture(autouse=True)
     def setup(self, mocker):
         self.exec_instance = CompatibilityTestExecution()
-        mock_cube = MockCube(True)
+        mock_cube = TestCube(is_valid=True)
         mocker.patch(PATCH_RUN.format("Dataset.get"))
         mocker.patch("medperf.entities.cube.Cube.get", return_value=mock_cube)
         self.new_data_uid = "new prepared data uid"

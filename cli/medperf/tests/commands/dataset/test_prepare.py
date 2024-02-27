@@ -2,7 +2,7 @@ from medperf.exceptions import InvalidArgumentError
 import pytest
 
 from medperf.tests.mocks.dataset import TestDataset
-from medperf.tests.mocks.cube import MockCube
+from medperf.tests.mocks.cube import TestCube
 from medperf.commands.dataset.prepare import DataPreparation
 
 PATCH_REGISTER = "medperf.commands.dataset.prepare.{}"
@@ -50,7 +50,7 @@ PATCH_REGISTER = "medperf.commands.dataset.prepare.{}"
     #     get_cube_spy = mocker.spy(DataPreparation, "validate_prep_cube")
     #     mocker.patch(
     #         PATCH_DATAPREP.format("Cube.get"),
-    #         side_effect=lambda id: MockCube(True, id),
+    #         side_effect=lambda id: TestCube(is_valid=True, id=id),
     #     )
     #     run_prepare_spy = mocker.patch(
     #         PATCH_DATAPREP.format("DataPreparation.run_prepare")
@@ -103,7 +103,8 @@ def dataset(mocker):
 
 @pytest.fixture
 def cube(mocker):
-    cube = MockCube(True)
+    mCube = mocker.create_autospec(TestCube)
+    cube = mCube(is_valid=True)
     mocker.patch(PATCH_REGISTER.format("Cube.get"), return_value=cube)
     return cube
 
@@ -121,6 +122,7 @@ def test_run_retrieves_specified_dataset(
     mocker.patch(
         PATCH_REGISTER.format("approval_prompt"), return_value=True,
     )
+    mocker.patch(PATCH_REGISTER.format("Cube"), side_effect=lambda x: TestCube(id=x))
     spy = mocker.patch(PATCH_REGISTER.format("Dataset.get"), return_value=dataset)
     mocker.patch(PATCH_REGISTER.format("Dataset.write"))
     mocker.patch("os.rename")
@@ -169,15 +171,13 @@ def test_run_executes_prepare_when_needed(mocker, comms, ui, dataset, cube, no_r
         spy.assert_not_called()
 
 
-@pytest.mark.parametrize("dset_dict", [{"test": "test"}, {}])
 @pytest.mark.parametrize("submitted_as_prepared", [False, True])
 @pytest.mark.parametrize("is_ready", [False, True])
 @pytest.mark.parametrize("approve_sending_reports", [False, True])
 @pytest.mark.parametrize("for_test", [False, True])
 @pytest.mark.parametrize("report_specified", [False, True])
-def test_run_prints_dset_dict_when_needed(mocker, comms, ui, dataset, cube, no_remote, dset_dict, submitted_as_prepared, is_ready, approve_sending_reports, for_test, report_specified):
+def test_run_promps_for_report_when_needed(mocker, comms, ui, dataset, cube, no_remote, submitted_as_prepared, is_ready, approve_sending_reports, for_test, report_specified):
     # Arrange
-    spy_dict = mocker.patch.object(dataset, "todict", return_value=dset_dict)
     spy = mocker.patch(PATCH_REGISTER.format("dict_pretty_print"))
     mocker.patch(
         PATCH_REGISTER.format("approval_prompt"), return_value=True,
@@ -187,43 +187,19 @@ def test_run_prints_dset_dict_when_needed(mocker, comms, ui, dataset, cube, no_r
     mocker.patch.object(dataset, "is_ready", return_value=is_ready)
     dataset.submitted_as_prepared = submitted_as_prepared
     dataset.for_test = for_test
-    mocker.patch(PATCH_REGISTER.format("Cube.get_default_output"), return_value="path" if report_specified else None)
-
-    # Act
-    DataPreparation.run(1, approve_sending_reports=approve_sending_reports)
-
-    # Assert
+    mocker.patch.object(cube, "get_default_output", return_value="path" if report_specified else None)
     should_run = (
         not submitted_as_prepared
         and not is_ready
         and not approve_sending_reports
         and not for_test
         and report_specified)
-    if should_run:
-        spy_dict.assert_called_once()
-        spy.assert_called_once_with(dset_dict)
-    else:
-        spy.assert_not_called()
-
-
-@pytest.mark.parametrize("data_hash", ["data_hash", "data_hash_2"])
-def test_updates_local_dset_if_remote_exists(mocker, comms, ui, dataset, data_hash):
-    # Arrange
-    dataset.generated_uid = data_hash
-    remote_dsets_dicts = [{"id": 1, "generated_uid": data_hash}]
-    remote_dsets = [
-        TestDataset(**dset_dict).todict() for dset_dict in remote_dsets_dicts
-    ]
-    mocker.patch.object(comms, "get_user_datasets", return_value=remote_dsets)
-    write_spy = mocker.patch(PATCH_REGISTER.format("Dataset.write"))
-    upload_spy = mocker.patch(
-        PATCH_REGISTER.format("Dataset.upload"), return_value=dataset.todict()
-    )
 
     # Act
-    DataPreparation.run(data_hash)
+    DataPreparation.run(1, approve_sending_reports=approve_sending_reports)
 
     # Assert
-    upload_spy.assert_not_called()
-    write_spy.assert_called_once()
-
+    if should_run:
+        spy.assert_called_once()
+    else:
+        spy.assert_not_called()
