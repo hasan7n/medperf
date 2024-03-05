@@ -97,7 +97,7 @@ def prepare(
 ):
     """Runs the Data preparation step for a raw dataset"""
     ui = config.ui
-    DataCreation.run(data_uid, approve_sending_reports=approval)
+    DataPreparation.run(data_uid, approve_sending_reports=approval)
     ui.print("✅ Done!")
 
 
