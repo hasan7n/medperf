@@ -1,9 +1,10 @@
 import os
 from watchdog.events import FileSystemEventHandler
-from rano_monitor.constants import *
+from rano_monitor.constants import REVIEW_FILENAME
 import tarfile
 import re
 from rano_monitor.utils import delete
+
 
 class ReviewedHandler(FileSystemEventHandler):
     def __init__(self, dset_data_path: str, textual_app):
@@ -36,7 +37,7 @@ class ReviewedHandler(FileSystemEventHandler):
                     brainmask_match = re.match(brainmask_pattern, member.name)
                     if brainmask_match:
                         identified_brainmasks.append(brainmask_match)
-        except:
+        except Exception:
             return
 
         if len(identified_reviewed):
@@ -87,4 +88,3 @@ class ReviewedHandler(FileSystemEventHandler):
                 if os.path.exists(target_file):
                     delete(target_file, self.dset_data_path)
                 tar.extract(member, dest)
-

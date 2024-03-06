@@ -1,9 +1,15 @@
 import os
-from watchdog.events import FileSystemEventHandler
-from rano_monitor.constants import *
-import tarfile
 import re
+import tarfile
+
+from rano_monitor.constants import (
+    BRAINMASK_PATTERN,
+    REVIEW_FILENAME,
+    REVIEWED_PATTERN,
+)
 from rano_monitor.utils import delete
+from watchdog.events import FileSystemEventHandler
+
 
 class ReviewedHandler(FileSystemEventHandler):
     def __init__(self, dset_data_path: str, textual_app):
@@ -34,7 +40,7 @@ class ReviewedHandler(FileSystemEventHandler):
                     brainmask_match = re.match(BRAINMASK_PATTERN, member.name)
                     if brainmask_match:
                         identified_brainmasks.append(brainmask_match)
-        except:
+        except Exception:
             return
 
         if len(identified_reviewed):
@@ -81,8 +87,8 @@ class ReviewedHandler(FileSystemEventHandler):
                 member = tar.getmember(src)
                 member.name = os.path.basename(member.name)
                 target_file = os.path.join(dest, member.name)
-                # TODO: this might be problematic UX. The brainmask might get overwritten without the user aknowledging it
+                # TODO: this might be problematic UX.
+                # The brainmask might get overwritten unknowingly
                 if os.path.exists(target_file):
                     delete(target_file, self.dset_data_path)
                 tar.extract(member, dest)
-
