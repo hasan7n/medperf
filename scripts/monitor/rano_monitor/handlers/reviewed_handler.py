@@ -34,7 +34,7 @@ def get_identified_extract_paths(
         identified_reviewed,
         identified_brainmasks,
         dset_data_path
-        ):
+):
     extracts = []
     for reviewed in identified_reviewed:
         id, tp, filename = reviewed.groups()

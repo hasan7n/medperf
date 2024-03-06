@@ -225,7 +225,7 @@ def package_review_cases(report: pd.DataFrame, dset_path: str):
                 row.name,
                 data_path,
                 labels_path
-                )[:-2]
+            )[:-2]
             rawscans = get_brain_review_paths(row.name, labels_path)[:-1]
             base_path = os.path.join(labels_path, "..")
 
@@ -244,7 +244,7 @@ def package_review_cases(report: pd.DataFrame, dset_path: str):
                 id,
                 tp,
                 "brain_scans"
-                )
+            )
             for brainscan in brainscans:
                 brainscan_target_path = os.path.join(
                     brainscan_path, os.path.basename(brainscan)
