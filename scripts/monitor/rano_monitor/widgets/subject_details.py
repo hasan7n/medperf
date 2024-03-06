@@ -2,9 +2,9 @@ import os
 
 import pandas as pd
 from rano_monitor.constants import (
+    DEFAULT_SEGMENTATION,
     DONE_STAGE,
     MANUAL_REVIEW_STAGE,
-    DEFAULT_SEGMENTATION,
 )
 from rano_monitor.messages import InvalidSubjectsUpdated
 from rano_monitor.utils import (
@@ -69,9 +69,7 @@ class SubjectDetails(Static):
             )
         yield Button("Invalidate", id="valid-btn")
 
-    def on_invalid_subjects_updated(
-            self, message: InvalidSubjectsUpdated
-            ) -> None:
+    def on_invalid_subjects_updated(self, message: InvalidSubjectsUpdated):
         self.invalid_subjects = message.invalid_subjects
         self.update_subject()
 

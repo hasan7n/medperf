@@ -1,8 +1,5 @@
-import os
-import medperf.config as config
 from medperf.exceptions import InvalidArgumentError, CleanExit
 import pytest
-from unittest.mock import call
 
 from medperf.tests.mocks import TestCube
 from medperf.tests.mocks.benchmark import TestBenchmark

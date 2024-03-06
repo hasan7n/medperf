@@ -14,7 +14,6 @@ from medperf.utils import (
 from medperf.exceptions import (
     CommunicationError,
     CommunicationRetrievalError,
-    CommunicationRetrievalError,
     CommunicationRequestError,
 )
 

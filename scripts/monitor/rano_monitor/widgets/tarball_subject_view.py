@@ -30,7 +30,7 @@ class TarballSubjectView(Static):
                 yield Static(
                     "Tumor segmentation reviewed",
                     classes="tumor-status"
-                    )
+                )
 
             yield Button("Review Brain Mask", classes="brain-btn")
             yield Button("Review Tumor Segmentation", classes="tumor-btn")
@@ -128,7 +128,7 @@ class TarballSubjectView(Static):
             id,
             tp,
             BRAINMASK_BAK
-            )
+        )
 
         if not os.path.exists(backup_brainpath):
             return False
@@ -144,7 +144,7 @@ class TarballSubjectView(Static):
             id,
             tp,
             "finalized"
-            )
+        )
         finalized_files = os.listdir(finalized_tumor_path)
 
         return len(finalized_files) > 0

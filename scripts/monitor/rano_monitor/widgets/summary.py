@@ -41,7 +41,7 @@ class Summary(Static):
     def on_invalid_subjects_updated(
             self,
             message: InvalidSubjectsUpdated
-            ) -> None:
+    ) -> None:
         self.invalid_subjects = message.invalid_subjects
         self.update_summary()
 
