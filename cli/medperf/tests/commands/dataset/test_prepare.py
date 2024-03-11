@@ -4,6 +4,7 @@ import pytest
 from medperf.tests.mocks.dataset import TestDataset
 from medperf.tests.mocks.cube import TestCube
 from medperf.commands.dataset.prepare import DataPreparation
+from watchdog.observers import Observer
 
 PATCH_REGISTER = "medperf.commands.dataset.prepare.{}"
 
@@ -115,9 +116,11 @@ def no_remote(mocker, comms):
 
 @pytest.mark.parametrize("data_uid", [287, 49, 1793])
 def test_run_retrieves_specified_dataset(
-    mocker, comms, ui, dataset, cube, data_uid, no_remote
+    mocker, comms, ui, dataset, cube, data_uid, no_remote, fs
 ):
     # Arrange
+    mocker.patch(PATCH_REGISTER.format("ReportSender.start"))
+    mocker.patch(PATCH_REGISTER.format("ReportSender.stop"))
     mocker.patch(
         PATCH_REGISTER.format("approval_prompt"),
         return_value=True,
