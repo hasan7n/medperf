@@ -89,7 +89,7 @@ PATCH_REGISTER = "medperf.commands.dataset.prepare.{}"
 
 
 @pytest.fixture
-def dataset(mocker):
+def dataset(mocker, ):
     dset = TestDataset(id=None, generated_uid="generated_uid", state="DEVELOPMENT")
     mocker.patch(PATCH_REGISTER.format("Dataset.get"), return_value=dset)
     mocker.patch(PATCH_REGISTER.format("Dataset.upload"), return_value=dset.todict())
@@ -115,7 +115,7 @@ def no_remote(mocker, comms):
 
 @pytest.mark.parametrize("data_uid", [287, 49, 1793])
 def test_run_retrieves_specified_dataset(
-    mocker, comms, ui, dataset, cube, data_uid, no_remote, fs
+    mocker, comms, ui, dataset, cube, data_uid, no_remote
 ):
     # Arrange
     mocker.patch(PATCH_REGISTER.format("ReportSender.start"))
@@ -181,7 +181,7 @@ def test_run_executes_prepare_when_needed(
 @pytest.mark.parametrize("approve_sending_reports", [False, True])
 @pytest.mark.parametrize("for_test", [False, True])
 @pytest.mark.parametrize("report_specified", [False, True])
-def test_run_promps_for_report_when_needed(
+def test_run_prompts_for_report_when_needed(
     mocker,
     comms,
     ui,
@@ -195,6 +195,8 @@ def test_run_promps_for_report_when_needed(
     report_specified,
 ):
     # Arrange
+    mocker.patch(PATCH_REGISTER.format("ReportSender.start"))
+    mocker.patch(PATCH_REGISTER.format("ReportSender.stop"))
     spy = mocker.patch(PATCH_REGISTER.format("dict_pretty_print"))
     mocker.patch(
         PATCH_REGISTER.format("approval_prompt"),
