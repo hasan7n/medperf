@@ -4,7 +4,6 @@ import pytest
 from medperf.tests.mocks.dataset import TestDataset
 from medperf.tests.mocks.cube import TestCube
 from medperf.commands.dataset.prepare import DataPreparation
-from watchdog.observers import Observer
 
 PATCH_REGISTER = "medperf.commands.dataset.prepare.{}"
 
