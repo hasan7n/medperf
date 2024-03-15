@@ -1,4 +1,9 @@
-from medperf.exceptions import InvalidArgumentError
+from medperf.exceptions import (
+    CommunicationError,
+    InvalidArgumentError,
+    ExecutionError,
+    CleanExit,
+)
 import pytest
 
 from medperf.tests.mocks.dataset import TestDataset
@@ -8,221 +13,236 @@ from medperf.commands.dataset.prepare import DataPreparation
 PATCH_REGISTER = "medperf.commands.dataset.prepare.{}"
 
 
-# def test_run_cube_tasks_runs_required_tasks(self, mocker, preparation):
-#     # Arrange
-#     spy = mocker.patch.object(preparation.cube, "run")
-
-#     prepare = call(
-#         task="prepare",
-#         timeout=None,
-#         data_path=DATA_PATH,
-#         labels_path=LABELS_PATH,
-#         output_path=OUT_DATAPATH,
-#         output_labels_path=OUT_LABELSPATH,
-#     )
-#     check = call(
-#         task="sanity_check",
-#         timeout=None,
-#         data_path=OUT_DATAPATH,
-#         labels_path=OUT_LABELSPATH,
-#     )
-#     stats = call(
-#         task="statistics",
-#         timeout=None,
-#         data_path=OUT_DATAPATH,
-#         labels_path=OUT_LABELSPATH,
-#         output_path=STATISTICS_PATH,
-#     )
-#     calls = [prepare, check, stats]
-
-#     # Act
-#     preparation.run_prepare()
-#     preparation.run_sanity_check()
-#     preparation.run_statistics()
-
-#     # Assert
-#     spy.assert_has_calls(calls)
-
-# def test_run_executes_expected_flow(self, mocker, comms, ui, fs):
-#     # Arrange
-#     validate_spy = mocker.patch(PATCH_DATAPREP.format("DataPreparation.validate"))
-#     get_cube_spy = mocker.spy(DataPreparation, "validate_prep_cube")
-#     mocker.patch(
-#         PATCH_DATAPREP.format("Cube.get"),
-#         side_effect=lambda id: TestCube(is_valid=True, id=id),
-#     )
-#     run_prepare_spy = mocker.patch(
-#         PATCH_DATAPREP.format("DataPreparation.run_prepare")
-#     )
-#     run_sanity_check_spy = mocker.patch(
-#         PATCH_DATAPREP.format("DataPreparation.run_sanity_check")
-#     )
-#     run_statistics_spy = mocker.patch(
-#         PATCH_DATAPREP.format("DataPreparation.run_statistics")
-#     )
-#     get_stat_spy = mocker.patch(
-#         PATCH_DATAPREP.format("DataPreparation.get_statistics"),
-#     )
-#     generate_uids_spy = mocker.patch(
-#         PATCH_DATAPREP.format("DataPreparation.generate_uids"),
-#     )
-#     to_permanent_path_spy = mocker.patch(
-#         PATCH_DATAPREP.format("DataPreparation.to_permanent_path"),
-#     )
-#     write_spy = mocker.patch(
-#         PATCH_DATAPREP.format("DataPreparation.write"),
-#     )
-
-#     # Act
-#     DataPreparation.run("", "", "", "")
-
-#     # Assert
-#     validate_spy.assert_called_once()
-#     get_cube_spy.assert_called_once()
-#     run_prepare_spy.assert_called_once()
-#     run_sanity_check_spy.assert_called_once()
-#     run_statistics_spy.assert_called_once()
-#     get_stat_spy.assert_called_once()
-#     generate_uids_spy.assert_called_once()
-#     to_permanent_path_spy.assert_called_once()
-#     write_spy.assert_called_once()
-
-
 @pytest.fixture
-def dataset(mocker, ):
+def dataset(mocker):
     dset = TestDataset(id=None, generated_uid="generated_uid", state="DEVELOPMENT")
-    mocker.patch(PATCH_REGISTER.format("Dataset.get"), return_value=dset)
-    mocker.patch(PATCH_REGISTER.format("Dataset.upload"), return_value=dset.todict())
-    mocker.patch.object(
-        dset, "get_raw_paths", return_value=("raw/data/path", "/raw/labels/path")
-    )
-    mocker.patch.object(dset, "mark_as_ready")
     return dset
 
 
 @pytest.fixture
 def cube(mocker):
-    mCube = mocker.create_autospec(TestCube)
-    cube = mCube(is_valid=True)
-    mocker.patch(PATCH_REGISTER.format("Cube.get"), return_value=cube)
+    cube = TestCube(is_valid=True)
     return cube
 
 
 @pytest.fixture
-def no_remote(mocker, comms):
-    mocker.patch.object(comms, "get_user_datasets", return_value=[])
+def data_preparation(mocker, dataset, cube):
+    dataprep = DataPreparation(None, None)
+    dataprep.dataset = dataset
+    dataprep.cube = cube
+    return dataprep
 
 
-@pytest.mark.parametrize("data_uid", [287, 49, 1793])
-def test_run_retrieves_specified_dataset(
-    mocker, comms, ui, dataset, cube, data_uid, no_remote
-):
+def test_validate_fails_if_dataset_already_in_operation(mocker, data_preparation):
     # Arrange
-    mocker.patch(PATCH_REGISTER.format("ReportSender.start"))
-    mocker.patch(PATCH_REGISTER.format("ReportSender.stop"))
-    mocker.patch(
-        PATCH_REGISTER.format("approval_prompt"),
-        return_value=True,
-    )
-    mocker.patch(PATCH_REGISTER.format("Cube"), side_effect=lambda x: TestCube(id=x))
-    spy = mocker.patch(PATCH_REGISTER.format("Dataset.get"), return_value=dataset)
-    mocker.patch(PATCH_REGISTER.format("Dataset.write"))
-    mocker.patch("os.rename")
-
-    # Act
-    DataPreparation.run(data_uid)
-
-    # Assert
-    spy.assert_called_once_with(data_uid)
-
-
-@pytest.mark.parametrize("uid", [3720, 1465, 4033])
-def test_run_fails_if_dataset_already_in_operation(
-    mocker, comms, ui, dataset, cube, uid, no_remote
-):
-    # Arrange
-    dataset.id = uid
-    dataset.state = "OPERATION"
+    data_preparation.dataset.state = "OPERATION"
 
     # Act & Assert
     with pytest.raises(InvalidArgumentError):
-        DataPreparation.run(uid)
+        data_preparation.validate()
 
 
-@pytest.mark.parametrize("submitted_as_prepared", [False, True])
-@pytest.mark.parametrize("is_ready", [False, True])
-def test_run_executes_prepare_when_needed(
-    mocker, comms, ui, dataset, cube, no_remote, submitted_as_prepared, is_ready
-):
+def test_get_prep_cube_downloads_cube_file(mocker, data_preparation, cube):
     # Arrange
-    spy = mocker.patch(PATCH_REGISTER.format("DataPreparation.run_prepare"))
-    mocker.patch(
-        PATCH_REGISTER.format("approval_prompt"),
-        return_value=True,
-    )
-    mocker.patch(PATCH_REGISTER.format("Dataset.write"))
-    mocker.patch("os.rename")
-    mocker.patch.object(dataset, "is_ready", return_value=is_ready)
-    dataset.submitted_as_prepared = submitted_as_prepared
+    spy = mocker.patch.object(cube, "download_run_files")
+    mocker.patch(PATCH_REGISTER.format("Cube.get"), return_value=cube)
 
     # Act
-    DataPreparation.run(1)
+    data_preparation.get_prep_cube()
 
     # Assert
-    should_run = not submitted_as_prepared and not is_ready
-    if should_run:
-        spy.assert_called_once()
-    else:
-        spy.assert_not_called()
+    spy.assert_called_once()
 
 
-@pytest.mark.parametrize("submitted_as_prepared", [False, True])
-@pytest.mark.parametrize("is_ready", [False, True])
-@pytest.mark.parametrize("approve_sending_reports", [False, True])
-@pytest.mark.parametrize("for_test", [False, True])
-@pytest.mark.parametrize("report_specified", [False, True])
-def test_run_prompts_for_report_when_needed(
-    mocker,
-    comms,
-    ui,
-    dataset,
-    cube,
-    no_remote,
-    submitted_as_prepared,
-    is_ready,
-    approve_sending_reports,
-    for_test,
-    report_specified,
+@pytest.mark.parametrize("allow_sending_reports", [False, True])
+def test_prepare_runs_then_stops_report_handler(
+    mocker, data_preparation, allow_sending_reports, cube
 ):
     # Arrange
+    data_preparation.allow_sending_reports = allow_sending_reports
+    mocker.patch.object(cube, "run")
+    start_spy = mocker.patch(PATCH_REGISTER.format("ReportSender.start"))
+    stop_spy = mocker.patch(PATCH_REGISTER.format("ReportSender.stop"))
+
+    # Act
+    data_preparation.run_prepare()
+
+    # Assert
+    if allow_sending_reports:
+        start_spy.assert_called_once()
+        stop_spy.assert_called_once_with("finished")
+    else:
+        start_spy.assert_not_called()
+        stop_spy.assert_not_called()
+
+
+@pytest.mark.parametrize("allow_sending_reports", [False, True])
+def test_prepare_runs_then_stops_report_handler_on_failure(
+    mocker, data_preparation, allow_sending_reports, cube
+):
+    # Arrange
+    def _failure_run(*args, **kwargs):
+        raise Exception()
+
+    data_preparation.allow_sending_reports = allow_sending_reports
+    mocker.patch.object(cube, "run", side_effect=_failure_run)
+    start_spy = mocker.patch(PATCH_REGISTER.format("ReportSender.start"))
+    stop_spy = mocker.patch(PATCH_REGISTER.format("ReportSender.stop"))
+
+    # Act
+    with pytest.raises(Exception):
+        data_preparation.run_prepare()
+
+    # Assert
+    if allow_sending_reports:
+        start_spy.assert_called_once()
+        stop_spy.assert_called_once_with("failed")
+    else:
+        start_spy.assert_not_called()
+        stop_spy.assert_not_called()
+
+
+@pytest.mark.parametrize("allow_sending_reports", [False, True])
+def test_prepare_runs_then_stops_report_handler_on_interrupt(
+    mocker, data_preparation, allow_sending_reports, cube
+):
+    # Arrange
+    def _failure_run(*args, **kwargs):
+        raise KeyboardInterrupt()
+
+    data_preparation.allow_sending_reports = allow_sending_reports
+    mocker.patch.object(cube, "run", side_effect=_failure_run)
+    start_spy = mocker.patch(PATCH_REGISTER.format("ReportSender.start"))
+    stop_spy = mocker.patch(PATCH_REGISTER.format("ReportSender.stop"))
+
+    # Act
+    with pytest.raises(KeyboardInterrupt):
+        data_preparation.run_prepare()
+
+    # Assert
+    if allow_sending_reports:
+        start_spy.assert_called_once()
+        stop_spy.assert_called_once_with("interrupted")
+    else:
+        start_spy.assert_not_called()
+        stop_spy.assert_not_called()
+
+
+@pytest.mark.parametrize("report_specified", [False, True])
+@pytest.mark.parametrize("metadata_specified", [False, True])
+def test_prepare_checks_report_and_metadata_path(
+    mocker, data_preparation, report_specified, metadata_specified, cube
+):
+    # Arrange
+    spy = mocker.patch.object(cube, "run")
     mocker.patch(PATCH_REGISTER.format("ReportSender.start"))
     mocker.patch(PATCH_REGISTER.format("ReportSender.stop"))
-    spy = mocker.patch(PATCH_REGISTER.format("dict_pretty_print"))
-    mocker.patch(
-        PATCH_REGISTER.format("approval_prompt"),
-        return_value=True,
-    )
-    mocker.patch(PATCH_REGISTER.format("Dataset.write"))
-    mocker.patch("os.rename")
-    mocker.patch.object(dataset, "is_ready", return_value=is_ready)
-    dataset.submitted_as_prepared = submitted_as_prepared
-    dataset.for_test = for_test
-    mocker.patch.object(
-        cube, "get_default_output", return_value="path" if report_specified else None
-    )
-    should_run = (
-        not submitted_as_prepared
-        and not is_ready
-        and not approve_sending_reports
-        and not for_test
-        and report_specified
-    )
+    data_preparation.report_specified = report_specified
+    data_preparation.metadata_specified = metadata_specified
 
     # Act
-    DataPreparation.run(1, approve_sending_reports=approve_sending_reports)
+    data_preparation.run_prepare()
 
     # Assert
-    if should_run:
-        spy.assert_called_once()
+    if report_specified:
+        assert "report_file" in spy.call_args.kwargs.keys()
     else:
-        spy.assert_not_called()
+        assert "report_file" not in spy.call_args.kwargs.keys()
+    if metadata_specified:
+        assert "metadata_path" in spy.call_args.kwargs.keys()
+    else:
+        assert "metadata_path" not in spy.call_args.kwargs.keys()
+
+
+@pytest.mark.parametrize(
+    "report_specified,exception", [[False, ExecutionError], [True, CleanExit]]
+)
+def test_sanity_checks_unmarks_the_dataset_as_ready_on_failure(
+    mocker, data_preparation, cube, report_specified, exception
+):
+    # Arrange
+    def _failure_run(*args, **kwargs):
+        raise ExecutionError()
+
+    mocker.patch.object(cube, "run", side_effect=_failure_run)
+    unmark_spy = mocker.patch.object(data_preparation.dataset, "unmark_as_ready")
+    data_preparation.report_specified = report_specified
+
+    # Act & assert
+    with pytest.raises(exception):
+        data_preparation.run_sanity_check()
+
+    # Assert
+    unmark_spy.assert_called_once()
+
+
+def test_statistics_unmarks_the_dataset_as_ready_on_failure(
+    mocker, data_preparation, cube
+):
+    # Arrange
+    def _failure_run(*args, **kwargs):
+        raise ExecutionError()
+
+    mocker.patch.object(cube, "run", side_effect=_failure_run)
+    unmark_spy = mocker.patch.object(data_preparation.dataset, "unmark_as_ready")
+
+    # Act & assert
+    with pytest.raises(ExecutionError):
+        data_preparation.run_statistics()
+
+    # Assert
+    unmark_spy.assert_called_once()
+
+
+@pytest.mark.parametrize("metadata_specified", [False, True])
+def test_statistics_checks_metadata_path(
+    mocker, data_preparation, metadata_specified, cube
+):
+    # Arrange
+    spy = mocker.patch.object(cube, "run")
+    data_preparation.metadata_specified = metadata_specified
+
+    # Act
+    data_preparation.run_statistics()
+
+    # Assert
+    if metadata_specified:
+        assert "metadata_path" in spy.call_args.kwargs.keys()
+    else:
+        assert "metadata_path" not in spy.call_args.kwargs.keys()
+
+
+def test_dataset_is_updated_after_report_sending(mocker, data_preparation, comms):
+    # Arrange
+    send_spy = mocker.patch.object(comms, "update_dataset")
+    write_spy = mocker.patch.object(data_preparation.dataset, "write")
+    data_preparation.dataset.report = None
+    mocker.patch.object(data_preparation, "_DataPreparation__generate_report_dict")
+
+    # Act
+    data_preparation._send_report({})
+
+    # Assert
+    send_spy.assert_called_once()
+    write_spy.assert_called_once()
+    assert data_preparation.dataset.report is not None
+
+
+def test_dataset_is_not_updated_after_report_sending_failure(
+    mocker, data_preparation, comms
+):
+    # Arrange
+    def _failure_run(*args, **kwargs):
+        raise CommunicationError()
+
+    mocker.patch.object(comms, "update_dataset", side_effect=_failure_run)
+    write_spy = mocker.patch.object(data_preparation.dataset, "write")
+    data_preparation.dataset.report = None
+    mocker.patch.object(data_preparation, "_DataPreparation__generate_report_dict")
+
+    # Act
+    data_preparation._send_report({})
+
+    # Assert
+    write_spy.assert_not_called()
+    assert data_preparation.dataset.report is None

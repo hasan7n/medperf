@@ -84,20 +84,10 @@ class DataPreparation:
         preparation.setup_parameters()
 
         # TODO: make these more readable
-        should_run_prepare = (
-            not preparation.dataset.submitted_as_prepared
-            and not preparation.dataset.is_ready()
-        )
-        should_prompt_for_report_sending_approval = (
-            should_run_prepare
-            and not approve_sending_reports
-            and not preparation.dataset.for_test
-            and preparation.report_specified
-        )
-        if should_prompt_for_report_sending_approval:
+        if preparation.should_prompt_for_report_sending_approval():
             preparation.prompt_for_report_sending_approval()
 
-        if should_run_prepare:
+        if preparation.should_run_prepare():
             preparation.run_prepare()
 
         with preparation.ui.interactive():
@@ -112,10 +102,30 @@ class DataPreparation:
         self.comms = config.comms
         self.ui = config.ui
         self.dataset_id = dataset_id
-        self.dataset = None
         self.allow_sending_reports = approve_sending_reports
-        self.latest_report_sent_at = None
+        self.dataset = None
+        self.cube = None
+        self.out_statistics_path = None
+        self.out_datapath = None
+        self.out_labelspath = None
+        self.report_path = None
+        self.metadata_path = None
+        self.raw_data_path = None
+        self.raw_labels_path = None
+        self.report_specified = None
+        self.metadata_specified = None
         self._lock = Lock()
+
+    def should_run_prepare(self):
+        return not self.dataset.submitted_as_prepared and not self.dataset.is_ready()
+
+    def should_prompt_for_report_sending_approval(self):
+        return (
+            self.should_run_prepare()
+            and not self.allow_sending_reports
+            and not self.dataset.for_test
+            and self.report_specified
+        )
 
     def get_dataset(self):
         self.dataset = Dataset.get(self.dataset_id)
