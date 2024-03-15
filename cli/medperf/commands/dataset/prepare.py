@@ -228,7 +228,7 @@ class DataPreparation:
                     "monitoring tool."
                 )
                 self.ui.print_warning(msg)
-                raise CleanExit()
+                raise CleanExit(medperf_status_code=1)
 
             msg = "The sanity check process failed"
             raise ExecutionError(msg)
