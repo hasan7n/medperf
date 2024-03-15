@@ -225,8 +225,7 @@ class DataPreparation:
                     "but the data doesn't appear to be ready. "
                     "This most probably means you have outstanding tasks. "
                     "Please verify the status of your data by using the "
-                    "monitoring tool if provided, or by checking the report "
-                    f"at {self.report_path}"
+                    "monitoring tool."
                 )
                 self.ui.print_warning(msg)
                 raise CleanExit()
