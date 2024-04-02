@@ -1,3 +1,4 @@
+#! /bin/bash
 doo() {
     echo "starting"
     sleep 20
