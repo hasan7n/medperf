@@ -2,7 +2,7 @@ hostname -A
 hostname -I
 
 BIND_ADDRESS=$(hostname -I | cut -d " " -f 1)
-HOSTNAME_=$(hostname -A | cut -d " " -f 1)
+HOSTNAME_=$(hostname -I | cut -d " " -f 1)
 
 echo $BIND_ADDRESS
 echo $HOSTNAME_
