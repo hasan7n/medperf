@@ -11,16 +11,11 @@ echo $p
 sleep 2
 
 doo </dev/null &>agg.log &
-echo $q
 q=$!
+echo $q
 
-if ! [ -z "$p" ]; then
-    echo "p is not running"
-fi
-
-if ! [ -z "$q" ]; then
-    echo "q is not running"
-fi
+[ -d "/proc/${p}" ] && echo "p exists" || echo "p not exists"
+[ -d "/proc/${q}" ] && echo "q exists" || echo "q not exists"
 
 echo "waiting p"
 wait $p
