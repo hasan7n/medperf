@@ -1,6 +1,6 @@
 doo() {
     echo "starting"
-    sleep 9
+    sleep 20
     echo "finishing"
 }
 
@@ -22,3 +22,6 @@ wait $p
 
 echo "waiting q"
 wait $q
+
+echo "waiting all"
+wait
