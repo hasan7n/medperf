@@ -13,6 +13,4 @@ jobs:
     - name: debug
       working-directory: .
       run: |
-        sh test.sh
-        echo "bash"
-        bash test.sh
+        sh test_hostname.sh
