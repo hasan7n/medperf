@@ -1,0 +1,16 @@
+name: DEBUG
+
+on: pull_request
+
+jobs:
+  setup:
+    name: debug
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: debug
+      working-directory: .
+      run: |
+        sh test_hostname.sh
