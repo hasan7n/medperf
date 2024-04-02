@@ -15,8 +15,13 @@ doo </dev/null &>agg.log &
 q=$!
 echo $q
 
-[ -d "/proc/${p}" ] && echo "p exists" || echo "p not exists"
-[ -d "/proc/${q}" ] && echo "q exists" || echo "q not exists"
+echo "/proc/$p"
+echo "/proc/$q"
+echo "/proc/${p}"
+echo "/proc/${q}"
+
+[ -d "/proc/$p" ] && echo "p exists" || echo "p not exists"
+[ -d "/proc/$q" ] && echo "q exists" || echo "q not exists"
 
 echo "waiting p"
 wait $p
