@@ -224,6 +224,13 @@ def add_inline_parameters(func: Callable) -> Callable:
             "--cleanup/--no-cleanup",
             help="Whether to clean up temporary medperf storage after execution",
         ),
+        container_shared_memory: str = typer.Option(
+            config.container_shared_memory,
+            "--container_shared_memory",
+            help="""Currently not supported for Singularity.\n
+            Shared memory to use for MLCube.\n
+            Refer to `docker run --help` for the correct format.""",
+        ),
         **kwargs,
     ):
         return func(*args, **kwargs)

@@ -334,11 +334,14 @@ class Cube(Entity, Uploadable, MedperfSchema, DeployableSchema):
         # TODO: we should override run args instead of what we are doing below
         #       we shouldn't allow arbitrary run args unless our client allows it
         if config.platform == "docker":
-            # use current user
+            # use current user and set shm-size
+            user_args = "-u $(id -u):$(id -g)"
+            shm_args = f"--shm-size {config.container_shared_memory}"
+
             cpu_args = self.get_config("docker.cpu_args") or ""
             gpu_args = self.get_config("docker.gpu_args") or ""
-            cpu_args = " ".join([cpu_args, "-u $(id -u):$(id -g)"]).strip()
-            gpu_args = " ".join([gpu_args, "-u $(id -u):$(id -g)"]).strip()
+            cpu_args = " ".join([cpu_args, user_args, shm_args]).strip()
+            gpu_args = " ".join([gpu_args, user_args, shm_args]).strip()
             cmd += f' -Pdocker.cpu_args="{cpu_args}"'
             cmd += f' -Pdocker.gpu_args="{gpu_args}"'
 

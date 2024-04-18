@@ -168,6 +168,7 @@ evaluate_timeout = None
 container_loglevel = None
 mlcube_configure_timeout = None
 mlcube_inspect_timeout = None
+container_shared_memory = "64m"  # Docker's default
 
 # Other
 loglevel = "debug"
@@ -191,8 +192,19 @@ inline_parameters = [
     "gpus",
     "cleanup",
     "container_loglevel",
+    "container_shared_memory",
 ]
-configurable_parameters = inline_parameters + [
+configurable_parameters = [
+    "loglevel",
+    "prepare_timeout",
+    "sanity_check_timeout",
+    "statistics_timeout",
+    "infer_timeout",
+    "evaluate_timeout",
+    "platform",
+    "gpus",
+    "cleanup",
+    "container_loglevel",
     "server",
     "certificate",
     "auth_class",
