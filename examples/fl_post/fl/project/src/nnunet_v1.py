@@ -54,8 +54,13 @@ def seed_everything(seed=1234):
     torch.backends.cudnn.deterministic = True
 
 
-def train_nnunet(epochs,
-                 current_epoch, 
+def train_nnunet(actual_max_num_epochs, 
+                 epochs,
+                 current_epoch,
+                 val_epoch=True,
+                 train_epoch=True,
+                 train_cutoff=np.inf,
+                 val_cutoff=np.inf,
                  network='3d_fullres', 
                  network_trainer='nnUNetTrainerV2', 
                  task='Task543_FakePostOpp_More', 
@@ -78,6 +83,15 @@ def train_nnunet(epochs,
                  pretrained_weights=None):
 
     """
+    actual_max_num_epochs (int): Provides the number of epochs intended to be trained 
+    (this needs to be held constant outside of individual calls to this function during with max_num_epochs is set to one more than the current epoch)
+    epochs (int): Number of epochs to trainon top of current epoch
+    current_epoch (int): Which epoch will be used to grab the model
+    val_epoch (bool) : Will validation be performed
+    train_epoch (bool) : Will training run (rather than val only) makes lr step and epoch increment
+    train_val_cutoff (int): Total time (in seconds) limit to use in approximating a restriction to training and validation activities.
+    train_cutoff_part (float): Portion of train_val_cutoff going to training
+    val_cutoff_part (float): Portion of train_val_cutoff going to val
     task (int): can be task name or task id
     fold: "0, 1, ..., 5 or 'all'"
     validation_only: use this if you want to only run the validation
@@ -198,6 +212,7 @@ def train_nnunet(epochs,
     trainer = trainer_class(
         plans_file,
         fold,
+        actual_max_num_epochs=actual_max_num_epochs,
         output_folder=output_folder_name,
         dataset_directory=dataset_directory,
         batch_dice=batch_dice,
@@ -221,11 +236,21 @@ def train_nnunet(epochs,
     trainer.save_latest_only = (
         True  # if false it will not store/overwrite _latest but separate files each
     )
+
     trainer.max_num_epochs = current_epoch + epochs
     trainer.epoch = current_epoch
 
-    # TODO: call validation separately
     trainer.initialize(not validation_only)
+
+    # infer total data size and batch size in order to get how many batches to apply so that over many epochs, each data
+    # point is expected to be seen epochs number of times
+
+    num_val_batches_per_epoch = int(np.ceil(len(trainer.dataset_val)/trainer.batch_size))
+    num_train_batches_per_epoch = int(np.ceil(len(trainer.dataset_tr)/trainer.batch_size))
+
+    # the nnunet trainer attributes have a different naming convention than I am using
+    trainer.num_batches_per_epoch = num_train_batches_per_epoch
+    trainer.num_val_batches_per_epoch = num_val_batches_per_epoch
 
     if os.getenv("PREP_INCREMENT_STEP", None) == "from_dataset_properties":
         trainer.save_checkpoint(
@@ -235,7 +260,7 @@ def train_nnunet(epochs,
         return
 
     if find_lr:
-        trainer.find_lr()
+        trainer.find_lr(num_iters=self.actual_max_num_epochs)
     else:
         if not validation_only:
             if args.continue_training:
@@ -247,8 +272,19 @@ def train_nnunet(epochs,
             else:
                 # new training without pretraine weights, do nothing
                 pass
-
-            trainer.run_training()
+            
+            batches_applied_train, \
+                 batches_applied_val, \
+                 this_ave_train_loss, \
+                 this_ave_val_loss, \
+                 this_val_eval_metrics, \
+                 this_val_eval_metrics_C1, \
+                 this_val_eval_metrics_C2, \
+                 this_val_eval_metrics_C3, \
+                 this_val_eval_metrics_C4 = trainer.run_training(train_cutoff=train_cutoff, 
+                                                         val_cutoff=val_cutoff, 
+                                                         val_epoch=val_epoch,
+                                                         train_epoch=train_epoch)
         else:
             # if valbest:
             #     trainer.load_best_checkpoint(train=False)
@@ -256,26 +292,17 @@ def train_nnunet(epochs,
             #     trainer.load_final_checkpoint(train=False)
             trainer.load_latest_checkpoint()
 
-        trainer.network.eval()
+        train_completed = batches_applied_train / float(num_train_batches_per_epoch)
+        val_completed = batches_applied_val / float(num_val_batches_per_epoch)
+        
+        return train_completed, \
+                 val_completed, \
+                 this_ave_train_loss, \
+                 this_ave_val_loss, \
+                 this_val_eval_metrics, \
+                 this_val_eval_metrics_C1, \
+                 this_val_eval_metrics_C2, \
+                 this_val_eval_metrics_C3, \
+                 this_val_eval_metrics_C4
 
-        # if fold == "all":
-        #     print("--> fold == 'all'")
-        #     print("--> DONE")
-        # else:
-        #     # predict validation
-        #     trainer.validate(
-        #         save_softmax=args.npz,
-        #         validation_folder_name=val_folder,
-        #         run_postprocessing_on_folds=not disable_postprocessing_on_folds,
-        #         overwrite=args.val_disable_overwrite,
-        #     )
-
-        #     if network == "3d_lowres" and not args.disable_next_stage_pred:
-        #         print("predicting segmentations for the next stage of the cascade")
-        #         predict_next_stage(
-        #             trainer,
-        #             join(
-        #                 dataset_directory,
-        #                 trainer.plans["data_identifier"] + "_stage%d" % 1,
-        #             ),
-        #         )
+        
