@@ -5,11 +5,12 @@ aggregator :
     init_state_path : save/fl_post_two_init.pbuf
     best_state_path : save/fl_post_two_best.pbuf
     last_state_path : save/fl_post_two_last.pbuf
-    rounds_to_train : 2
+    rounds_to_train : 300
     admins_endpoints_mapping:
       testfladmin@example.com:
         - GetExperimentStatus
         - SetStragglerCuttoffTime
+
 
 collaborator :
   defaults : plan/defaults/collaborator.yaml
@@ -29,9 +30,12 @@ task_runner :
   defaults : plan/defaults/task_runner.yaml
   template : src.runner_nnunetv1.PyTorchNNUNetCheckpointTaskRunner
   settings :
-    device          : cuda
-    gpu_num_string  : '0'
-    nnunet_task     : Task537_FLPost
+    device                  : cuda
+    gpu_num_string          : '0'
+    nnunet_task             : Task537_FLPost
+    train_cutoff            : 100
+    val_cutoff              : 3
+    actual_max_num_epochs   : 1000
     
 network :
   defaults : plan/defaults/network.yaml
@@ -45,19 +49,39 @@ assigner :
       - name       : train_and_validate
         percentage : 1.0
         tasks      :
-          # - aggregated_model_validation
+          - aggregated_model_validation
           - train
-          # - locally_tuned_model_validation
+          - locally_tuned_model_validation
 
 tasks :
   defaults : plan/defaults/tasks_torch.yaml
+  aggregated_model_validation:
+    function : validate
+    kwargs :
+      metrics     :
+        - val_eval
+        - val_eval_C1
+        - val_eval_C2 
+        - val_eval_C3 
+        - val_eval_C4
+      apply : global
   train:
     function : train
     kwargs   :
       metrics     :
-      - train_loss
-      - val_eval
+        - train_loss
       epochs : 1
+  locally_tuned_model_validation:
+    function : validate
+    kwargs   :
+      metrics     :
+        - val_eval
+        - val_eval_C1
+        - val_eval_C2 
+        - val_eval_C3 
+        - val_eval_C4
+      apply  : local
+      from_checkpoint: true
 
 compression_pipeline :
   defaults : plan/defaults/compression_pipeline.yaml
