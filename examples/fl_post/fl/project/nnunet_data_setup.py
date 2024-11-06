@@ -14,8 +14,8 @@ from nnunet_model_setup import trim_data_and_setup_model
 
 num_to_modality = {'_0000': '_brain_t1n.nii.gz',
                    '_0001': '_brain_t2w.nii.gz',
-                   '_0002': '_brain_t1c.nii.gz',
-                   '_0003': '_brain_t2f.nii.gz'}
+                   '_0002': '_brain_t2f.nii.gz',
+                   '_0003': '_brain_t1c.nii.gz'}
 
 def get_subdirs(parent_directory):
     subjects = os.listdir(parent_directory)
@@ -419,3 +419,4 @@ def setup_fl_data(postopp_pardir,
         print(f"\n###   ###   ###   ###   ###   ###   ###\n")
     
     return col_paths
+
