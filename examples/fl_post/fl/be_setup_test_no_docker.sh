@@ -9,10 +9,10 @@ while getopts t flag; do
 done
 TWO_COL_SAME_CERT="${TWO_COL_SAME_CERT:-false}"
 
-for (int i = 0; i< $NUM_COLS; i++) {
+for ((i=0; i< $NUM_COLS; i++)) 
     do
-        COL{$i}_CN="col{$i}@example.com"
-        COL{$i}_LABEL="col{$i}@example.com"
+        eval "COL${i}_CN="col${i}@example.com""
+        eval "COL${i}_LABEL="col${i}@example.com""
     done
 
 
@@ -24,23 +24,28 @@ HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_p
 
 cd $HOMEDIR
 
+rm -rf mlcube_agg
 mkdir mlcube_agg
 cp -r ./mlcube/* ./mlcube_agg
 
-for (int i = 0; i< $NUM_COLS; i++) {
+for ((i=0; i< $NUM_COLS; i++)) 
     do
-        mkdir mlcube_col{$i}
-        cp -r ./mlcube ./mlcube_col{$i}
+	rm -rf mlcube_col${i}
+        mkdir mlcube_col${i}
+        cp -r ./mlcube/* ./mlcube_col${i}
     done
 
+mkdir ./mlcube_agg/workspace/node_cert 
+mkdir ./mlcube_agg/workspace/ca_cert
 
-mkdir ./mlcube_agg/workspace/node_cert ./mlcube_agg/workspace/ca_cert
 
-for (int i = 0; i< $NUM_COLS; i++) {
+for ((i=0; i< $NUM_COLS; i++))
     do
-        mkdir ./mlcube_col{$i}/workspace/node_cert ./mlcube_col{$i}/workspace/ca_cert
+        mkdir ./mlcube_col${i}/workspace/node_cert 
+	mkdir ./mlcube_col${i}/workspace/ca_cert
     done
 
+rm -rf ca
 mkdir ca
 
 # root ca
@@ -49,11 +54,11 @@ openssl req -x509 -new -nodes -key ca/root.key -sha384 -days 36500 -out ca/root.
     -subj "/DC=org/DC=simple/CN=Simple Root CA/O=Simple Inc/OU=Simple Root CA"
 
 # cols 0 through NUM_COLS-1
-for (int i = 0; i< $NUM_COLS; i++) {
+for ((i=0; i< $NUM_COLS; i++))
     do
-        sed -i "/^commonName = /c\commonName = $COL{$i}_CN" csr.conf
-        sed -i "/^DNS\.1 = /c\DNS.1 = $COL{$i}_CN" csr.conf
-        cd mlcube_col{$i}/workspace/node_cert
+        sed -i "/^commonName = /c\commonName = $COL${i}_CN" csr.conf
+        sed -i "/^DNS\.1 = /c\DNS.1 = COL${i}_CN" csr.conf
+        cd mlcube_col${i}/workspace/node_cert
         openssl genpkey -algorithm RSA -out key.key -pkeyopt rsa_keygen_bits:3072
         openssl req -new -key key.key -out csr.csr -config ../../../csr.conf -extensions v3_client
         openssl x509 -req -in csr.csr -CA ../../../ca/root.crt -CAkey ../../../ca/root.key \
@@ -64,7 +69,7 @@ for (int i = 0; i< $NUM_COLS; i++) {
     done
 
 # agg
-sed -i "/^commonName = /c\commonName = $HOSTNAME_" csr.conf
+sed -i "/^commonName = /c\commonName = $AGG_HOSTNAME" csr.conf
 sed -i "/^DNS\.1 = /c\DNS.1 = $AGG_HOSTNAME" csr.conf
 cd mlcube_agg/workspace/node_cert
 openssl genpkey -algorithm RSA -out key.key -pkeyopt rsa_keygen_bits:3072
@@ -80,14 +85,15 @@ echo "address: $AGG_HOSTNAME" >> mlcube_agg/workspace/aggregator_config.yaml
 echo "port: $AGG_PORT" >>mlcube_agg/workspace/aggregator_config.yaml
 
 # cols file
-for (int i = 0; i< $NUM_COLS; i++) {
+for ((i=0; i< $NUM_COLS; i++))
     do
-        echo "$COL{$i}_LABEL: $COL{$i}_CN" >>mlcube_agg/workspace/cols.yaml
+        echo "$COL${i}_LABEL: $COL${i}_CN" >>mlcube_agg/workspace/cols.yaml
     done
 
 # for admin
 ADMIN_CN="admin@example.com"
 
+rm -rf ./for_admin
 mkdir ./for_admin
 mkdir ./for_admin/node_cert
 
@@ -104,10 +110,10 @@ cp -r ../../ca/root.crt ../ca_cert/root.crt
 cd $HOMEDIR
 
 # THIS IS BRANDON'S CODE COPYING IN THE SAME DATA
-for (int i = 0; i< $NUM_COLS; i++) {
+for ((i=0; i< $NUM_COLS; i++))
     do
-        mkdir mlcube_col{$i}/workspace/labels
-	mkdir mlcube_col{$i}/workspace/data
+        mkdir mlcube_col${i}/workspace/labels
+	mkdir mlcube_col${i}/workspace/data
     done
 
 # DATA_DIR="test_data_links_testforhasan"
@@ -129,15 +135,10 @@ for (int i = 0; i< $NUM_COLS; i++) {
 # DATA_DIR_4="test_${SIZE}_BraTS20_3${SUPPLEMENT}_3"
 # DATA_DIR_5="test_${SIZE}_BraTS20_3${SUPPLEMENT}_4"
 
-for (int i = 0; i< $NUM_COLS; i++) {
+for ((i=0; i< $NUM_COLS; i++))
     do
-        DATA_DIR_{$i}="test_small_from_hasan"
-    done
-
-for (int i = 0; i< $NUM_COLS; i++) {
-    do
-        cp -r /raid/edwardsb/projects/RANO/$DATA_DIR_{$i}/labels/* mlcube_col{$i}/workspace/labels
-        cp -r /raid/edwardsb/projects/RANO/$DATA_DIR_{$i}/data/* mlcube_col{$i}/workspace/data
+        cp -r /raid/edwardsb/projects/RANO/test_data_small_from_hasan/labels/* mlcube_col${i}/workspace/labels
+        cp -r /raid/edwardsb/projects/RANO/test_data_small_from_hasan/data/* mlcube_col${i}/workspace/data
     done
 
 # wget https://storage.googleapis.com/medperf-storage/fltest29July/flpost_add29july.tar.gz I copied on spr01 into /home/edwardsb/repo_extras/hasan_medperperf_extras
@@ -150,10 +151,10 @@ cp -r /home/edwardsb/repo_extras/hasan_medperf_extras/download_from_hasan/init_n
 
 
 
-for (int i = 0; i< $NUM_COLS; i++) {
+for ((i=0; i< $NUM_COLS; i++))
     do
-        mkdir mlcube_col{$i}/workspace/additional_files
-        cp -r /home/edwardsb/repo_extras/hasan_medperf_extras/download_from_hasan/init_nnunet mlcube_col{$i}/workspace/additional_files
+        mkdir mlcube_col${i}/workspace/additional_files
+        cp -r /home/edwardsb/repo_extras/hasan_medperf_extras/download_from_hasan/init_nnunet mlcube_col${i}/workspace/additional_files
     done
 
 # source /home/edwardsb/virtual/hasan_medperf/bin/activate
