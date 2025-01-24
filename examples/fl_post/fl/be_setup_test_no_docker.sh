@@ -1,13 +1,22 @@
-NUM_COLS=50
+
 AGG_HOSTNAME=$1
 AGG_PORT=$2
 
-while getopts t flag; do
-    case "${flag}" in
-    t) TWO_COL_SAME_CERT="true" ;;
-    esac
-done
-TWO_COL_SAME_CERT="${TWO_COL_SAME_CERT:-false}"
+
+# Some hard coded variables
+NUM_COLS=50
+HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_post/fl"
+
+
+if [ "$AGG_HOSTNAME" == "" ]; then
+    echo "YOU DID NOT PROVIDE AN AGG HOSTNAME"
+    exit
+fi
+
+if [ "$AGG_PORT" == "" ]; then
+    echo "YOU DID NOT PROVIDE A PORT FOR THE AGGREGATOR"
+    exit
+fi
 
 for ((i=0; i< $NUM_COLS; i++)) 
     do
@@ -18,7 +27,6 @@ for ((i=0; i< $NUM_COLS; i++))
 
 # CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
 
-HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_post/fl"
 
 # cp -r $CODE_CHANGE_DIR/* $HOMEDIR
 
