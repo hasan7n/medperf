@@ -1,18 +1,10 @@
-HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf/examples/fl_post/fl"
+
+HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_post/fl"
 
 cd $HOMEDIR
 
-
 rm -rf mlcube_agg/workspace/final_weights
 rm -rf mlcube_agg/workspace/logs
-rm -rf mlcube_col1/workspace/logs
-rm -rf mlcube_col2/workspace/logs
-rm -rf mlcube_col3/workspace/logs
-rm -rf mlcube_col4/workspace/logs
-rm -rf mlcube_col5/workspace/logs
 rm -rf mlcube_agg/workspace/plan.yaml
-rm -rf mlcube_col1/workspace/plan.yaml
-rm -rf mlcube_col2/workspace/plan.yaml
-rm -rf mlcube_col3/workspace/plan.yaml
-rm -rf mlcube_col4/workspace/plan.yaml
-rm -rf mlcube_col5/workspace/plan.yaml
+rm -rf mlcube_col*/workspace/logs
+rm -rf mlcube_col*/workspace/plan.yaml

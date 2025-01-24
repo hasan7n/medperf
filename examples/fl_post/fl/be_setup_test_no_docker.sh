@@ -95,8 +95,10 @@ echo "port: $AGG_PORT" >>mlcube_agg/workspace/aggregator_config.yaml
 # cols file
 for ((i=0; i< $NUM_COLS; i++))
     do
-        echo "$COL${i}_LABEL: $COL${i}_CN" >>mlcube_agg/workspace/cols.yaml
+        echo "col${i}@example.com: col${i}@example.com" >>mlcube_agg/workspace/cols.yaml
     done
+    # debugging
+exit
 
 # for admin
 ADMIN_CN="admin@example.com"
@@ -165,4 +167,4 @@ for ((i=0; i< $NUM_COLS; i++))
         cp -r /home/edwardsb/repo_extras/hasan_medperf_extras/download_from_hasan/init_nnunet mlcube_col${i}/workspace/additional_files
     done
 
-# source /home/edwardsb/virtual/hasan_medperf/bin/activate
+source /home/edwardsb/virtual/hasan_medperf/bin/activate
