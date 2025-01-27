@@ -11,7 +11,7 @@ cp ./project/be_Dockerfile ./project/Dockerfile
 if ${BUILD_BASE}; then
     git clone https://github.com/hasan7n/openfl.git
     cd openfl
-    git checkout more_split_determinism
+    git checkout develop
     docker build \
 	    --build-arg http_proxy="http://proxy-us.intel.com:912"   \
 	    --build-arg https_proxy="http://proxy-us.intel.com:912"  \

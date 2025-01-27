@@ -97,8 +97,6 @@ for ((i=0; i< $NUM_COLS; i++))
     do
         echo "col${i}@example.com: col${i}@example.com" >>mlcube_agg/workspace/cols.yaml
     done
-    # debugging
-exit
 
 # for admin
 ADMIN_CN="admin@example.com"
@@ -155,9 +153,7 @@ for ((i=0; i< $NUM_COLS; i++))
 
 # aggregator additional files
 mkdir mlcube_agg/workspace/additional_files
-cp -r /home/edwardsb/repo_extras/hasan_medperf_extras/download_from_hasan/init_weights mlcube_agg/workspace/additional_files
-# maybe I don't need the one immediately below (only for collaborators)
-cp -r /home/edwardsb/repo_extras/hasan_medperf_extras/download_from_hasan/init_nnunet mlcube_agg/workspace/additional_files
+cp -r /home/edwardsb/repo_extras/hasan_medperf_extras/download_from_hasan/* mlcube_agg/workspace/additional_files
 
 
 

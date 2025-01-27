@@ -40,13 +40,14 @@ for ((i=0; i< $NUM_COLS; i++))
 
 # run aggregator if appropriate
 if [ "$RUN_AGGREGATOR" == "true" ]; then
-   medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_agg --task start_aggregator -P $AGG_PORT 
+   medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_agg --task start_aggregator -P $AGG_PORT & 
 fi
 
 # run collaborators
 for ((i=0; i< $NUM_COLS; i++))
-    do
-        medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_col${i} --task train -e MEDPERF_PARTICIPANT_LABEL=col${i}@example.com --params data_path=${!COL_${i}_DATA_PATH},labels_path=${!COL_${i}_LABELS_PATH} > col${i}.log & 
+    do  
+        data_path=COL_${i}_DATA_PATH
+	labels_path=COL_${i}_LABELS_PATH
+	medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_col${i} --task train -e MEDPERF_PARTICIPANT_LABEL=col${i}@example.com --params data_path={!data_path},labels_path={!labels_path} > col${i}.log & 
 	sleep 6
     done
-wait
