@@ -3,7 +3,10 @@ PYTHONSCRIPT="import torch; torch.tensor([1.0, 2.0, 3.0, 4.0]).to('cuda')"
 if [ "$1" = "start_aggregator" ] || [ "$1" = "generate_plan" ]; then
     # no need for gpu, don't test cuda
     python /mlcube_project/mlcube.py $@
-else
+# dissabling cuda check for now (inserting jump to start immediately below
+elif true; then
+	python /mlcube_project/mlcube.py $@
+elif false; then
     echo "Testing which cuda version to use"
     python -c "$PYTHONSCRIPT"
     if [ "$?" -ne "0" ]; then

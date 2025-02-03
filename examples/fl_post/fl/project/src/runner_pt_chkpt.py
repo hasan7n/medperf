@@ -79,7 +79,7 @@ class PyTorchCheckpointTaskRunner(TaskRunner):
         })
 
         # Initialize model
-        self.replace_checkpoint(self.checkpoint_path_initial)
+        self.replace_checkpoint(self.checkpoint_path_initial, map_location=self.device)
      
 
     def load_checkpoint(self, checkpoint_path, map_location=None):
@@ -121,9 +121,9 @@ class PyTorchCheckpointTaskRunner(TaskRunner):
         else:
             return self.required_tensorkeys_for_function[func_name]
 
-    def reset_opt_vars(self):
-        current_checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load)
-        initial_checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_initial)
+    def reset_opt_vars(self, map_location=None):
+        current_checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load, map_location=map_location)
+        initial_checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_initial, map_location=map_location)
         derived_opt_state_dict = self._get_optimizer_state(checkpoint_dict=initial_checkpoint_dict)
         self._set_optimizer_state(derived_opt_state_dict=derived_opt_state_dict, 
                                   checkpoint_dict=current_checkpoint_dict)
@@ -138,8 +138,8 @@ class PyTorchCheckpointTaskRunner(TaskRunner):
         """
         return self.write_tensors_into_checkpoint(tensor_dict=tensor_dict, with_opt_vars=with_opt_vars)
     
-    def replace_checkpoint(self, path_to_replacement):
-        checkpoint_dict = self.load_checkpoint(checkpoint_path=path_to_replacement)
+    def replace_checkpoint(self, path_to_replacement, map_location=None):
+        checkpoint_dict = self.load_checkpoint(checkpoint_path=path_to_replacement, map_location=map_location)
         self.save_checkpoint(checkpoint_dict)
         # shutil.copyfile(src=path_to_replacement, dst=self.checkpoint_path_save)
 
@@ -157,20 +157,21 @@ class PyTorchCheckpointTaskRunner(TaskRunner):
             dict: Tensor dictionary {**dict, **optimizer_dict}
 
         """
-        return self.read_tensors_from_checkpoint(with_opt_vars=with_opt_vars)
+        return self.read_tensors_from_checkpoint(with_opt_vars=with_opt_vars, map_location=self.device)
 
-    def read_tensors_from_checkpoint(self, with_opt_vars):
+    def read_tensors_from_checkpoint(self, with_opt_vars, map_location=None):
         """Return a tensor dictionary interpreted from a checkpoint.
 
         Args:
             with_opt_vars (bool): Return the tensor dictionary including the
                                 optimizer tensors (Default=False)
+            map_location: device for torch.load
 
         Returns:
             dict: Tensor dictionary {**dict, **optimizer_dict}
 
         """
-        checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load)
+        checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load, map_location=map_location)
         state = to_cpu_numpy(checkpoint_dict['state_dict'])
         if with_opt_vars:
             opt_state = self._get_optimizer_state(checkpoint_dict=checkpoint_dict)
