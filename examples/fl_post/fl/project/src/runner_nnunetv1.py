@@ -24,7 +24,7 @@ from openfl.utilities.split import split_tensor_dict_for_holdouts
 
 
 from .runner_pt_chkpt import PyTorchCheckpointTaskRunner
-from .NO_OP_nnunet_v1 import FAKE_train_nnunet
+from .NO_OP_nnunet_v1 import FAKE_train_nnunet as train_nnunet
 
 shared_plans_identifier = 'nnUNetPlans_pretrained_POSTOPP'
 
