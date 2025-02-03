@@ -5,7 +5,7 @@ AGG_PORT=$1
 # Some hard coded variables (note one data is being used by all cols)
 PLATFORM="docker"
 NUM_COLS=50
-RUN_AGGREGATOR="true"
+RUN_AGGREGATOR="false"
 HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_post/fl"
 
 
@@ -13,14 +13,7 @@ HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_p
 if [ "$AGG_PORT" == "" ]; then
     echo "YOU DID NOT PROVIDE A PORT FOR THE AGGREGATOR"
     exit
-fi
-
-for ((i=0; i< $NUM_COLS; i++))
-    do
-        eval "COL_${i}_DATA_PATH="$PWD/mlcube_col${i}/workspace/data""
-	eval "COL_${i}_LABELS_PATH="$PWD/mlcube_col${i}/workspace/labels""
-    done	    
-
+fi	    
 
 cd $HOMEDIR
 
@@ -40,7 +33,7 @@ for ((i=0; i< $NUM_COLS; i++))
 
 # run aggregator if appropriate
 if [ "$RUN_AGGREGATOR" == "true" ]; then
-   medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_agg --task start_aggregator -P $AGG_PORT & 
+   medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_agg --task start_aggregator -P $AGG_PORT > agg.log & 
 fi
 
 # run collaborators
@@ -48,6 +41,6 @@ for ((i=0; i< $NUM_COLS; i++))
     do  
         data_path=COL_${i}_DATA_PATH
 	labels_path=COL_${i}_LABELS_PATH
-	medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_col${i} --task train -e MEDPERF_PARTICIPANT_LABEL=col${i}@example.com --params data_path={!data_path},labels_path={!labels_path} > col${i}.log & 
+	medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_col${i} --task train -e MEDPERF_PARTICIPANT_LABEL=col${i}@example.com --params data_path=$PWD/mlcube_col${i}/workspace/data,labels_path=$PWD/mlcube_col${i}/workspace/labels > col${i}.log & 
 	sleep 6
     done

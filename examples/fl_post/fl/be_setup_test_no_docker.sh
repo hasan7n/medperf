@@ -18,17 +18,10 @@ if [ "$AGG_PORT" == "" ]; then
     exit
 fi
 
-for ((i=0; i< $NUM_COLS; i++)) 
-    do
-        eval "COL${i}_CN="col${i}@example.com""
-        eval "COL${i}_LABEL="col${i}@example.com""
-    done
+# Sync code changes to home directory where stuff will run
+CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
+cp -r $CODE_CHANGE_DIR/* $HOMEDIR
 
-
-# CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
-
-
-# cp -r $CODE_CHANGE_DIR/* $HOMEDIR
 
 cd $HOMEDIR
 
@@ -64,8 +57,8 @@ openssl req -x509 -new -nodes -key ca/root.key -sha384 -days 36500 -out ca/root.
 # cols 0 through NUM_COLS-1
 for ((i=0; i< $NUM_COLS; i++))
     do
-        sed -i "/^commonName = /c\commonName = $COL${i}_CN" csr.conf
-        sed -i "/^DNS\.1 = /c\DNS.1 = COL${i}_CN" csr.conf
+        sed -i "/^commonName = /c\commonName = col${i}@example.com" csr.conf
+        sed -i "/^DNS\.1 = /c\DNS.1 = col${i}@example.com" csr.conf
         cd mlcube_col${i}/workspace/node_cert
         openssl genpkey -algorithm RSA -out key.key -pkeyopt rsa_keygen_bits:3072
         openssl req -new -key key.key -out csr.csr -config ../../../csr.conf -extensions v3_client
@@ -145,8 +138,8 @@ for ((i=0; i< $NUM_COLS; i++))
 
 for ((i=0; i< $NUM_COLS; i++))
     do
-        cp -r /raid/edwardsb/projects/RANO/test_data_small_from_hasan/labels/* mlcube_col${i}/workspace/labels
-        cp -r /raid/edwardsb/projects/RANO/test_data_small_from_hasan/data/* mlcube_col${i}/workspace/data
+        cp -r /raid/edwardsb/projects/RANO/test_hundred_BraTS20_3square_0/labels/* mlcube_col${i}/workspace/labels
+        cp -r /raid/edwardsb/projects/RANO/test_hundred_BraTS20_3square_0/data/* mlcube_col${i}/workspace/data
     done
 
 # wget https://storage.googleapis.com/medperf-storage/fltest29July/flpost_add29july.tar.gz I copied on spr01 into /home/edwardsb/repo_extras/hasan_medperperf_extras
