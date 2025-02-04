@@ -232,16 +232,17 @@ class PyTorchNNUNetCheckpointTaskRunner(PyTorchCheckpointTaskRunner):
                        'val_eval_C3': this_val_eval_metrics_C3, 
                        'val_eval_C4': this_val_eval_metrics_C4}
         else:
-            checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load)
+            # fake values since only testing network
+            # checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load)
             
-            all_tr_losses, \
-                all_val_losses, \
-                all_val_losses_tr_mode, \
-                all_val_eval_metrics, \
-                all_val_eval_metrics_C1, \
-                all_val_eval_metrics_C2, \
-                all_val_eval_metrics_C3, \
-                all_val_eval_metrics_C4 = checkpoint_dict['plot_stuff']
+            all_tr_losses =1.0
+            all_val_losses = 1.0
+            all_val_losses_tr_mode = 1.0
+            all_val_eval_metrics = 0.5
+            all_val_eval_metrics_C1 = 0.5
+            all_val_eval_metrics_C2 = 0.5
+            all_val_eval_metrics_C3 = 0.5
+            all_val_eval_metrics_C4 = 0.5
             # these metrics are appended to the checkpoint each call to train, so it is critical that we are grabbing this right after
             metrics = {'val_eval': all_val_eval_metrics[-1], 
                        'val_eval_C1': all_val_eval_metrics_C1[-1], 
