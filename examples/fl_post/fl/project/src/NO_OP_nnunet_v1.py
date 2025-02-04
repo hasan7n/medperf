@@ -292,13 +292,13 @@ def FAKE_train_nnunet(actual_max_num_epochs,
     else:
         train_completed = 1.0
     val_completed = 1.0
-    this_ave_train_loss = 0.5 
-    this_ave_val_loss = 0.5
-    this_val_eval_metrics =0.4  
-    this_val_eval_metrics_C1 = 0.4
-    this_val_eval_metrics_C2 = 0.4
-    this_val_eval_metrics_C3 = 0.4
-    this_val_eval_metrics_C4 = 0.4
+    this_ave_train_loss = [0.5] 
+    this_ave_val_loss = [0.5]
+    this_val_eval_metrics =[0.4]  
+    this_val_eval_metrics_C1 = [0.4]
+    this_val_eval_metrics_C2 = [0.4]
+    this_val_eval_metrics_C3 = [0.4]
+    this_val_eval_metrics_C4 = [0.4]
 
 
 
