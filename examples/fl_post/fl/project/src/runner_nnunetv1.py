@@ -117,7 +117,7 @@ class PyTorchNNUNetCheckpointTaskRunner(PyTorchCheckpointTaskRunner):
 
         # get device for correct placement of tensors
         device = self.device
-
+        self.logger.info('loading checkpoint, due to set tensor call.')
         checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load, map_location=device)
         epoch = checkpoint_dict['epoch']
         new_state = {}
@@ -132,11 +132,14 @@ class PyTorchNNUNetCheckpointTaskRunner(PyTorchCheckpointTaskRunner):
         checkpoint_dict['state_dict'] = new_state
         
         if with_opt_vars:
+            self.logger.info('maybe set optimizer state')
             # see if there is state to restore first
             if tensor_dict.pop('__opt_state_needed') == 'true':
                 checkpoint_dict = self._set_optimizer_state(derived_opt_state_dict=tensor_dict, 
                                                             checkpoint_dict=checkpoint_dict)
+        self.logger.info('save checkpoint')
         self.save_checkpoint(checkpoint_dict)
+        self.logger.info('done save checkpoint')
 
         # FIXME: this should be unnecessary now
         # we may want to know epoch so that we can properly tell the training script to what epoch to train (NNUnet V1 only supports training with a max_num_epochs setting)
@@ -194,8 +197,10 @@ class PyTorchNNUNetCheckpointTaskRunner(PyTorchCheckpointTaskRunner):
         """Perform validation."""
 
         if not from_checkpoint:
+            self.logger.info('Rebuilding Model')
             self.rebuild_model(input_tensor_dict=input_tensor_dict, **kwargs)
             # 1. Insert tensor_dict info into checkpoint
+            self.logger.info('set_tensor_dict before running validation')
             self.set_tensor_dict(tensor_dict=input_tensor_dict, with_opt_vars=False)
             self.logger.info(f"Validating for round:{round_num}")
             # 2. Train/val function existing externally
@@ -249,8 +254,10 @@ class PyTorchNNUNetCheckpointTaskRunner(PyTorchCheckpointTaskRunner):
                        'val_eval_C2': all_val_eval_metrics_C2[-1], 
                        'val_eval_C3': all_val_eval_metrics_C3[-1], 
                        'val_eval_C4': all_val_eval_metrics_C4[-1]}
-
-        return self.convert_results_to_tensorkeys(col_name, round_num, metrics, insert_model=False)
+        add_metrics_tags = []
+        if "apply" in kwargs:
+            add_metrics_tags = [f"nnunet_{kwargs['apply']}_val"]
+        return self.convert_results_to_tensorkeys(col_name, round_num, metrics, insert_model=False, add_metrics_tags=add_metrics_tags)
 
 
     def load_metrics(self, filepath):
