@@ -116,4 +116,4 @@ straggler_handling_policy :
     template : openfl.component.straggler_handling_functions.CutoffTimeBasedStragglerHandling
     settings :
         straggler_cutoff_time : 1200
-        minimum_reporting : 2
+        minimum_reporting : 50
