@@ -21,7 +21,15 @@ RUN pip install --no-cache-dir /openfl
 # RUN /cuda118/bin/pip install --no-cache-dir torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --extra-index-url https://download.pytorch.org/whl/cu118
 # RUN /cuda118/bin/pip install --no-cache-dir -r /mlcube_project/requirements.txt
 
+RUN apt-get install sudo
+RUN useradd -m -s /bin/bash bedwards && echo "bedwards:linklink" | chpasswd
+
+# Add the user to the sudo group
+RUN usermod -aG sudo bedwards
+
 # Copy mlcube project folder
 COPY . /mlcube_project
+
+ENV GRPC_TRACE="call,call_error,client_channel,tcp"
 
 ENTRYPOINT ["sh", "/mlcube_project/entrypoint.sh"]
