@@ -146,7 +146,7 @@ for ((i=0; i< $NUM_COLS; i++))
 
 # aggregator additional files
 mkdir mlcube_agg/workspace/additional_files
-cp -r /home/edwardsb/repo_extras/hasan_medperf_extras/download_from_hasan/* mlcube_agg/workspace/additional_files
+cp -r /raid/edwardsb/RANO/download_from_hasan/* mlcube_agg/workspace/additional_files
 
 
 
