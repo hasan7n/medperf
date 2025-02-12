@@ -62,6 +62,8 @@ mv ./mlcube_agg/workspace/plan/plan.yaml ./mlcube_agg/workspace
 rm -r ./mlcube_agg/workspace/plan
 cp ./mlcube_agg/workspace/plan.yaml ./for_admin
 
+echo "...copying plan"
+
 for dir in mlcube_col*/; do
     if [ -d "$dir" ]; then
         cp ./mlcube_agg/workspace/plan.yaml $dir/workspace
@@ -73,6 +75,8 @@ AGG="medperf --platform $AGG_PLATFORM mlcube run --mlcube ./mlcube_agg --task st
 COL1="medperf --platform $COL1_PLATFORM --gpus=device=0 mlcube run --mlcube ./mlcube_col1 --task train -e MEDPERF_PARTICIPANT_LABEL=col1@example.com --params data_path=$COL1_DATA,labels_path=$COL1_LABELS"
 COL2="medperf --platform $COL2_PLATFORM --gpus=device=1 mlcube run --mlcube ./mlcube_col2 --task train -e MEDPERF_PARTICIPANT_LABEL=col2@example.com --params data_path=$COL2_DATA,labels_path=$COL2_LABELS"
 COL3="medperf --platform $COL3_PLATFORM --gpus=device=1 mlcube run --mlcube ./mlcube_col3 --task train -e MEDPERF_PARTICIPANT_LABEL=col3@example.com --params data_path=$COL3_DATA,labels_path=$COL3_LABELS"
+
+echo "...running aggregator"
 
 $AGG  &
 #sleep 6
