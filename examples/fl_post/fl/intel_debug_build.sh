@@ -6,7 +6,7 @@ done
 BUILD_BASE="${BUILD_BASE:-false}"
 
 # copy over changes from be_Dockerfile to Dockerfile
-cp project/debug_Dockerfile project/Dockerfile
+cp project/intel_debug_Dockerfile project/Dockerfile
 
 if ${BUILD_BASE}; then
     git clone https://github.com/hasan7n/openfl.git
