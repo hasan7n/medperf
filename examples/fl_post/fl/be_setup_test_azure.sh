@@ -1,6 +1,6 @@
 
-AGG_HOSTNAME=$1
-AGG_PORT=$2
+AGG_HOSTNAME=rano-aggregator.westus2.cloudapp.azure.com
+AGG_PORT=46585
 
 
 # Some hard coded variables

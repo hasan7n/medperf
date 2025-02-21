@@ -1,5 +1,5 @@
 
-AGG_PORT=443
+AGG_PORT=46585
 
 
 # Some hard coded variables (note one data is being used by all cols)
