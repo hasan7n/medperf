@@ -5,7 +5,7 @@ AGG_PORT=$2
 
 # Some hard coded variables
 NUM_COLS=50
-HOMEDIR="/home/bedwards/repositories/medperf/examples/fl_post/fl"
+HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_azure/examples/fl_post/fl"
 
 
 if [ "$AGG_HOSTNAME" == "" ]; then
@@ -19,6 +19,11 @@ if [ "$AGG_PORT" == "" ]; then
 fi
 
 cd $HOMEDIR
+
+# Sync code changes to home directory where stuff will run
+CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
+cp -r $CODE_CHANGE_DIR/* ./
+
 
 rm -rf mlcube_agg
 mkdir mlcube_agg
@@ -133,21 +138,22 @@ for ((i=0; i< $NUM_COLS; i++))
 
 for ((i=0; i< $NUM_COLS; i++))
     do
-        cp -r /home/bedwards/data/test_data_small_from_hasan/labels/* mlcube_col${i}/workspace/labels
-        cp -r /home/bedwards/data/test_data_small_from_hasan/data/* mlcube_col${i}/workspace/data
+        cp -r /raid/edwardsb/projects/RANO/test_hundred_BraTS20_3square_0/labels/* mlcube_col${i}/workspace/labels
+        cp -r /raid/edwardsb/projects/RANO/test_hundred_BraTS20_3square_0/data/* mlcube_col${i}/workspace/data
     done
 
 # wget https://storage.googleapis.com/medperf-storage/fltest29July/flpost_add29july.tar.gz I copied on spr01 into /home/edwardsb/repo_extras/hasan_medperperf_extras
 
 # aggregator additional files
-cp -r /home/bedwards/mlcube_agg_backup_fullmodel_secondtry/workspace/additional_files/* mlcube_agg/workspace/additional_files
+mkdir mlcube_agg/workspace/additional_files
+cp -r /raid/edwardsb/projects/RANO/download_from_hasan/* mlcube_agg/workspace/additional_files
 
 
 
 for ((i=0; i< $NUM_COLS; i++))
     do
-        mkdir -p mlcube_col${i}/workspace/additional_files
-        cp -r /home/bedwards/mlcube_agg_backup_fullmodel_secondtry/workspace/additional_files/init_nnunet mlcube_col${i}/workspace/additional_files
+        mkdir mlcube_col${i}/workspace/additional_files
+        cp -r /raid/edwardsb/projects/RANO/download_from_hasan/init_nnunet mlcube_col${i}/workspace/additional_files
     done
 
 # source /home/edwardsb/virtual/hasan_medperf/bin/activate

@@ -1,12 +1,12 @@
 
-AGG_PORT=$1
+AGG_PORT=46585
 
 
 # Some hard coded variables (note one data is being used by all cols)
 PLATFORM="docker"
 NUM_COLS=50
 RUN_AGGREGATOR="false"
-HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_post/fl"
+HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_azure/examples/fl_post/fl"
 
 
 
@@ -16,6 +16,11 @@ if [ "$AGG_PORT" == "" ]; then
 fi	    
 
 cd $HOMEDIR
+
+# Copy over project code
+SRC_PROJECT_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl/project"
+cp -r $SRC_PROJECT_DIR /project
+
 
 # generate plan and copy it to each node
 

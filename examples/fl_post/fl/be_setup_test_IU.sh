@@ -1,11 +1,11 @@
 
-AGG_HOSTNAME=$1
-AGG_PORT=$2
+AGG_HOSTNAME=
+AGG_PORT=443
 
 
 # Some hard coded variables
 NUM_COLS=50
-HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_post/fl"
+HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_IU/examples/fl_post/fl"
 
 
 if [ "$AGG_HOSTNAME" == "" ]; then
@@ -18,12 +18,14 @@ if [ "$AGG_PORT" == "" ]; then
     exit
 fi
 
-# Sync code changes to home directory where stuff will run
-CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
-cp -r $CODE_CHANGE_DIR/* $HOMEDIR
 
 
 cd $HOMEDIR
+
+# Sync code changes to HOMEDIR where stuff will run
+CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
+cp -r $CODE_CHANGE_DIR/* ./
+
 
 rm -rf mlcube_agg
 mkdir mlcube_agg

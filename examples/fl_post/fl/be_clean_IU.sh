@@ -8,7 +8,7 @@ fi
 
 
 
-HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_fullmodel_test/examples/fl_post/fl"
+HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_IU/examples/fl_post/fl"
 
 cd $HOMEDIR
 
