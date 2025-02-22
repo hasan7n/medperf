@@ -24,7 +24,7 @@ cd $HOMEDIR
 
 # Sync code changes to HOMEDIR where stuff will run
 CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
-cp -r $CODE_CHANGE_DIR/* ./
+rsync -r --exclude .git $CODE_CHANGE_DIR/* ./
 
 
 rm -rf mlcube_agg
