@@ -19,6 +19,8 @@ cd $HOMEDIR
 # Copy over project code
 SRC_PROJECT_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl/project"
 cp -r $SRC_PROJECT_DIR /project
+rsync -r --exclude .git $SRC_PROJECT_DIR/* ./project
+
 
 # generate plan and copy it to each node
 
