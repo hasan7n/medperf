@@ -158,4 +158,11 @@ for ((i=0; i< $NUM_COLS; i++))
         cp -r /raid/edwardsb/projects/RANO/download_from_hasan/init_nnunet mlcube_col${i}/workspace/additional_files
     done
 
+# Copy PKI to folder for transfer
++cp -r mlcube_agg/workspace/ca_cert /raid/edwardsb/projects/RANO/files_for_agg_side/azure
++cp -r mlcube_agg/workspace/node_cert /raid/edwardsb/projects/RANO/files_for_agg_side/azure
++cp mlcube_agg/workspace/training_config.yaml /raid/edwardsb/projects/RANO/files_for_agg_side/azure
+
+
+
 # source /home/edwardsb/virtual/hasan_medperf/bin/activate
