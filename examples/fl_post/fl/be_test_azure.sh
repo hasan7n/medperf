@@ -24,8 +24,11 @@ rsync -r --exclude .git $SRC_PROJECT_DIR/* ./project
 # generate plan and copy it to each node
 
 medperf --platform $PLATFORM mlcube run --mlcube ./mlcube_agg --task generate_plan
+echo "...moving plan into mlcube_agg/workspace"
 mv ./mlcube_agg/workspace/plan/plan.yaml ./mlcube_agg/workspace
+echo "...removing plan folder from mlcube_agg/workspace"
 rm -r ./mlcube_agg/workspace/plan
+echo "...copying plan into ./for_admin"
 cp ./mlcube_agg/workspace/plan.yaml ./for_admin
 
 echo "...copying over the plan into mlcube_col# directories"
