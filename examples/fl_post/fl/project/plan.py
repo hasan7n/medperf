@@ -2,8 +2,10 @@ import yaml
 
 
 def generate_plan(training_config_path, aggregator_config_path, plan_path):
+    print(f"...opening training config\n")
     with open(training_config_path) as f:
         training_config = yaml.safe_load(f)
+    print(f"...opening aggregator config\n")
     with open(aggregator_config_path) as f:
         aggregator_config = yaml.safe_load(f)
 
@@ -11,6 +13,6 @@ def generate_plan(training_config_path, aggregator_config_path, plan_path):
     #       (e.g., tls=true, reconnect_interval, ...)
     training_config["network"]["settings"]["agg_addr"] = aggregator_config["address"]
     training_config["network"]["settings"]["agg_port"] = aggregator_config["port"]
-
+    print(f"...saving plan yaml\n")
     with open(plan_path, "w") as f:
         yaml.dump(training_config, f)
