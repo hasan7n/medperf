@@ -16,3 +16,5 @@ def generate_plan(training_config_path, aggregator_config_path, plan_path):
     print(f"...saving plan yaml\n")
     with open(plan_path, "w") as f:
         yaml.dump(training_config, f)
+    print(f"...exiting generate_plan\n")
+    return
