@@ -11,7 +11,7 @@ cp project/intel_debug_Dockerfile project/Dockerfile
 if ${BUILD_BASE}; then
     git clone https://github.com/hasan7n/openfl.git
     cd openfl
-    git checkout develop
+    git checkout 9467f829687b6284a6e380d31f90d31bc9de023f
     docker build \
 	    --build-arg http_proxy="http://proxy-us.intel.com:912"   \
 	    --build-arg https_proxy="http://proxy-us.intel.com:912"  \
