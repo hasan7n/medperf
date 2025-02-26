@@ -21,6 +21,8 @@ fi
 
 for ((i=0; i< $NUM_COLS; i++))
     do
+	echo ""
+	echo "#### Col${i} results below####"
         cat col${i}.log | grep -A $AFTER -B $BEFORE "$STRING"
     done
 
