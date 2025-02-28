@@ -30,6 +30,4 @@ RUN usermod -aG sudo bedwards
 # Copy mlcube project folder
 COPY . /mlcube_project
 
-ENV GRPC_TRACE="call,call_error,client_channel,tcp"
-
 ENTRYPOINT ["sh", "/mlcube_project/entrypoint.sh"]
