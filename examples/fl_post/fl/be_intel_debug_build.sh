@@ -1,5 +1,10 @@
-cp mlcube/be_mlcube.yaml mlcube/mlcube.yaml
+if [ -f "mlcube/be_mlcube.yaml" ]; then
 
+    cp mlcube/be_mlcube.yaml mlcube/mlcube.yaml
+else
+    echo "mlcube/be_mlcube.yaml was not able to be copied because it did not exist"
+    exit
+fi
 
 while getopts b flag; do
     case "${flag}" in

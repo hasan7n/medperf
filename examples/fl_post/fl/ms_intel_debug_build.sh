@@ -1,5 +1,11 @@
-cp mlcube/ms_mlcube.yaml mlcube/mlcube.yaml
-
+if [ -f "mlcube/ms_mlcube.yaml" ]; then
+	
+    cp mlcube/ms_mlcube.yaml mlcube/mlcube.yaml
+else
+    echo "mlcube/ms_mlcube.yaml was not able to be copied, because it does not exist"
+    exit
+fi
+			    
 
 while getopts b flag; do
     case "${flag}" in
