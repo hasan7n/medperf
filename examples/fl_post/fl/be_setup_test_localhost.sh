@@ -1,13 +1,12 @@
 
-AGG_HOSTNAME=rano-aggregator.westus2.cloudapp.azure.com
+AGG_HOSTNAME=localhost
 AGG_PORT=46585
 
 
 # Some hard coded variables
 NUM_COLS=50
 BASEDIR="/raid/edwardsb/projects/RANO"
-HOMEDIR="$BASEDIR/hasan_medperf_azure/examples/fl_post/fl"
-TRANSFER_DIR="$BASEDIR/files_for_agg_side/azure"
+HOMEDIR="$BASEDIR/hasan_medperf_localhost/examples/fl_post/fl"
 
 CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
 
@@ -158,7 +157,4 @@ for ((i=0; i< $NUM_COLS; i++))
         mkdir mlcube_col${i}/workspace/additional_files
         cp -r /raid/edwardsb/projects/RANO/download_from_hasan/init_nnunet mlcube_col${i}/workspace/additional_files
     done
-
-# Copy PKI etc. to folder for transfer
-cp -r mlcube_agg/* $TRANSFER_DIR
 

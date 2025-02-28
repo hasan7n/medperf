@@ -5,8 +5,11 @@ AGG_PORT=443
 
 # Some hard coded variables
 NUM_COLS=50
-HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_IU/examples/fl_post/fl"
+BASEDIR="/raid/edwardsb/projects/RANO"
+HOMEDIR="$BASEDIR/hasan_medperf_IU/examples/fl_post/fl"
+TRANSFER_DIR="$BASEDIR/files_for_agg_side/IU"
 
+CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
 
 if [ "$AGG_HOSTNAME" == "" ]; then
     echo "YOU DID NOT PROVIDE AN AGG HOSTNAME"
@@ -19,11 +22,10 @@ if [ "$AGG_PORT" == "" ]; then
 fi
 
 
-
+mkdir -p $HOMEDIR
 cd $HOMEDIR
 
 # Sync code changes to HOMEDIR where stuff will run
-CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
 rsync -r --exclude .git $CODE_CHANGE_DIR/* ./
 
 
@@ -158,11 +160,8 @@ for ((i=0; i< $NUM_COLS; i++))
         cp -r /raid/edwardsb/projects/RANO/download_from_hasan/init_nnunet mlcube_col${i}/workspace/additional_files
     done
 
-# Copy PKI to folder for transfer
-+cp -r mlcube_agg/workspace/ca_cert /raid/edwardsb/projects/RANO/files_for_agg_side/azure
-+cp -r mlcube_agg/workspace/node_cert /raid/edwardsb/projects/RANO/files_for_agg_side/azure
-+cp mlcube_agg/workspace/training_config.yaml /raid/edwardsb/projects/RANO/files_for_agg_side/azure
-
+# Copy PKI etc. to folder for transfer
+cp -r mlcube_agg/* $TRANSFER_DIR
 
 
 # source /home/edwardsb/virtual/hasan_medperf/bin/activate
