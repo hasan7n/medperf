@@ -1,12 +1,14 @@
 
 AGG_PORT=443
 
-
 # Some hard coded variables (note one data is being used by all cols)
 PLATFORM="docker"
 NUM_COLS=50
 RUN_AGGREGATOR="false"
 HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_IU/examples/fl_post/fl"
+
+# These logs build up and cause significant lag
+rm -rf ~/.medperf_logs/*
 
 
 if [ "$AGG_PORT" == "" ]; then

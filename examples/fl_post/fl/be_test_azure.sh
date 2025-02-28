@@ -8,6 +8,8 @@ NUM_COLS=50
 RUN_AGGREGATOR="false"
 HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_azure/examples/fl_post/fl"
 
+# These logs build up and cause significant lag
+rm -rf ~/.medperf_logs/*
 
 if [ "$AGG_PORT" == "" ]; then
     echo "YOU DID NOT PROVIDE A PORT FOR THE AGGREGATOR"
