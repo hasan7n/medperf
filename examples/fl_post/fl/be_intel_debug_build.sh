@@ -1,3 +1,6 @@
+cp mlcube/be_mlcube.yaml mlcube/mlcube.yaml
+
+
 while getopts b flag; do
     case "${flag}" in
     b) BUILD_BASE="true" ;;
