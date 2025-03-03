@@ -250,7 +250,7 @@ class Cube(Entity, MedperfSchema, DeployableSchema):
         kwargs.update(string_params)
         cmd = f"mlcube --log-level {config.loglevel} run"
         cmd += (
-            f' --mlcube="{self.cube_path}" --task={task} --platform={config.platform}'
+            f' --mlcube="{self.cube_path}" --task={task} --platform={config.platform --network=host}'
         )
         if task not in [
             "train",
