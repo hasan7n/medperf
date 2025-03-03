@@ -24,3 +24,7 @@ for ((i=0; i< $NUM_COLS; i++))
     do
         rm col${i}.log
     done
+
+# clean out medperf logs
+rm ~/.medperf_logs
+

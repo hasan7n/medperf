@@ -15,9 +15,9 @@ fi
 
 cd $HOMEDIR
 
-# Copy over project code
-SRC_PROJECT_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl/project"
-rsync -r --exclude .git $SRC_PROJECT_DIR/* ./project
+# We do not copy over project code since this test requires a local change
+# SRC_PROJECT_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl/project"
+# rsync -r --exclude .git $SRC_PROJECT_DIR/* ./project
 
 
 # generate plan and copy it to each node
