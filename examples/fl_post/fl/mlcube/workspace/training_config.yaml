@@ -58,7 +58,7 @@ task_runner :
   defaults : plan/defaults/task_runner.yaml
   template : src.runner_nnunetv1.PyTorchNNUNetCheckpointTaskRunner
   settings :
-    device                  : cpu
+    device                  : cuda
     gpu_num_string          : '0'
     nnunet_task             : Task537_FLPost
     actual_max_num_epochs   : *rounds_to_train
