@@ -1,3 +1,4 @@
+rm -rf ~/.medperf_logs/*
 
 AGG_PORT=46585
 
