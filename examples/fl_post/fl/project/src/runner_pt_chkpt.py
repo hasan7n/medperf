@@ -101,7 +101,8 @@ class PyTorchCheckpointTaskRunner(TaskRunner):
         rebuild_model_util(runner_class=self, input_tensor_dict=input_tensor_dict, **kwargs)
 
     def initialize_tensorkeys_for_functions(self, **kwargs):
-        initialize_tensorkeys_for_functions_util(runner_class=self, **kwargs)
+        pass
+        # initialize_tensorkeys_for_functions_util(runner_class=self, **kwargs)
      
     def get_required_tensorkeys_for_function(self, func_name, **kwargs):
         """
