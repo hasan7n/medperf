@@ -1,6 +1,6 @@
 FROM local/openfl:local
 
-ENV LANG C.UTF-8
+ENV LANG=C.UTF-8
 ENV CUDA_VISIBLE_DEVICES="0"
 
 # install project dependencies
