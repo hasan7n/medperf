@@ -1,6 +1,3 @@
-rm -rf ~/.medperf_logs/*
-
-
 AGG_PORT=46585
 
 MEDPERF=/home/edwardsb/virtual/hasan_medperf_with_host_network/bin/medperf

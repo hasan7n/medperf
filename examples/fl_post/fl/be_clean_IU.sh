@@ -26,4 +26,4 @@ for ((i=0; i< $NUM_COLS; i++))
     done
 
 # clean out medperf logs
-rm ~/.medperf_logs
+rm -rf ~/.medperf_logs/*
