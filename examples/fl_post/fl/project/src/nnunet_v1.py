@@ -258,8 +258,8 @@ def train_nnunet(actual_max_num_epochs,
 
     # STAYing WITH NNUNET CONVENTION OF 50 AND 250 VAL AND TRAIN BATCHES RESPECTIVELY
     # Note: This convention makes sense in combination with a train_completion_dampener of 0.0
-    num_val_batches_per_epoch = 50 
-    num_train_batches_per_epoch = 250 
+    num_val_batches_per_epoch = 2
+    num_train_batches_per_epoch = 2
 
     # the nnunet trainer attributes have a different naming convention than I am using
     trainer.num_batches_per_epoch = num_train_batches_per_epoch

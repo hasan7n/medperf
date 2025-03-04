@@ -150,113 +150,39 @@ class PyTorchNNUNetCheckpointTaskRunner(PyTorchCheckpointTaskRunner):
         # TODO: Figure out the right name to use for this method and the default assigner
         """Perform training for a specified number of epochs."""
 
-        self.rebuild_model(input_tensor_dict=input_tensor_dict, **kwargs)
-        # 1. Insert tensor_dict info into checkpoint
-        self.set_tensor_dict(tensor_dict=input_tensor_dict, with_opt_vars=False)
-        self.logger.info(f"Training for round:{round_num}")
-        train_completed, \
-        val_completed, \
-        this_ave_train_loss, \
-        this_ave_val_loss, \
-        this_val_eval_metrics, \
-        this_val_eval_metrics_C1, \
-        this_val_eval_metrics_C2, \
-        this_val_eval_metrics_C3, \
-        this_val_eval_metrics_C4 = train_nnunet(actual_max_num_epochs=self.actual_max_num_epochs, 
-                                                      fl_round=round_num, 
-                                                      train_cutoff=train_cutoff_time,
-                                                      val_cutoff = val_cutoff_time,
-                                                      task=self.data_loader.get_task_name(),
-                                                      val_epoch=True,
-                                                      train_epoch=True)
+        global_tensor_dict = {}
+        local_tensor_dict = {}
+        the_file = os.path.join(os.path.dirname(__file__), "to_send.yaml")
+        with open(the_file) as f:
+            req = yaml.safe_load(f)
+        for k in req:
+            tk = TensorKey(k["tensor_name"], k["origin"], round_num, k["report"], tuple(k["tags"]))
+            global_tensor_dict[tk] = np.random.random(size=k["val_shape"]).astype(k["val_type"])
 
-        # dampen the train_completion
-        """
-        values in range: (0, 1] with values near 0.0 making all train_completion rates shift nearer to 1.0, thus making the
-        trained model update weighting during aggregation stay closer to the plain data size weighting
-        specifically, update_weight = train_data_size / train_completed**train_completion_dampener
-        """
-        train_completed = train_completed**train_completion_dampener
+        local_tensor_dict[TensorKey("__opt_state_needed", col_name, round_num, False, ("trained",))] = "true"
+        local_tensor_dict[TensorKey("__opt_state_needed", col_name, round_num+1, False, ("model",))] = "true"
 
-        # update amount of task completed
-        self.task_completed['train'] = train_completed
-        self.task_completed['locally_tuned_model_validation'] = val_completed
-
-        # 3. Prepare metrics 
-        metrics = {'train_loss': this_ave_train_loss}
-
-        global_tensor_dict, local_tensor_dict = self.convert_results_to_tensorkeys(col_name, round_num, metrics, insert_model=True)
-
-        self.logger.info(f"Completed train/val with {int(train_completed*100)}% of the train work and {int(val_completed*100)}% of the val work. Exact rates are: {train_completed} and {val_completed}")
-        
         return global_tensor_dict, local_tensor_dict
   
 
     def validate(self, col_name, round_num, input_tensor_dict, val_cutoff_time=np.inf, from_checkpoint=False, **kwargs):
         # TODO: Figure out the right name to use for this method and the default assigner
         """Perform validation."""
+        local_output_tensor_dict = {}
+        global_output_tensor_dict = {}
 
-        if not from_checkpoint:
-            self.logger.info('Rebuilding Model')
-            self.rebuild_model(input_tensor_dict=input_tensor_dict, **kwargs)
-            # 1. Insert tensor_dict info into checkpoint
-            self.logger.info('set_tensor_dict before running validation')
-            self.set_tensor_dict(tensor_dict=input_tensor_dict, with_opt_vars=False)
-            self.logger.info(f"Validating for round:{round_num}")
-            # 2. Train/val function existing externally
-            # Some todo inside function below
-            train_completed, \
-            val_completed, \
-            this_ave_train_loss, \
-            this_ave_val_loss, \
-            this_val_eval_metrics, \
-            this_val_eval_metrics_C1, \
-            this_val_eval_metrics_C2, \
-            this_val_eval_metrics_C3, \
-            this_val_eval_metrics_C4 = train_nnunet(actual_max_num_epochs=self.actual_max_num_epochs, 
-                                                fl_round=round_num, 
-                                                train_cutoff=0,
-                                                val_cutoff = val_cutoff_time,
-                                                task=self.data_loader.get_task_name(), 
-                                                val_epoch=True,
-                                                train_epoch=False)
-            # double check
-            if train_completed != 0.0:
-                raise ValueError(f"Tried to validate only, but got a non-zero amount ({train_completed}) of training done.")
+        metrics = {'val_eval': np.random.random(size=[]).astype(np.float64), 
+                       'val_eval_C1': np.random.random(size=[]).astype(np.float64), 
+                       'val_eval_C2': np.random.random(size=[]).astype(np.float64), 
+                       'val_eval_C3': np.random.random(size=[]).astype(np.float64), 
+                       'val_eval_C4': np.random.random(size=[]).astype(np.float64)}
+        tags = ("metric", f"nnunet_{kwargs['apply']}_val")
+        
+        for m in metrics:
+            tk = TensorKey(m, col_name, round_num, True, tags)
+            global_output_tensor_dict[tk] = metrics[m]
 
-            # update amount of task completed
-            self.task_completed['aggregated_model_validation'] = val_completed
-
-            self.logger.info(f"Completed train/val with {int(train_completed*100)}% of the train work and {int(val_completed*100)}% of the val work. Exact rates are: {train_completed} and {val_completed}")
-
-            
-            # 3. Prepare metrics 
-            metrics = {'val_eval': this_val_eval_metrics, 
-                       'val_eval_C1': this_val_eval_metrics_C1, 
-                       'val_eval_C2': this_val_eval_metrics_C2, 
-                       'val_eval_C3': this_val_eval_metrics_C3, 
-                       'val_eval_C4': this_val_eval_metrics_C4}
-        else:
-            checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load)
-            
-            all_tr_losses, \
-                all_val_losses, \
-                all_val_losses_tr_mode, \
-                all_val_eval_metrics, \
-                all_val_eval_metrics_C1, \
-                all_val_eval_metrics_C2, \
-                all_val_eval_metrics_C3, \
-                all_val_eval_metrics_C4 = checkpoint_dict['plot_stuff']
-            # these metrics are appended to the checkpoint each call to train, so it is critical that we are grabbing this right after
-            metrics = {'val_eval': all_val_eval_metrics[-1], 
-                       'val_eval_C1': all_val_eval_metrics_C1[-1], 
-                       'val_eval_C2': all_val_eval_metrics_C2[-1], 
-                       'val_eval_C3': all_val_eval_metrics_C3[-1], 
-                       'val_eval_C4': all_val_eval_metrics_C4[-1]}
-        add_metrics_tags = []
-        if "apply" in kwargs:
-            add_metrics_tags = [f"nnunet_{kwargs['apply']}_val"]
-        return self.convert_results_to_tensorkeys(col_name, round_num, metrics, insert_model=False, add_metrics_tags=add_metrics_tags)
+        return global_output_tensor_dict, local_output_tensor_dict
 
 
     def load_metrics(self, filepath):
