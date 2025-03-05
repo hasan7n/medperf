@@ -17,29 +17,29 @@ def collaborator_pre_training_hook(
 
     cn = get_collaborator_cn()
 
-    os.symlink(data_path, f"{workspace_folder}/data", target_is_directory=True)
-    os.symlink(labels_path, f"{workspace_folder}/labels", target_is_directory=True)
+    # os.symlink(data_path, f"{workspace_folder}/data", target_is_directory=True)
+    # os.symlink(labels_path, f"{workspace_folder}/labels", target_is_directory=True)
 
     # this function returns metadata (model weights and config file) to be distributed out of band
     # evan should use this without stuff to overwrite/sync so that it produces the correct metdata
     # when evan runs, init_model_path, init_model_info_path should be None
     # plans_path should also be None (the returned thing will point to where it lives so that it will be synced with others)
 
-    nnunet_setup.main(
-        postopp_pardir=workspace_folder,
-        three_digit_task_num=537,  # FIXME: does this need to be set in any particular way?
-        init_model_path=f"{init_nnunet_directory}/model_initial_checkpoint.model",
-        init_model_info_path=f"{init_nnunet_directory}/model_initial_checkpoint.model.pkl",
-        task_name="FLPost",
-        percent_train=0.8,
-        split_logic="by_subject_time_pair",
-        network="3d_fullres",
-        network_trainer="nnUNetTrainerV2",
-        fold="0",
-        plans_path=f"{init_nnunet_directory}/nnUNetPlans_pretrained_POSTOPP_plans_3D.pkl",  # NOTE: IT IS NOT AN OPENFL PLAN
-        cuda_device="0",
-        verbose=False,
-    )
+    # nnunet_setup.main(
+    #     postopp_pardir=workspace_folder,
+    #     three_digit_task_num=537,  # FIXME: does this need to be set in any particular way?
+    #     init_model_path=f"{init_nnunet_directory}/model_initial_checkpoint.model",
+    #     init_model_info_path=f"{init_nnunet_directory}/model_initial_checkpoint.model.pkl",
+    #     task_name="FLPost",
+    #     percent_train=0.8,
+    #     split_logic="by_subject_time_pair",
+    #     network="3d_fullres",
+    #     network_trainer="nnUNetTrainerV2",
+    #     fold="0",
+    #     plans_path=f"{init_nnunet_directory}/nnUNetPlans_pretrained_POSTOPP_plans_3D.pkl",  # NOTE: IT IS NOT AN OPENFL PLAN
+    #     cuda_device="0",
+    #     verbose=False,
+    # )
 
     data_config = f"{cn},Task537_FLPost"
     plan_folder = os.path.join(workspace_folder, "plan")
@@ -48,6 +48,7 @@ def collaborator_pre_training_hook(
     with open(data_config_path, "w") as f:
         f.write(data_config)
     shutil.copytree("/mlcube_project/src", os.path.join(workspace_folder, "src"))
+    # shutil.copytree("/home/hasan_proj12/medperf/examples/fl_post/fl/project/src", os.path.join(workspace_folder, "src"))
 
 
 def collaborator_post_training_hook(

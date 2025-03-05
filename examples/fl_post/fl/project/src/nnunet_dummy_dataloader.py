@@ -14,10 +14,10 @@ import os
 class NNUNetDummyDataLoader():
     def __init__(self, data_path, p_train):
         self.task_name = data_path
-        data_base_path = os.path.join(os.environ['nnUNet_preprocessed'], self.task_name)
-        with open(f'{data_base_path}/dataset.json', 'r') as f:
-            data_config = json.load(f)
-        data_size = data_config['numTraining']
+        # data_base_path = os.path.join(os.environ['nnUNet_preprocessed'], self.task_name)
+        # with open(f'{data_base_path}/dataset.json', 'r') as f:
+        #     data_config = json.load(f)
+        data_size = 10
 
         # TODO: determine how nnunet validation splits round
         self.train_data_size = int(p_train * data_size)

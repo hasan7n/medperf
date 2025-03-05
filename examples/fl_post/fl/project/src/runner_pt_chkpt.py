@@ -10,7 +10,7 @@ Contributors: Micah Sheller, Patrick Foley, Brandon Edwards
 import os
 import shutil
 from copy import deepcopy
-
+import yaml
 import numpy as np
 import torch
 
@@ -63,20 +63,20 @@ class PyTorchCheckpointTaskRunner(TaskRunner):
         self.training_round_completed = False
 
         # enable GPUs if appropriate
-        if self.device == 'cuda' and not self.gpu_num_string:
-            raise ValueError(f"If device is 'cuda' then gpu_num must be set rather than allowing to be the default None.")
-        else:
-            os.environ['CUDA_VISIBLE_DEVICES']= self.gpu_num_string
+        # if self.device == 'cuda' and not self.gpu_num_string:
+        #     raise ValueError(f"If device is 'cuda' then gpu_num must be set rather than allowing to be the default None.")
+        # else:
+        #     os.environ['CUDA_VISIBLE_DEVICES']= self.gpu_num_string
 
         self.required_tensorkeys_for_function = {}
-        self.initialize_tensorkeys_for_functions()
+        # self.initialize_tensorkeys_for_functions()
 
         # overwrite attribute to account for one optimizer param (in every
         # child model that does not overwrite get and set tensordict) that is
         # not a numpy array
-        self.tensor_dict_split_fn_kwargs.update({
-            'holdout_tensor_names': ['__opt_state_needed']
-        })
+        # self.tensor_dict_split_fn_kwargs.update({
+        #     'holdout_tensor_names': ['__opt_state_needed']
+        # })
 
         # Initialize model
         self.replace_checkpoint(self.checkpoint_path_initial, map_location=self.device)
@@ -101,7 +101,8 @@ class PyTorchCheckpointTaskRunner(TaskRunner):
         rebuild_model_util(runner_class=self, input_tensor_dict=input_tensor_dict, **kwargs)
 
     def initialize_tensorkeys_for_functions(self, **kwargs):
-        initialize_tensorkeys_for_functions_util(runner_class=self, **kwargs)
+        pass
+        # initialize_tensorkeys_for_functions_util(runner_class=self, **kwargs)
      
     def get_required_tensorkeys_for_function(self, func_name, **kwargs):
         """
@@ -115,11 +116,19 @@ class PyTorchCheckpointTaskRunner(TaskRunner):
         Returns:
             list : [TensorKey]
         """
-        if func_name == 'validate':
-            local_model = 'apply=' + str(kwargs['apply'])
-            return self.required_tensorkeys_for_function[func_name][local_model]
-        else:
-            return self.required_tensorkeys_for_function[func_name]
+        the_file = os.path.join(os.path.dirname(__file__), "to_get.yaml")
+        with open(the_file) as f:
+            req = yaml.safe_load(f)
+        tks = []
+        for k in req:
+            tk = TensorKey(k["tensor_name"], k["origin"], 0, k["report"], tuple(k["tags"]))
+            tks.append(tk)
+        return tks
+        # if func_name == 'validate':
+        #     local_model = 'apply=' + str(kwargs['apply'])
+        #     return self.required_tensorkeys_for_function[func_name][local_model]
+        # else:
+        #     return self.required_tensorkeys_for_function[func_name]
 
     def reset_opt_vars(self, map_location=None):
         current_checkpoint_dict = self.load_checkpoint(checkpoint_path=self.checkpoint_path_load, map_location=map_location)
