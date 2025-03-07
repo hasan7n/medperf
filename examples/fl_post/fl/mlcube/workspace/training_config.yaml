@@ -5,7 +5,7 @@ aggregator :
     init_state_path : save/fl_post_two_init.pbuf
     best_state_path : save/fl_post_two_best.pbuf
     last_state_path : save/fl_post_two_last.pbuf
-    rounds_to_train : &rounds_to_train 40
+    rounds_to_train : &rounds_to_train 100
     admins_endpoints_mapping:
       col1@example.com:
         - GetExperimentStatus
