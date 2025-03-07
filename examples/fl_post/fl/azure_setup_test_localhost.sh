@@ -5,10 +5,10 @@ AGG_PORT=46585
 
 # Some hard coded variables
 NUM_COLS=50
-BASEDIR="/raid/edwardsb/projects/RANO"
-HOMEDIR="$BASEDIR/hasan_medperf_localhost/examples/fl_post/fl"
+BASEDIR="/home/bedwards/repositories"
+HOMEDIR="$BASEDIR/medperf/examples/fl_post/fl"
 
-CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
+CODE_CHANGE_DIR=$HOMEDIR
 
 
 #############################################################################################
