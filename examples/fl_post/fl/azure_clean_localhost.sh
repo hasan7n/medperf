@@ -8,7 +8,7 @@ fi
 
 
 
-HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_localhost/examples/fl_post/fl"
+HOMEDIR="/home/bedwards/repositories/medperf/examples/fl_post/fl"
 
 
 ############################################################################

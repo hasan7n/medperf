@@ -1,12 +1,12 @@
 AGG_PORT=46585
 
-MEDPERF=/home/edwardsb/virtual/hasan_medperf_with_host_network/bin/medperf
+MEDPERF=/home/bedwards/virtual/hasan_medperf_with_host_network/bin/medperf
 
 # Some hard coded variables (note one data is being used by all cols)
 PLATFORM="docker"
 NUM_COLS=50
 RUN_AGGREGATOR="true"
-HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_localhost/examples/fl_post/fl"
+HOMEDIR="/home/repositories/bedwards/medperf/examples/fl_post/fl"
 
 if [ "$AGG_PORT" == "" ]; then
     echo "YOU DID NOT PROVIDE A PORT FOR THE AGGREGATOR"
