@@ -1,0 +1,179 @@
+
+AGG_HOSTNAME=localhost
+AGG_PORT=46585
+
+
+# Some hard coded variables
+NUM_COLS=50
+BASEDIR="/raid/edwardsb/projects/RANO"
+HOMEDIR="$BASEDIR/hasan_medperf_localhost/examples/fl_post/fl"
+
+CODE_CHANGE_DIR="/home/edwardsb/repositories/hasan_medperf/examples/fl_post/fl"
+
+
+#############################################################################################
+# REMOVE THIS LATER
+#############################################################################################
+HOMEDIR=$CODE_CHANGE_DIR
+#############################################################################################
+# REMOVE THIS LATER
+#############################################################################################
+
+
+if [ "$AGG_HOSTNAME" == "" ]; then
+    echo "YOU DID NOT PROVIDE AN AGG HOSTNAME"
+    exit
+fi
+
+if [ "$AGG_PORT" == "" ]; then
+    echo "YOU DID NOT PROVIDE A PORT FOR THE AGGREGATOR"
+    exit
+fi
+
+mkdir -p $HOMEDIR
+cd $HOMEDIR
+
+# Sync code changes to home directory where stuff will run
+
+############################################
+# UNCOMMENT THIS LETER
+##########################################
+
+# rsync -r --exclude .git $CODE_CHANGE_DIR/* ./
+
+############################################
+# UNCOMMENT THIS LETER
+##########################################
+
+
+rm -rf mlcube_agg
+mkdir mlcube_agg
+cp -r ./mlcube/* ./mlcube_agg
+
+for ((i=0; i< $NUM_COLS; i++)) 
+    do
+	rm -rf mlcube_col${i}
+        mkdir mlcube_col${i}
+        cp -r ./mlcube/* ./mlcube_col${i}
+    done
+
+mkdir ./mlcube_agg/workspace/node_cert 
+mkdir ./mlcube_agg/workspace/ca_cert
+
+
+for ((i=0; i< $NUM_COLS; i++))
+    do
+        mkdir ./mlcube_col${i}/workspace/node_cert 
+	mkdir ./mlcube_col${i}/workspace/ca_cert
+    done
+
+rm -rf ca
+mkdir ca
+
+# root ca
+openssl genpkey -algorithm RSA -out ca/root.key -pkeyopt rsa_keygen_bits:3072
+openssl req -x509 -new -nodes -key ca/root.key -sha384 -days 36500 -out ca/root.crt \
+    -subj "/DC=org/DC=simple/CN=Simple Root CA/O=Simple Inc/OU=Simple Root CA"
+
+# cols 0 through NUM_COLS-1
+for ((i=0; i< $NUM_COLS; i++))
+    do
+        sed -i "/^commonName = /c\commonName = col${i}@example.com" csr.conf
+        sed -i "/^DNS\.1 = /c\DNS.1 = col${i}@example.com" csr.conf
+        cd mlcube_col${i}/workspace/node_cert
+        openssl genpkey -algorithm RSA -out key.key -pkeyopt rsa_keygen_bits:3072
+        openssl req -new -key key.key -out csr.csr -config ../../../csr.conf -extensions v3_client
+        openssl x509 -req -in csr.csr -CA ../../../ca/root.crt -CAkey ../../../ca/root.key \
+            -CAcreateserial -out crt.crt -days 36500 -sha384 -extensions v3_client_crt -extfile ../../../csr.conf
+        rm csr.csr
+        cp ../../../ca/root.crt ../ca_cert/
+        cd $HOMEDIR
+    done
+
+# agg
+sed -i "/^commonName = /c\commonName = $AGG_HOSTNAME" csr.conf
+sed -i "/^DNS\.1 = /c\DNS.1 = $AGG_HOSTNAME" csr.conf
+cd mlcube_agg/workspace/node_cert
+openssl genpkey -algorithm RSA -out key.key -pkeyopt rsa_keygen_bits:3072
+openssl req -new -key key.key -out csr.csr -config ../../../csr.conf -extensions v3_server
+openssl x509 -req -in csr.csr -CA ../../../ca/root.crt -CAkey ../../../ca/root.key \
+    -CAcreateserial -out crt.crt -days 36500 -sha384 -extensions v3_server_crt -extfile ../../../csr.conf
+rm csr.csr
+cp ../../../ca/root.crt ../ca_cert/
+cd $HOMEDIR
+
+# aggregator_config
+echo "address: $AGG_HOSTNAME" >> mlcube_agg/workspace/aggregator_config.yaml
+echo "port: $AGG_PORT" >>mlcube_agg/workspace/aggregator_config.yaml
+
+# cols file
+for ((i=0; i< $NUM_COLS; i++))
+    do
+        echo "col${i}@example.com: col${i}@example.com" >>mlcube_agg/workspace/cols.yaml
+    done
+
+# for admin
+ADMIN_CN="admin@example.com"
+
+rm -rf ./for_admin
+mkdir ./for_admin
+mkdir ./for_admin/node_cert
+
+sed -i "/^commonName = /c\commonName = $ADMIN_CN" csr.conf
+sed -i "/^DNS\.1 = /c\DNS.1 = $ADMIN_CN" csr.conf
+cd for_admin/node_cert
+openssl genpkey -algorithm RSA -out key.key -pkeyopt rsa_keygen_bits:3072
+openssl req -new -key key.key -out csr.csr -config ../../csr.conf -extensions v3_client
+openssl x509 -req -in csr.csr -CA ../../ca/root.crt -CAkey ../../ca/root.key \
+    -CAcreateserial -out crt.crt -days 36500 -sha384 -extensions v3_client_crt -extfile ../../csr.conf
+rm csr.csr
+mkdir ../ca_cert
+cp -r ../../ca/root.crt ../ca_cert/root.crt
+cd $HOMEDIR
+
+# THIS IS BRANDON'S CODE COPYING IN THE SAME DATA
+for ((i=0; i< $NUM_COLS; i++))
+    do
+        mkdir mlcube_col${i}/workspace/labels
+	mkdir mlcube_col${i}/workspace/data
+    done
+
+# DATA_DIR="test_data_links_testforhasan"
+# DATA_DIR="test_data_links_random_times_0"
+# DATA_DIR="test_data_links"
+
+# this is the one I had success running on
+#DATA_DIRS=test_data_small_from_hasan
+
+# SIZE="hundred"
+# SUPPLEMENT="square"
+#SUPPLEMENT="thresholdbrainsorted"
+#SUPPLEMENT="thresholdbrainandsquaresorted"
+#SIZE="thousand"
+
+# DATA_DIR_1="test_${SIZE}_BraTS20_3${SUPPLEMENT}_0"
+# DATA_DIR_2="test_${SIZE}_BraTS20_3${SUPPLEMENT}_1"
+# DATA_DIR_3="test_${SIZE}_BraTS20_3${SUPPLEMENT}_2"
+# DATA_DIR_4="test_${SIZE}_BraTS20_3${SUPPLEMENT}_3"
+# DATA_DIR_5="test_${SIZE}_BraTS20_3${SUPPLEMENT}_4"
+
+for ((i=0; i< $NUM_COLS; i++))
+    do
+        cp -r /raid/edwardsb/projects/RANO/test_hundred_BraTS20_3square_0/labels/* mlcube_col${i}/workspace/labels
+        cp -r /raid/edwardsb/projects/RANO/test_hundred_BraTS20_3square_0/data/* mlcube_col${i}/workspace/data
+    done
+
+# wget https://storage.googleapis.com/medperf-storage/fltest29July/flpost_add29july.tar.gz I copied on spr01 into /home/edwardsb/repo_extras/hasan_medperperf_extras
+
+# aggregator additional files
+mkdir mlcube_agg/workspace/additional_files
+cp -r /raid/edwardsb/projects/RANO/download_from_hasan/* mlcube_agg/workspace/additional_files
+
+
+
+for ((i=0; i< $NUM_COLS; i++))
+    do
+        mkdir mlcube_col${i}/workspace/additional_files
+        cp -r /raid/edwardsb/projects/RANO/download_from_hasan/init_nnunet mlcube_col${i}/workspace/additional_files
+    done
+
