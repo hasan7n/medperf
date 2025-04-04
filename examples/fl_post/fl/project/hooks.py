@@ -47,7 +47,7 @@ def collaborator_pre_training_hook(
     data_config_path = os.path.join(plan_folder, "data.yaml")
     with open(data_config_path, "w") as f:
         f.write(data_config)
-    shutil.copytree("/mlcube_project/src", os.path.join(workspace_folder, "src"))
+    shutil.copytree("/home/hasan_kassem/medperf/examples/fl_post/fl/project/src", os.path.join(workspace_folder, "src"))
     # shutil.copytree("/home/hasan_proj12/medperf/examples/fl_post/fl/project/src", os.path.join(workspace_folder, "src"))
 
 
