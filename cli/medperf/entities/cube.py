@@ -182,9 +182,19 @@ class Cube(Entity, MedperfSchema, DeployableSchema):
         remove_path(tmp_out_yaml)
         local_hash = mlcube_details["hash"]
         if self.image_hash and local_hash != self.image_hash:
-            raise InvalidEntityError(
-                f"Hash mismatch. Expected {self.image_hash}, found {local_hash}."
-            )
+            # try with digest if possible
+            digest = None
+            if self.metadata is not None:
+                digest = self.metadata.get("digest", None)
+            if digest is None:
+                raise InvalidEntityError(
+                    f"Hash mismatch. Expected {self.image_hash}, found {local_hash}."
+                )
+            if digest is not None and local_hash != digest:
+                raise InvalidEntityError(
+                    f"Hash mismatch. Expected {self.image_hash} or {digest}, found {local_hash}."
+                )
+
         self.image_hash = local_hash
 
     def _get_image_from_registry(self):
