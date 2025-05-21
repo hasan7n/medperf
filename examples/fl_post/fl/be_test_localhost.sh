@@ -4,7 +4,7 @@ MEDPERF=/home/edwardsb/virtual/hasan_medperf_with_host_network/bin/medperf
 
 # Some hard coded variables (note one data is being used by all cols)
 PLATFORM="docker"
-NUM_COLS=50
+NUM_COLS=5
 RUN_AGGREGATOR="true"
 HOMEDIR="/raid/edwardsb/projects/RANO/hasan_medperf_localhost/examples/fl_post/fl"
 

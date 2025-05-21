@@ -1,5 +1,5 @@
 
-NUM_COLS=50
+NUM_COLS=5
 
 if [ "$NUM_COLS" == "" ]; then
     echo "YOU DID NOT PROVIDE A NUM_COLS"
