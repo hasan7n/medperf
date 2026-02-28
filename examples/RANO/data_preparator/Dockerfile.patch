@@ -1,0 +1,8 @@
+FROM mlcommons/rano-data-prep-mlcube:1.0.10
+
+# TODO: patch file
+
+RUN sed -i '36s|.*|    temp_path = Path("/tmp") / ".report.yaml"|' /project/stages/pipeline.py
+RUN sed -i '39s|.*|    shutil.move(temp_path, filepath)|' /project/stages/pipeline.py
+RUN sed -i '1i import shutil' /project/stages/pipeline.py
+
