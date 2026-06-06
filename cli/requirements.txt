@@ -39,3 +39,4 @@ google-cloud-kms==3.11.0
 google-cloud-compute==1.46.0
 google-api-python-client==2.192.0
 tqdm==4.67.3
+python-multipart==0.0.32
