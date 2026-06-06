@@ -146,7 +146,7 @@ def register_container(
             container_info,
             container_config=container_file,
             parameters_config=parameters_file,
-            decryption_key=decryption_file,
+            decryption_key=decryption_file or None,
         )
         return_response["status"] = "success"
         return_response["entity_id"] = container_id
