@@ -373,7 +373,7 @@ function onActionSuccess(panelTitle) {
                 url: url
             });
         } else {
-            showErrorModal("Something when wrong while " + panelTitle.toLowerCase(), response);
+            showErrorModal("Something went wrong while " + panelTitle.toLowerCase(), response);
         }
     };
 }
