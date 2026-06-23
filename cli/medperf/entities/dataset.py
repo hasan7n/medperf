@@ -179,9 +179,10 @@ class Dataset(Entity):
             comms_fn = config.comms.get_user_datasets
 
         if "mlcube" in filters and filters["mlcube"] is not None:
+            mlcube_id = filters["mlcube"]
 
-            def func():
-                return config.comms.get_mlcube_datasets(filters["mlcube"])
+            def func(filters: dict):
+                return config.comms.get_mlcube_datasets(mlcube_id)
 
             comms_fn = func
 
