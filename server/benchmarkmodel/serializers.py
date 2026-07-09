@@ -89,6 +89,12 @@ class ModelApprovalSerializer(serializers.ModelSerializer):
         validate_approval_status_on_update(
             last_approval_status, cur_approval_status, initiated_user, current_user
         )
+        if self.instance.benchmark.user_can_manage_benchmark(
+            current_user
+        ) and self.instance.benchmark.user_can_manage_benchmark(initiated_user):
+            raise serializers.ValidationError(
+                "Association request cannot be both initiated and approved from the benchmark side."
+            )
         return cur_approval_status
 
     def update(self, instance, validated_data):

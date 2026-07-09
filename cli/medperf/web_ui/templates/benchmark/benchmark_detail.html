@@ -15,7 +15,7 @@
         <div class="flex items-center mb-3 sm:mb-0">
             <h1 class="text-5xl font-bold medperf-accent dark:text-green-400">{{ entity.name }}</h1>
         </div>
-        {% if current_user_is_benchmark_owner %}
+        {% if current_user_can_manage_benchmark %}
         <button type="button" id="dashboard-btn" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl medperf-bg dark:bg-green-600 text-white font-bold hover:opacity-90 transition-all shadow-lg cursor-pointer shrink-0" {% if task_running %}disabled{% endif %}>
             Preparation Dashboard
             <i class="fas fa-caret-down transition-transform duration-200" style="transform: rotate(0deg);" aria-hidden="true"></i>
@@ -24,7 +24,7 @@
     </div>
 </div>
 
-{% if current_user_is_benchmark_owner %}
+{% if current_user_can_manage_benchmark %}
 <div id="dashboard-form-wrapper" class="hidden bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg border-2 border-green-100 dark:border-gray-700 mb-6">
     <h2 class="text-2xl font-bold medperf-accent dark:text-green-400 mb-6 flex items-center">
         <i class="fas fa-chart-line mr-3"></i>Open preparation dashboard
@@ -125,7 +125,7 @@
     </div>
 </div>
 
-{% if current_user_is_benchmark_owner %}
+{% if current_user_can_manage_benchmark %}
 <div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg border-2 border-green-100 dark:border-gray-700 mb-6">
     <h2 class="text-3xl font-bold medperf-accent dark:text-green-400 mb-6 flex items-center">
         <i class="fas fa-cog mr-3"></i>Association Policy
@@ -166,9 +166,28 @@
         </div>
     </form>
 </div>
+
+<div class="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg border-2 border-green-100 dark:border-gray-700 mb-6">
+    <h2 class="text-3xl font-bold medperf-accent dark:text-green-400 mb-6 flex items-center">
+        <i class="fas fa-users mr-3"></i>Committee Members
+    </h2>
+    <form id="committee-members-form" class="space-y-6">
+        <div>
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2" for="committee-members-text-input">Committee member emails</label>
+            <div class="email-container" id="committee-members-emails" data-allowed-list='{{ entity.committee_member_emails | tojson }}'>
+                <input type="text" name="committee-members-text-input" id="committee-members-text-input" class="email-input w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white mt-2" placeholder="Type email and hit Enter, comma, or space" {% if task_running %} disabled {% endif %}>
+            </div>
+        </div>
+        <div class="flex justify-start pt-4">
+            <button type="button" id="save-committee-members-btn" class="px-8 py-4 medperf-bg dark:bg-green-600 text-white rounded-xl font-bold hover:opacity-90 transition-all shadow-lg cursor-pointer" data-benchmark-id="{{ entity.id }}" {% if task_running %} disabled {% endif %}>
+                <i class="fas fa-save mr-2"></i>Save Committee Members
+            </button>
+        </div>
+    </form>
+</div>
 {% endif %}
 
-{% if current_user_is_benchmark_owner %}
+{% if current_user_can_manage_benchmark %}
 {% set dataset_assoc_len = datasets_associations|length %}
 {% set models_assoc_len = models_associations|length %}
 {% set results_len = results|length %}

@@ -12,11 +12,13 @@ class BenchmarkTest(MedPerfTest):
         prep_mlcube_owner = "prep_mlcube_owner"
         ref_model_owner = "ref_model_owner"
         eval_mlcube_owner = "eval_mlcube_owner"
+        committee_user = "committee_user"
 
         self.create_user(bmk_owner)
         self.create_user(prep_mlcube_owner)
         self.create_user(ref_model_owner)
         self.create_user(eval_mlcube_owner)
+        self.committee_user_info = self.create_user(committee_user)
 
         # create mlcubes
         self.set_credentials(prep_mlcube_owner)
@@ -44,6 +46,7 @@ class BenchmarkTest(MedPerfTest):
         self.prep_mlcube_owner = prep_mlcube_owner
         self.ref_model_owner = ref_model_owner
         self.eval_mlcube_owner = eval_mlcube_owner
+        self.committee_user = committee_user
 
         self.prep = prep
         self.ref_model = ref_model
@@ -85,6 +88,58 @@ class BenchmarkPostTest(BenchmarkTest):
             if k in benchmark:
                 self.assertEqual(benchmark[k], v, f"Unexpected value for {k}")
 
+    def test_committee_member_emails_are_saved_as_expected(self):
+        """Testing that committee members are resolved from emails and stored"""
+        # Arrange
+        benchmark = self.mock_benchmark(
+            self.prep["id"],
+            self.ref_model["id"],
+            self.eval["id"],
+            committee_member_emails=[self.committee_user_info["email"]],
+        )
+
+        # Act
+        response = self.client.post(self.url, benchmark, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            response.data["committee_member_emails"],
+            [self.committee_user_info["email"]],
+        )
+
+    def test_creation_with_owner_as_committee_member_is_rejected(self):
+        """The benchmark owner cannot be listed as a committee member"""
+        # Arrange
+        benchmark = self.mock_benchmark(
+            self.prep["id"],
+            self.ref_model["id"],
+            self.eval["id"],
+            committee_member_emails=[f"{self.actor}@example.com"],
+        )
+
+        # Act
+        response = self.client.post(self.url, benchmark, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_creation_with_unknown_committee_member_email_is_rejected(self):
+        """Committee member emails must belong to existing users"""
+        # Arrange
+        benchmark = self.mock_benchmark(
+            self.prep["id"],
+            self.ref_model["id"],
+            self.eval["id"],
+            committee_member_emails=["ghost@example.com"],
+        )
+
+        # Act
+        response = self.client.post(self.url, benchmark, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     @parameterized.expand([(True,), (False,)])
     def test_creation_of_duplicate_name_gets_rejected(self, different_name):
         """Testing the model fields rules"""
@@ -124,6 +179,7 @@ class BenchmarkPostTest(BenchmarkTest):
             "dataset_auto_approval_mode": "NEVER",
             "model_auto_approval_allow_list": [],
             "model_auto_approval_mode": "NEVER",
+            "committee_member_emails": [],
         }
 
         benchmark = self.mock_benchmark(

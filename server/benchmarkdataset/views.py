@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
-from .permissions import IsAdmin, IsDatasetOwner, IsBenchmarkOwner
+from .permissions import IsAdmin, IsDatasetOwner, IsBenchmarkOwner, IsCommitteeMember
 from .serializers import (
     BenchmarkDatasetListSerializer,
     DatasetApprovalSerializer,
@@ -13,7 +13,7 @@ from .serializers import (
 
 
 class BenchmarkDatasetList(GenericAPIView):
-    permission_classes = [IsAdmin | IsBenchmarkOwner | IsDatasetOwner]
+    permission_classes = [IsAdmin | IsBenchmarkOwner | IsCommitteeMember | IsDatasetOwner]
     serializer_class = BenchmarkDatasetListSerializer
     queryset = ""
 
@@ -58,7 +58,7 @@ class DatasetApproval(GenericAPIView):
     queryset = ""
 
     def get_permissions(self):
-        self.permission_classes = [IsAdmin | IsBenchmarkOwner | IsDatasetOwner]
+        self.permission_classes = [IsAdmin | IsBenchmarkOwner | IsCommitteeMember | IsDatasetOwner]
         if self.request.method == "DELETE":
             self.permission_classes = [IsAdmin]
         return super(self.__class__, self).get_permissions()

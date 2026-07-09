@@ -33,6 +33,7 @@ from medperf.enums import Status
 from medperf.commands.benchmark.update_associations_poilcy import (
     UpdateAssociationsPolicy,
 )
+from medperf.commands.benchmark.update_committee_members import UpdateCommitteeMembers
 
 from medperf.web_ui.utils import mount_dashboard
 
@@ -101,7 +102,8 @@ def benchmark_detail_ui(
     dataset_assoc_pending = False
     model_assoc_pending = False
     current_user_is_benchmark_owner = benchmark.owner == get_medperf_user_data()["id"]
-    if current_user_is_benchmark_owner:
+    current_user_can_manage_benchmark = benchmark.user_can_manage()
+    if current_user_can_manage_benchmark:
         datasets_associations = Benchmark.get_datasets_associations(
             benchmark_uid=benchmark_id
         )
@@ -153,6 +155,7 @@ def benchmark_detail_ui(
             "datasets": datasets,
             "models": models,
             "current_user_is_benchmark_owner": current_user_is_benchmark_owner,
+            "current_user_can_manage_benchmark": current_user_can_manage_benchmark,
             "results": results,
             "dataset_assoc_pending": dataset_assoc_pending,
             "model_assoc_pending": model_assoc_pending,
@@ -356,6 +359,38 @@ def update_associations_policy(
     return return_response
 
 
+@router.post("/update_committee_members", response_class=JSONResponse)
+def update_committee_members(
+    request: Request,
+    benchmark_id: int = Form(...),
+    committee_emails: Optional[str] = Form(None),
+    current_user: bool = Depends(check_user_api),
+):
+    initialize_state_task(request, task_name="update_committee_members")
+    return_response = {"status": "", "error": ""}
+    try:
+        UpdateCommitteeMembers.run(
+            benchmark_uid=benchmark_id,
+            committee_emails=committee_emails,
+        )
+        return_response["status"] = "success"
+        notification_message = "Committee members updated"
+    except Exception as exp:
+        return_response["status"] = "failed"
+        return_response["error"] = str(exp)
+        notification_message = "Failed to update committee members"
+        logger.exception(exp)
+
+    config.ui.end_task(return_response)
+    reset_state_task(request)
+    config.ui.add_notification(
+        message=notification_message,
+        return_response=return_response,
+        url=f"/benchmarks/ui/display/{benchmark_id}",
+    )
+    return return_response
+
+
 @router.post("/ui/dashboard", response_class=HTMLResponse)
 def preparation_dashboard(
     request: Request,
@@ -370,10 +405,12 @@ def preparation_dashboard(
     error_message = "Failed to load dashboard: "
 
     benchmark = Benchmark.get(benchmark_id)
-    is_owner = benchmark.owner == get_medperf_user_data()["id"]
-    if not is_owner:
+    can_manage = benchmark.user_can_manage()
+    if not can_manage:
         errors = True
-        error_message += "Only the benchmark owner can access the dashboard."
+        error_message += (
+            "Only the benchmark owner or committee members can access the dashboard."
+        )
 
     try:
         if not errors:

@@ -4,6 +4,7 @@ from .models import Benchmark
 
 
 class BenchmarkAdmin(admin.ModelAdmin):
+    filter_horizontal = ("committee_members",)
     list_display = (
         "name",
         "description",

@@ -11,6 +11,7 @@ from medperf.commands.execution.create import BenchmarkExecution
 from medperf.commands.benchmark.update_associations_poilcy import (
     UpdateAssociationsPolicy,
 )
+from medperf.commands.benchmark.update_committee_members import UpdateCommitteeMembers
 
 app = typer.Typer()
 
@@ -255,4 +256,29 @@ def update_associations_policy(
         dataset_emails_file=dataset_auto_approve_file,
         model_mode=model_auto_approve_mode,
         model_emails_file=model_auto_approve_file,
+    )
+
+
+@app.command("update_committee_members")
+@clean_except
+def update_committee_members(
+    benchmark_uid: int = typer.Option(
+        ..., "--benchmark", "-b", help="UID of the desired benchmark"
+    ),
+    committee_emails_file: str = typer.Option(
+        None,
+        "--committee_emails_file",
+        help="File containing list of committee member emails",
+    ),
+    committee_emails: str = typer.Option(
+        None,
+        "--committee_emails",
+        help="Space-separated list of committee member emails",
+    ),
+):
+    """Updates the committee members for a benchmark"""
+    UpdateCommitteeMembers.run(
+        benchmark_uid,
+        committee_emails_file=committee_emails_file,
+        committee_emails=committee_emails,
     )

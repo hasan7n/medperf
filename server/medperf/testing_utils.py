@@ -125,6 +125,7 @@ def mock_benchmark(
         "dataset_auto_approval_mode": "NEVER",
         "model_auto_approval_allow_list": [],
         "model_auto_approval_mode": "NEVER",
+        "committee_member_emails": [],
     }
 
     for key, val in kwargs.items():

@@ -12,12 +12,14 @@ class BenchmarkTest(MedPerfTest):
         prep_mlcube_owner = "prep_mlcube_owner"
         ref_model_owner = "ref_model_owner"
         eval_mlcube_owner = "eval_mlcube_owner"
+        committee_user = "committee_user"
         other_user = "other_user"
 
         self.create_user(bmk_owner)
         self.create_user(prep_mlcube_owner)
         self.create_user(ref_model_owner)
         self.create_user(eval_mlcube_owner)
+        self.committee_user_info = self.create_user(committee_user)
         self.create_user(other_user)
 
         # setup globals
@@ -25,6 +27,7 @@ class BenchmarkTest(MedPerfTest):
         self.prep_mlcube_owner = prep_mlcube_owner
         self.ref_model_owner = ref_model_owner
         self.eval_mlcube_owner = eval_mlcube_owner
+        self.committee_user = committee_user
         self.other_user = other_user
 
         self.url = self.api_prefix + "/benchmarks/{0}/"
@@ -37,6 +40,7 @@ class BenchmarkTest(MedPerfTest):
         {"actor": "ref_model_owner"},
         {"actor": "eval_mlcube_owner"},
         {"actor": "bmk_owner"},
+        {"actor": "committee_user"},
         {"actor": "other_user"},
     ]
 )
@@ -53,16 +57,18 @@ class BenchmarkGetTest(BenchmarkTest):
             self.bmk_owner,
             target_approval_status="PENDING",
             state="DEVELOPMENT",
+            committee_member_emails=[self.committee_user_info["email"]],
         )
         self.testbenchmark = testbenchmark
         self.private_fields = [
             "dataset_auto_approval_allow_list",
             "model_auto_approval_allow_list",
+            "committee_member_emails",
         ]
         self.set_credentials(self.actor)
 
     def __can_see_private_fields(self):
-        return self.actor == "bmk_owner"
+        return self.actor in (self.bmk_owner, self.committee_user)
 
     def test_generic_get_benchmark(self):
         # Arrange
@@ -216,6 +222,59 @@ class BenchmarkPutTest(BenchmarkTest):
         for k, v in response.data.items():
             if k in newtestbenchmark:
                 self.assertEqual(newtestbenchmark[k], v, f"{k} was not modified")
+
+    @parameterized.expand(
+        [
+            ("DEVELOPMENT", "PENDING"),
+            ("OPERATION", "PENDING"),
+            ("OPERATION", "APPROVED"),
+        ]
+    )
+    def test_put_modifies_committee_member_emails(
+        self, state, benchmark_approval_status
+    ):
+        """committee_member_emails is editable in both states, including OPERATION"""
+        # Arrange
+        _, _, _, testbenchmark = self.shortcut_create_benchmark(
+            self.prep_mlcube_owner,
+            self.ref_model_owner,
+            self.eval_mlcube_owner,
+            self.bmk_owner,
+            target_approval_status=benchmark_approval_status,
+            state=state,
+        )
+        url = self.url.format(testbenchmark["id"])
+        new = {"committee_member_emails": [self.committee_user_info["email"]]}
+
+        # Act
+        response = self.client.put(url, new, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["committee_member_emails"],
+            [self.committee_user_info["email"]],
+        )
+
+    def test_put_committee_member_emails_rejects_owner(self):
+        """The benchmark owner cannot add themselves as a committee member"""
+        # Arrange
+        _, _, _, testbenchmark = self.shortcut_create_benchmark(
+            self.prep_mlcube_owner,
+            self.ref_model_owner,
+            self.eval_mlcube_owner,
+            self.bmk_owner,
+            target_approval_status="PENDING",
+            state="DEVELOPMENT",
+        )
+        url = self.url.format(testbenchmark["id"])
+        new = {"committee_member_emails": [f"{self.bmk_owner}@example.com"]}
+
+        # Act
+        response = self.client.put(url, new, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     @parameterized.expand([("APPROVED",), ("PENDING",)])
     def test_put_does_not_modify_non_editable_fields_in_operation(
@@ -410,6 +469,69 @@ class BenchmarkPutTest(BenchmarkTest):
 
 @parameterized_class(
     [
+        {"actor": "committee_user"},
+    ]
+)
+class BenchmarkCommitteeMemberPutTest(BenchmarkTest):
+    """Test module for PUT /benchmarks/<pk> as a committee member.
+    Committee members may edit the benchmark just like its owner (except
+    approval_status, which is admin-only and tested in the permission tests)."""
+
+    def setUp(self):
+        super(BenchmarkCommitteeMemberPutTest, self).setUp()
+        self.generic_setup()
+        _, _, _, testbenchmark = self.shortcut_create_benchmark(
+            self.prep_mlcube_owner,
+            self.ref_model_owner,
+            self.eval_mlcube_owner,
+            self.bmk_owner,
+            target_approval_status="APPROVED",
+            state="OPERATION",
+            committee_member_emails=[self.committee_user_info["email"]],
+        )
+        self.testbenchmark = testbenchmark
+        self.set_credentials(self.actor)
+
+    def test_committee_member_can_edit_editable_fields(self):
+        # Arrange
+        url = self.url.format(self.testbenchmark["id"])
+        new = {
+            "is_valid": False,
+            "user_metadata": {"newkey": "newval"},
+            "dataset_auto_approval_mode": "ALWAYS",
+        }
+
+        # Act
+        response = self.client.put(url, new, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        for k, v in new.items():
+            self.assertEqual(response.data[k], v, f"{k} was not modified")
+
+    def test_committee_member_can_edit_committee_member_emails(self):
+        # Arrange
+        url = self.url.format(self.testbenchmark["id"])
+        new = {
+            "committee_member_emails": [
+                self.committee_user_info["email"],
+                f"{self.other_user}@example.com",
+            ]
+        }
+
+        # Act
+        response = self.client.put(url, new, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            sorted(response.data["committee_member_emails"]),
+            sorted(new["committee_member_emails"]),
+        )
+
+
+@parameterized_class(
+    [
         {"actor": "api_admin"},
     ]
 )
@@ -525,10 +647,12 @@ class PermissionTest(BenchmarkTest):
     """Test module for permissions of /benchmarks/{pk} endpoint
     Non-permitted actions:
         GET: for unauthenticated users
-        DELETE: for all users except admin
+        DELETE: for all users except admin (committee members included)
         PUT:
             including approval_status: for all users except admin
-            not including approval_status: for all users except bmk_owner and admin
+            (committee members included)
+            not including approval_status: for all users except bmk_owner,
+            committee members, and admin
     """
 
     def setUp(self):
@@ -542,6 +666,7 @@ class PermissionTest(BenchmarkTest):
             self.bmk_owner,
             target_approval_status="PENDING",
             state="DEVELOPMENT",
+            committee_member_emails=[self.committee_user_info["email"]],
         )
         self.testbenchmark = testbenchmark
         self.url = self.url.format(self.testbenchmark["id"])
@@ -628,6 +753,7 @@ class PermissionTest(BenchmarkTest):
     @parameterized.expand(
         [
             ("bmk_owner", status.HTTP_403_FORBIDDEN),
+            ("committee_user", status.HTTP_403_FORBIDDEN),
             ("prep_mlcube_owner", status.HTTP_403_FORBIDDEN),
             ("ref_model_owner", status.HTTP_403_FORBIDDEN),
             ("eval_mlcube_owner", status.HTTP_403_FORBIDDEN),
@@ -650,6 +776,7 @@ class PermissionTest(BenchmarkTest):
     @parameterized.expand(
         [
             ("bmk_owner", status.HTTP_403_FORBIDDEN),
+            ("committee_user", status.HTTP_403_FORBIDDEN),
             ("prep_mlcube_owner", status.HTTP_403_FORBIDDEN),
             ("ref_model_owner", status.HTTP_403_FORBIDDEN),
             ("eval_mlcube_owner", status.HTTP_403_FORBIDDEN),

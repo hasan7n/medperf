@@ -5,6 +5,15 @@ function isValidEmail(email) {
 }
 
 function createEmailChip(email, inputElement) {
+    var normalizedEmail = email.toLowerCase();
+    if (inputElement && inputElement.parentNode) {
+        var alreadyAdded = false;
+        inputElement.parentNode.querySelectorAll(".email-chip").forEach(function (chip) {
+            var text = (chip.textContent || "").replace(/\s*×\s*$/, "").trim().toLowerCase();
+            if (text === normalizedEmail) alreadyAdded = true;
+        });
+        if (alreadyAdded) return;
+    }
     var chip = document.createElement("div");
     chip.className = "email-chip inline-block bg-gray-200 dark:bg-gray-600 rounded-full py-1 px-3 mr-2 mb-2 text-sm";
     chip.textContent = email;
@@ -89,6 +98,24 @@ function updateAssociationsPolicy(saveBtn) {
     ajaxRequest("/benchmarks/update_associations_policy", "POST", formData, onUpdateAssociationsPolicySuccess, "Failed to update associations policy");
 }
 
+function onUpdateCommitteeMembersSuccess(response) {
+    if (response && response.status === "success") {
+        showReloadModal({ title: "Benchmark Committee Members Successfully Updated", seconds: 3 });
+    } else {
+        showErrorModal("Failed to Update Benchmark Committee Members", response);
+    }
+}
+
+function updateCommitteeMembers(saveBtn) {
+    addSpinner(saveBtn);
+    disableElements("#committee-members-form button, #committee-members-form input");
+    var committeeEmailsArr = getEmailsList(document.getElementById("committee-members-emails"));
+    var formData = new FormData();
+    formData.append("committee_emails", committeeEmailsArr.join(" "));
+    formData.append("benchmark_id", saveBtn.getAttribute("data-benchmark-id"));
+    ajaxRequest("/benchmarks/update_committee_members", "POST", formData, onUpdateCommitteeMembersSuccess, "Failed to update committee members");
+}
+
 function initBenchmarkDetail() {
     document.querySelectorAll("form.benchmark-action-form").forEach(function (form) {
         form.addEventListener("submit", submitActionForm);
@@ -114,6 +141,7 @@ function initBenchmarkDetail() {
 
     parseEmails(document.getElementById("model-allow-list-emails"));
     parseEmails(document.getElementById("dataset-allow-list-emails"));
+    parseEmails(document.getElementById("committee-members-emails"));
 
     document.querySelectorAll(".email-input").forEach(function (input) {
         input.addEventListener("keydown", function (e) {
@@ -138,9 +166,14 @@ function initBenchmarkDetail() {
         });
     });
 
-    var saveBtn = document.getElementById("save-policy-btn");
-    if (saveBtn) saveBtn.addEventListener("click", function (e) {
+    var savePolicyBtn = document.getElementById("save-policy-btn");
+    if (savePolicyBtn) savePolicyBtn.addEventListener("click", function (e) {
         if (checkUpdateAssociationsPolicyForm()) showConfirmModal(e.currentTarget, updateAssociationsPolicy, "update benchmark associations policy?");
+    });
+
+    var saveCommitteeBtn = document.getElementById("save-committee-members-btn");
+    if (saveCommitteeBtn) saveCommitteeBtn.addEventListener("click", function (e) {
+        showConfirmModal(e.currentTarget, updateCommitteeMembers, "update benchmark committee members?");
     });
 
     if (datasetModeEl) datasetModeEl.dispatchEvent(new Event("change"));

@@ -78,6 +78,46 @@ class BenchmarksTest(MedPerfTest):
         self.assertEqual(resp1[0]["id"], benchmark1["id"])
         self.assertEqual(resp2[0]["id"], benchmark2["id"])
 
+    def test_endpoint_returns_committee_managed_benchmarks(self):
+        url = self.api_prefix + "/me/benchmarks/"
+
+        # setup users
+        owner = "owner"
+        committee = "committee"
+        self.create_user(owner)
+        committee_info = self.create_user(committee)
+
+        # owner creates a benchmark and adds the committee member
+        _, _, _, benchmark = self.shortcut_create_benchmark(
+            owner,
+            owner,
+            owner,
+            owner,
+            prep_mlcube_kwargs={
+                "name": "committeeprep",
+                "container_config": {"committeeprep": "committeeprep"},
+            },
+            ref_model_kwargs={
+                "name": "committeeref",
+                "container_config": {"committeeref": "committeeref"},
+            },
+            eval_mlcube_kwargs={
+                "name": "committeeeval",
+                "container_config": {"committeeeval": "committeeeval"},
+            },
+            name="committeename",
+            committee_member_emails=[committee_info["email"]],
+        )
+
+        # Act
+        self.set_credentials(committee)
+        response = self.client.get(url)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        benchmark_ids = [item["id"] for item in response.data["results"]]
+        self.assertIn(benchmark["id"], benchmark_ids)
+
 
 class DatasetsTest(MedPerfTest):
     def __create_asset(self, user):
@@ -279,6 +319,57 @@ class BenchmarkDatasetTest(MedPerfTest):
         self.assertEqual(resp1[0]["id"], assoc1["id"])
         self.assertEqual(resp2[0]["id"], assoc2["id"])
 
+    def test_endpoint_returns_committee_managed_associations(self):
+        url = self.api_prefix + "/me/datasets/associations/"
+
+        # setup users
+        owner = "owner"
+        committee = "committee"
+        data_owner = "data_owner"
+        self.create_user(owner)
+        committee_info = self.create_user(committee)
+        self.create_user(data_owner)
+
+        # owner creates a benchmark with a committee member
+        prep, _, _, benchmark = self.shortcut_create_benchmark(
+            owner,
+            owner,
+            owner,
+            owner,
+            prep_mlcube_kwargs={
+                "name": "committeeprep",
+                "container_config": {"committeeprep": "committeeprep"},
+            },
+            ref_model_kwargs={
+                "name": "committeeref",
+                "container_config": {"committeeref": "committeeref"},
+            },
+            eval_mlcube_kwargs={
+                "name": "committeeeval",
+                "container_config": {"committeeeval": "committeeeval"},
+            },
+            name="committeename",
+            committee_member_emails=[committee_info["email"]],
+        )
+
+        # data owner requests an association
+        self.set_credentials(data_owner)
+        dataset = self.mock_dataset(
+            prep["id"], generated_uid="committeegenuid", state="OPERATION"
+        )
+        dataset = self.create_dataset(dataset).data
+        assoc = self.mock_dataset_association(benchmark["id"], dataset["id"])
+        assoc = self.create_dataset_association(assoc, data_owner, owner).data
+
+        # Act
+        self.set_credentials(committee)
+        response = self.client.get(url)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        assoc_ids = [item["id"] for item in response.data["results"]]
+        self.assertIn(assoc["id"], assoc_ids)
+
 
 class BenchmarkModelTest(MedPerfTest):
     def __create_asset(self, user):
@@ -342,6 +433,59 @@ class BenchmarkModelTest(MedPerfTest):
         self.assertEqual(len(resp2), 1)
         self.assertEqual(resp1[0]["id"], assoc1["id"])
         self.assertEqual(resp2[0]["id"], assoc2["id"])
+
+    def test_endpoint_returns_committee_managed_associations(self):
+        url = self.api_prefix + "/me/models/associations/"
+
+        # setup users
+        owner = "owner"
+        committee = "committee"
+        model_owner = "model_owner"
+        self.create_user(owner)
+        committee_info = self.create_user(committee)
+        self.create_user(model_owner)
+
+        # owner creates a benchmark with a committee member
+        _, _, _, benchmark = self.shortcut_create_benchmark(
+            owner,
+            owner,
+            owner,
+            owner,
+            prep_mlcube_kwargs={
+                "name": "committeeprep",
+                "container_config": {"committeeprep": "committeeprep"},
+            },
+            ref_model_kwargs={
+                "name": "committeeref",
+                "container_config": {"committeeref": "committeeref"},
+            },
+            eval_mlcube_kwargs={
+                "name": "committeeeval",
+                "container_config": {"committeeeval": "committeeeval"},
+            },
+            name="committeename",
+            committee_member_emails=[committee_info["email"]],
+        )
+
+        # model owner requests an association
+        self.set_credentials(model_owner)
+        model = self.mock_model(
+            name="committeemodel",
+            container_config={"committeemodel": "committeemodel"},
+            state="OPERATION",
+        )
+        model = self.create_model(model).data
+        assoc = self.mock_model_association(benchmark["id"], model["id"])
+        assoc = self.create_model_association(assoc, model_owner, owner).data
+
+        # Act
+        self.set_credentials(committee)
+        response = self.client.get(url)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        assoc_ids = [item["id"] for item in response.data["results"]]
+        self.assertIn(assoc["id"], assoc_ids)
 
 
 class CertificatesTest(MedPerfTest):

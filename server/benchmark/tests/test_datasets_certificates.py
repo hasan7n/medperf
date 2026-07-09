@@ -17,6 +17,7 @@ class BenchmarkCertificatesTest(MedPerfTest):
         data_owner2 = "data_owner2"
         data_owner3 = "data_owner3"
         ca_owner = "ca_owner"
+        committee_user = "committee_user"
         other_user = "other_user"
 
         self.create_user(bmk_owner)
@@ -28,11 +29,16 @@ class BenchmarkCertificatesTest(MedPerfTest):
         self.create_user(data_owner2)
         self.create_user(data_owner3)
         self.create_user(ca_owner)
+        committee_user_info = self.create_user(committee_user)
         self.create_user(other_user)
 
         # create benchmark
         prep, _, _, benchmark = self.shortcut_create_benchmark(
-            prep_mlcube_owner, ref_model_owner, eval_mlcube_owner, bmk_owner
+            prep_mlcube_owner,
+            ref_model_owner,
+            eval_mlcube_owner,
+            bmk_owner,
+            committee_member_emails=[committee_user_info["email"]],
         )
 
         # create CA
@@ -110,6 +116,7 @@ class BenchmarkCertificatesTest(MedPerfTest):
         self.data_owner2 = data_owner2
         self.data_owner3 = data_owner3
         self.ca_owner = ca_owner
+        self.committee_user = committee_user
         self.other_user = other_user
         self.benchmark_id = benchmark["id"]
         self.cert1_id = cert1["id"]
@@ -123,6 +130,7 @@ class BenchmarkCertificatesTest(MedPerfTest):
     [
         {"actor": "model_owner"},
         {"actor": "bmk_owner"},
+        {"actor": "committee_user"},
     ]
 )
 class BenchmarkCertificatesGetTest(BenchmarkCertificatesTest):
@@ -208,7 +216,8 @@ class BenchmarkCertificatesGetTest(BenchmarkCertificatesTest):
 class PermissionTest(BenchmarkCertificatesTest):
     """Test module for permissions of /benchmarks/<pk>/datasets_certificates/ endpoint
     Non-permitted actions:
-        GET: for all users except associated model owner and admin
+        GET: for all users except associated model owner, benchmark owner,
+            committee members, and admin
     """
 
     def setUp(self):

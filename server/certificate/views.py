@@ -15,6 +15,7 @@ from .permissions import (
     IsCertificateOwner,
     IsAdmin,
     IsBenchmarkOwner,
+    IsCommitteeMember,
 )
 from training.permissions import IsExpOwner, IsAggregatorOwner
 from drf_spectacular.utils import extend_schema
@@ -93,7 +94,7 @@ class CertificateDetail(GenericAPIView):
 
 
 class CertificatesFromBenchmark(GenericAPIView):
-    permission_classes = [IsAdmin | IsAssociatedModelOwner | IsBenchmarkOwner]
+    permission_classes = [IsAdmin | IsAssociatedModelOwner | IsBenchmarkOwner | IsCommitteeMember]
 
     def get_object(self, pk):
         try:
