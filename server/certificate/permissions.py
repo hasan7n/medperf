@@ -52,6 +52,24 @@ class IsBenchmarkOwner(BasePermission):
             return False
 
 
+class IsCommitteeMember(BasePermission):
+    def get_object(self, pk):
+        try:
+            return Benchmark.objects.get(pk=pk)
+        except Benchmark.DoesNotExist:
+            return None
+
+    def has_permission(self, request, view):
+        pk = view.kwargs.get("pk", None)
+        if not pk:
+            return False
+
+        benchmark = self.get_object(pk)
+        if not benchmark:
+            return False
+        return benchmark.committee_members.filter(id=request.user.id).exists()
+
+
 # TODO: check effciency / database costs
 class IsAssociatedModelOwner(BasePermission):
     def has_permission(self, request, view):

@@ -61,6 +61,9 @@ class Benchmark(models.Model):
         choices=AUTO_APPROVAL_MODE, max_length=100, default="NEVER"
     )
     user_metadata = models.JSONField(default=dict, blank=True, null=True)
+    committee_members = models.ManyToManyField(
+        User, blank=True, related_name="committee_benchmarks"
+    )
     approved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
@@ -70,3 +73,12 @@ class Benchmark(models.Model):
 
     class Meta:
         ordering = ["modified_at"]
+
+    @property
+    def committee_member_emails(self):
+        return list(self.committee_members.values_list("email", flat=True))
+
+    def user_can_manage_benchmark(self, user):
+        if self.owner.id == user.id:
+            return True
+        return self.committee_members.filter(id=user.id).exists()

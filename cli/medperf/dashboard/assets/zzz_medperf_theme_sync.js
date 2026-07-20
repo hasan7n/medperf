@@ -1,10 +1,14 @@
 /**
- * Keeps Dash dashboard theme in sync with MedPerf WebUI:
- * - Same localStorage key and prefers-color-scheme fallback as base.html
- * - postMessage from parent (dashboard_wrapper) when user toggles theme
- * - Plotly relayout after theme change (graphs render async)
+ * Keeps Dash dashboard theme in sync with MedPerf WebUI (localStorage medperf-dark).
  */
 (function () {
+    var FONT = "Instrument Sans, ui-sans-serif, system-ui, sans-serif";
+    var INK = "#11141f";
+    var SURFACE = "#f7f8fa";
+    var CARD_DARK = "#1f2433";
+    var TEXT_DARK = "#e5e7eb";
+    var TEXT_DARK_BRIGHT = "#ffffff";
+
     function medperfDashIsDark() {
         try {
             var v = localStorage.getItem("medperf-dark");
@@ -19,62 +23,66 @@
         }
     }
 
+    function medperfPlotlyLayoutPatch(gd, dark) {
+        var text = dark ? TEXT_DARK : INK;
+        var centerText = dark ? TEXT_DARK_BRIGHT : INK;
+        var plotBg = dark ? CARD_DARK : SURFACE;
+        var grid = dark ? "#3d455a" : "#d8dce6";
+        var axis = dark ? "#6b7280" : "#9b9fad";
+        var zero = dark ? "#4b5563" : "#d8dce6";
+        var legendBg = dark ? "rgba(24,28,40,0.95)" : "rgba(247,248,250,0.95)";
+        var legendBorder = dark ? "#3d455a" : "#ebeef4";
+
+        var patch = {
+            paper_bgcolor: "rgba(0,0,0,0)",
+            plot_bgcolor: plotBg,
+            "font.color": text,
+            "title.font.color": centerText,
+            "legend.font.color": text,
+            "legend.bgcolor": legendBg,
+            "legend.bordercolor": legendBorder,
+        };
+
+        var layout = gd.layout || {};
+        var key;
+        for (key in layout) {
+            if (/^xaxis\d*$/.test(key) || /^yaxis\d*$/.test(key)) {
+                patch[key + ".tickfont.color"] = text;
+                patch[key + ".title.font.color"] = text;
+                patch[key + ".gridcolor"] = grid;
+                patch[key + ".linecolor"] = axis;
+                patch[key + ".zerolinecolor"] = zero;
+            }
+        }
+
+        if (layout.annotations && layout.annotations.length) {
+            var i;
+            for (i = 0; i < layout.annotations.length; i++) {
+                patch["annotations[" + i + "].font.color"] = centerText;
+            }
+        }
+
+        return patch;
+    }
+
     function medperfPlotlyRelayout() {
         if (typeof window.Plotly === "undefined") return;
         var dark = document.documentElement.classList.contains("dark");
+        var text = dark ? TEXT_DARK : INK;
+        var sliceLabel = dark ? TEXT_DARK_BRIGHT : INK;
         var plots = document.querySelectorAll(".js-plotly-plot");
         var i;
         var gd;
+
         for (i = 0; i < plots.length; i++) {
             gd = plots[i];
             try {
-                if (dark) {
-                    window.Plotly.relayout(gd, {
-                        paper_bgcolor: "rgba(0,0,0,0)",
-                        plot_bgcolor: "#111827",
-                        font: {
-                            color: "#e5e7eb",
-                            family: "Inter, ui-sans-serif, system-ui, sans-serif",
-                        },
-                        title: { font: { color: "#f9fafb" } },
-                        legend: {
-                            bgcolor: "rgba(31,41,55,0.95)",
-                            bordercolor: "#374151",
-                            font: { color: "#e5e7eb" },
-                        },
-                        "xaxis.gridcolor": "#374151",
-                        "xaxis.linecolor": "#6b7280",
-                        "xaxis.zerolinecolor": "#4b5563",
-                        "xaxis.tickfont.color": "#d1d5db",
-                        "yaxis.gridcolor": "#374151",
-                        "yaxis.linecolor": "#6b7280",
-                        "yaxis.zerolinecolor": "#4b5563",
-                        "yaxis.tickfont.color": "#d1d5db",
-                    });
-                } else {
-                    window.Plotly.relayout(gd, {
-                        paper_bgcolor: "rgba(0,0,0,0)",
-                        plot_bgcolor: "#f9fafb",
-                        font: {
-                            color: "#374151",
-                            family: "Inter, ui-sans-serif, system-ui, sans-serif",
-                        },
-                        title: { font: { color: "#1f2937" } },
-                        legend: {
-                            bgcolor: "rgba(249,250,251,0.95)",
-                            bordercolor: "#e5e7eb",
-                            font: { color: "#374151" },
-                        },
-                        "xaxis.gridcolor": "#e5e7eb",
-                        "xaxis.linecolor": "#9ca3af",
-                        "xaxis.zerolinecolor": "#d1d5db",
-                        "xaxis.tickfont.color": "#4b5563",
-                        "yaxis.gridcolor": "#e5e7eb",
-                        "yaxis.linecolor": "#9ca3af",
-                        "yaxis.zerolinecolor": "#d1d5db",
-                        "yaxis.tickfont.color": "#4b5563",
-                    });
-                }
+                window.Plotly.relayout(gd, medperfPlotlyLayoutPatch(gd, dark));
+                window.Plotly.restyle(gd, {
+                    "textfont.color": sliceLabel,
+                    "insidetextfont.color": sliceLabel,
+                    "outsidetextfont.color": sliceLabel,
+                });
             } catch (e) {
                 /* ignore per-figure errors */
             }

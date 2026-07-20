@@ -19,6 +19,7 @@ from .serializers import (
 from .permissions import (
     IsAdmin,
     IsBenchmarkOwner,
+    IsCommitteeMember,
     IsAssociatedDatasetOwner,
     IsAssociatedModelOwner,
 )
@@ -64,7 +65,9 @@ class BenchmarkList(GenericAPIView):
 class BenchmarkModelList(GenericAPIView):
     # TODO: instead of using IsAssociatedDatasetOwner, add a new endpoint?
     #       at /datasets/<data_id>/benchmarks/<benchmark_id>/models
-    permission_classes = [IsAdmin | IsBenchmarkOwner | IsAssociatedDatasetOwner]
+    permission_classes = [
+        IsAdmin | IsBenchmarkOwner | IsCommitteeMember | IsAssociatedDatasetOwner
+    ]
     serializer_class = BenchmarkListofModelsSerializer
     queryset = ""
 
@@ -87,7 +90,9 @@ class BenchmarkModelList(GenericAPIView):
 
 class BenchmarkDatasetList(GenericAPIView):
     # TODO: should we have an endpoint that returns datasets instead of associations?
-    permission_classes = [IsAdmin | IsBenchmarkOwner | IsAssociatedModelOwner]
+    permission_classes = [
+        IsAdmin | IsBenchmarkOwner | IsCommitteeMember | IsAssociatedModelOwner
+    ]
     serializer_class = BenchmarkListofDatasetsSerializer
     queryset = ""
 
@@ -109,7 +114,7 @@ class BenchmarkDatasetList(GenericAPIView):
 
 
 class BenchmarkResultList(GenericAPIView):
-    permission_classes = [IsAdmin | IsBenchmarkOwner]
+    permission_classes = [IsAdmin | IsBenchmarkOwner | IsCommitteeMember]
     serializer_class = ModelResultSerializer
     queryset = ""
 
@@ -131,7 +136,7 @@ class BenchmarkResultList(GenericAPIView):
 
 
 class ParticipantsInfo(GenericAPIView):
-    permission_classes = [IsAdmin | IsBenchmarkOwner]
+    permission_classes = [IsAdmin | IsBenchmarkOwner | IsCommitteeMember]
     queryset = ""
 
     def get_object(self, pk):
@@ -167,7 +172,7 @@ class BenchmarkDetail(GenericAPIView):
 
     def get_permissions(self):
         if self.request.method == "PUT":
-            self.permission_classes = [IsAdmin | IsBenchmarkOwner]
+            self.permission_classes = [IsAdmin | IsBenchmarkOwner | IsCommitteeMember]
             if "approval_status" in self.request.data:
                 self.permission_classes = [IsAdmin]
         elif self.request.method == "DELETE":
@@ -185,7 +190,7 @@ class BenchmarkDetail(GenericAPIView):
         Retrieve a benchmark instance.
         """
         benchmark = self.get_object(pk)
-        if benchmark.owner.id == request.user.id:
+        if benchmark.user_can_manage_benchmark(request.user):
             serializer = BenchmarkSerializer(benchmark)
         else:
             serializer = BenchmarkPublicSerializer(benchmark)

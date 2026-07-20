@@ -61,6 +61,7 @@ class BenchmarkSchema(MedperfSchema):
     dataset_auto_approval_mode: str = "NEVER"
     model_auto_approval_allow_list: list[str] = []
     model_auto_approval_mode: str = "NEVER"
+    committee_member_emails: list[str] = []
 
 
 class CASchema(MedperfSchema):

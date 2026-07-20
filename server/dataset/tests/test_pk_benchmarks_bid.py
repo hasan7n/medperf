@@ -13,6 +13,7 @@ class DatasetTest(MedPerfTest):
         bmk_prep_mlcube_owner = "bmk_prep_mlcube_owner"
         ref_model_owner = "ref_model_owner"
         eval_mlcube_owner = "eval_mlcube_owner"
+        committee_user = "committee_user"
         other_user = "other_user"
 
         self.create_user(data_owner)
@@ -20,6 +21,7 @@ class DatasetTest(MedPerfTest):
         self.create_user(bmk_prep_mlcube_owner)
         self.create_user(ref_model_owner)
         self.create_user(eval_mlcube_owner)
+        committee_user_info = self.create_user(committee_user)
         self.create_user(other_user)
 
         # create benchmark and dataset
@@ -29,6 +31,7 @@ class DatasetTest(MedPerfTest):
             ref_model_owner,
             eval_mlcube_owner,
             bmk_owner,
+            committee_member_emails=[committee_user_info["email"]],
         )
         self.set_credentials(data_owner)
         dataset = self.mock_dataset(
@@ -42,6 +45,7 @@ class DatasetTest(MedPerfTest):
         self.bmk_prep_mlcube_owner = bmk_prep_mlcube_owner
         self.ref_model_owner = ref_model_owner
         self.eval_mlcube_owner = eval_mlcube_owner
+        self.committee_user = committee_user
         self.other_user = other_user
 
         self.bmk_id = benchmark["id"]
@@ -339,6 +343,83 @@ class DatasetDeleteTest(DatasetTest):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 0)
+
+
+class CommitteeMemberDatasetApprovalTest(DatasetTest):
+    """Test module for committee member approval of
+    /datasets/<pk>/benchmarks/<bid>/
+
+    Committee members act on the benchmark side of an association. They may
+    approve/reject a request initiated by the dataset owner, but an association
+    cannot be both initiated and approved from the benchmark side.
+    """
+
+    def setUp(self):
+        super(CommitteeMemberDatasetApprovalTest, self).setUp()
+        self.generic_setup()
+        self.url = self.url.format(self.dataset_id, self.bmk_id)
+
+    def __create_pending_association(self, initiator):
+        assoc = self.mock_dataset_association(
+            self.bmk_id, self.dataset_id, approval_status="PENDING"
+        )
+        self.create_dataset_association(assoc, initiator, None)
+
+    def test_committee_member_can_approve_data_owner_initiated_association(self):
+        # Arrange
+        self.__create_pending_association(self.data_owner)
+        self.set_credentials(self.committee_user)
+
+        # Act
+        response = self.client.put(
+            self.url, {"approval_status": "APPROVED"}, format="json"
+        )
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_committee_member_can_reject_data_owner_initiated_association(self):
+        # Arrange
+        self.__create_pending_association(self.data_owner)
+        self.set_credentials(self.committee_user)
+
+        # Act
+        response = self.client.put(
+            self.url, {"approval_status": "REJECTED"}, format="json"
+        )
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_committee_member_cannot_approve_benchmark_owner_initiated_association(
+        self,
+    ):
+        # Arrange
+        self.__create_pending_association(self.bmk_owner)
+        self.set_credentials(self.committee_user)
+
+        # Act
+        response = self.client.put(
+            self.url, {"approval_status": "APPROVED"}, format="json"
+        )
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_benchmark_owner_cannot_approve_committee_member_initiated_association(
+        self,
+    ):
+        # Arrange
+        self.__create_pending_association(self.committee_user)
+        self.set_credentials(self.bmk_owner)
+
+        # Act
+        response = self.client.put(
+            self.url, {"approval_status": "APPROVED"}, format="json"
+        )
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 @parameterized_class(

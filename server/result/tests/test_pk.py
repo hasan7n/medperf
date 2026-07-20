@@ -14,6 +14,7 @@ class ResultsTest(MedPerfTest):
         bmk_prep_mlcube_owner = "bmk_prep_mlcube_owner"
         ref_model_owner = "ref_model_owner"
         eval_mlcube_owner = "eval_mlcube_owner"
+        committee_user = "committee_user"
         other_user = "other_user"
 
         self.create_user(data_owner)
@@ -22,6 +23,7 @@ class ResultsTest(MedPerfTest):
         self.create_user(bmk_prep_mlcube_owner)
         self.create_user(ref_model_owner)
         self.create_user(eval_mlcube_owner)
+        committee_user_info = self.create_user(committee_user)
         self.create_user(other_user)
 
         # create benchmark
@@ -30,6 +32,7 @@ class ResultsTest(MedPerfTest):
             ref_model_owner,
             eval_mlcube_owner,
             bmk_owner,
+            committee_member_emails=[committee_user_info["email"]],
         )
 
         # create dataset
@@ -63,6 +66,7 @@ class ResultsTest(MedPerfTest):
         self.bmk_prep_mlcube_owner = bmk_prep_mlcube_owner
         self.ref_model_owner = ref_model_owner
         self.eval_mlcube_owner = eval_mlcube_owner
+        self.committee_user = committee_user
         self.other_user = other_user
 
         self.bmk_id = benchmark["id"]
@@ -77,6 +81,7 @@ class ResultsTest(MedPerfTest):
     [
         {"actor": "data_owner"},
         {"actor": "bmk_owner"},
+        {"actor": "committee_user"},
     ]
 )
 class ResultGetTest(ResultsTest):
@@ -258,9 +263,11 @@ class ResultDeleteTest(ResultsTest):
 class PermissionTest(ResultsTest):
     """Test module for permissions of /results/{pk} endpoint
     Non-permitted actions:
-        GET: for all users except bmk_owner, data_owner, and admin
-        DELETE: for all users except admin
-        PUT: for all users except admin and data_owner
+        GET: for all users except bmk_owner, committee members, data_owner,
+            and admin
+        DELETE: for all users except admin (committee members included)
+        PUT: for all users except admin and data_owner (committee members
+            included)
     """
 
     def setUp(self):
@@ -299,6 +306,7 @@ class PermissionTest(ResultsTest):
     @parameterized.expand(
         [
             ("bmk_owner", status.HTTP_403_FORBIDDEN),
+            ("committee_user", status.HTTP_403_FORBIDDEN),
             ("model_owner", status.HTTP_403_FORBIDDEN),
             ("bmk_prep_mlcube_owner", status.HTTP_403_FORBIDDEN),
             ("ref_model_owner", status.HTTP_403_FORBIDDEN),
@@ -370,6 +378,7 @@ class PermissionTest(ResultsTest):
     @parameterized.expand(
         [
             ("bmk_owner", status.HTTP_403_FORBIDDEN),
+            ("committee_user", status.HTTP_403_FORBIDDEN),
             ("model_owner", status.HTTP_403_FORBIDDEN),
             ("data_owner", status.HTTP_403_FORBIDDEN),
             ("bmk_prep_mlcube_owner", status.HTTP_403_FORBIDDEN),

@@ -485,9 +485,48 @@ class SerializersDatasetBenchmarksPostAssociationPolicyTest(DatasetBenchmarksTes
         self.assertEqual(response.data["approved_at"], None)
 
 
+class CommitteeMemberDatasetBenchmarksPostTest(DatasetBenchmarksTest):
+    """A committee member may initiate an association from the benchmark side."""
+
+    def setUp(self):
+        super(CommitteeMemberDatasetBenchmarksPostTest, self).setUp()
+        self.generic_setup()
+        committee_user = "committee_user"
+        committee_user_info = self.create_user(committee_user)
+        self.committee_user = committee_user
+
+        prep, _, _, benchmark = self.shortcut_create_benchmark(
+            self.bmk_prep_mlcube_owner,
+            self.ref_model_owner,
+            self.eval_mlcube_owner,
+            self.bmk_owner,
+            committee_member_emails=[committee_user_info["email"]],
+        )
+        self.set_credentials(self.data_owner)
+        dataset = self.mock_dataset(
+            data_preparation_mlcube=prep["id"], state="OPERATION"
+        )
+        dataset = self.create_dataset(dataset).data
+
+        self.bmk_id = benchmark["id"]
+        self.dataset_id = dataset["id"]
+        self.set_credentials(self.committee_user)
+
+    def test_committee_member_can_create_association(self):
+        # Arrange
+        assoc = self.mock_dataset_association(self.bmk_id, self.dataset_id)
+
+        # Act
+        response = self.client.post(self.url, assoc, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+
 class PermissionTest(DatasetBenchmarksTest):
     """Test module for permissions of /datasets/benchmarks endpoint
-    Non-permitted actions: POST for all users except data_owner, bmk_owner, and admins
+    Non-permitted actions: POST for all users except data_owner, bmk_owner,
+    committee members, and admins
     """
 
     def setUp(self):

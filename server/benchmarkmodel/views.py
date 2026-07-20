@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
-from .permissions import IsAdmin, IsModelOwner, IsBenchmarkOwner
+from .permissions import IsAdmin, IsModelOwner, IsBenchmarkOwner, IsCommitteeMember
 from .serializers import (
     BenchmarkModelListSerializer,
     ModelApprovalSerializer,
@@ -13,7 +13,7 @@ from .serializers import (
 
 
 class BenchmarkModelList(GenericAPIView):
-    permission_classes = [IsAdmin | IsBenchmarkOwner | IsModelOwner]
+    permission_classes = [IsAdmin | IsBenchmarkOwner | IsCommitteeMember | IsModelOwner]
     serializer_class = BenchmarkModelListSerializer
     queryset = ""
     filterset_fields = ("model", "benchmark", "initiated_by", "priority")
@@ -58,9 +58,9 @@ class ModelApproval(GenericAPIView):
     queryset = ""
 
     def get_permissions(self):
-        self.permission_classes = [IsAdmin | IsBenchmarkOwner | IsModelOwner]
+        self.permission_classes = [IsAdmin | IsBenchmarkOwner | IsCommitteeMember | IsModelOwner]
         if self.request.method == "PUT" and "priority" in self.request.data:
-            self.permission_classes = [IsAdmin | IsBenchmarkOwner]
+            self.permission_classes = [IsAdmin | IsBenchmarkOwner | IsCommitteeMember]
         elif self.request.method == "DELETE":
             self.permission_classes = [IsAdmin]
         return super(self.__class__, self).get_permissions()

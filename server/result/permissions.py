@@ -91,3 +91,32 @@ class IsBenchmarkOwner(BasePermission):
             return True
         else:
             return False
+
+
+class IsCommitteeMember(BasePermission):
+    def get_result_object(self, pk):
+        try:
+            return ModelResult.objects.get(pk=pk)
+        except ModelResult.DoesNotExist:
+            return None
+
+    def get_benchmark_object(self, pk):
+        try:
+            return Benchmark.objects.get(pk=pk)
+        except Benchmark.DoesNotExist:
+            return None
+
+    def has_permission(self, request, view):
+        pk = None
+        if request.method == "GET":
+            result_pk = view.kwargs.get("pk", None)
+            result = self.get_result_object(result_pk)
+            if not result:
+                return False
+            pk = result.benchmark.id
+        if not pk:
+            return False
+        benchmark = self.get_benchmark_object(pk)
+        if not benchmark:
+            return False
+        return benchmark.committee_members.filter(id=request.user.id).exists()

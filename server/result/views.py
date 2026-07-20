@@ -6,7 +6,7 @@ from drf_spectacular.utils import extend_schema
 
 from .models import ModelResult
 from .serializers import ModelResultSerializer, ModelResultDetailSerializer
-from .permissions import IsAdmin, IsBenchmarkOwner, IsDatasetOwner
+from .permissions import IsAdmin, IsBenchmarkOwner, IsCommitteeMember, IsDatasetOwner
 
 
 class ModelResultList(GenericAPIView):
@@ -61,7 +61,7 @@ class ModelResultDetail(GenericAPIView):
         elif self.request.method == "DELETE":
             self.permission_classes = [IsAdmin]
         elif self.request.method == "GET":
-            self.permission_classes = [IsAdmin | IsDatasetOwner | IsBenchmarkOwner]
+            self.permission_classes = [IsAdmin | IsDatasetOwner | IsBenchmarkOwner | IsCommitteeMember]
         return super(self.__class__, self).get_permissions()
 
     def get_object(self, pk):
