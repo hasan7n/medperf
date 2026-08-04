@@ -26,11 +26,12 @@ from .permissions import (
     IsAssociatedDatasetOwner,
     IsAggregatorOwner,
 )
+from utils.list_mixins import SearchableOrderingListMixin
 
 User = get_user_model()
 
 
-class TrainingExperimentList(GenericAPIView):
+class TrainingExperimentList(SearchableOrderingListMixin, GenericAPIView):
     serializer_class = WriteTrainingExperimentSerializer
     queryset = ""
 
@@ -40,6 +41,7 @@ class TrainingExperimentList(GenericAPIView):
         List all training experiments
         """
         training_exps = TrainingExperiment.objects.all()
+        training_exps = self.filter_queryset(training_exps)
         training_exps = self.paginate_queryset(training_exps)
         serializer = WriteTrainingExperimentSerializer(training_exps, many=True)
         return self.get_paginated_response(serializer.data)

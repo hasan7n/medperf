@@ -250,6 +250,7 @@ REST_FRAMEWORK = {
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.NamespaceVersioning",
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
     "DEFAULT_PARSER_CLASSES": [

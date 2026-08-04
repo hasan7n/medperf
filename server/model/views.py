@@ -7,9 +7,10 @@ from drf_spectacular.utils import extend_schema
 from .models import Model
 from .serializers import ModelSerializer, ModelDetailSerializer
 from .permissions import IsAdmin, IsModelOwner
+from utils.list_mixins import SearchableOrderingListMixin
 
 
-class ModelList(GenericAPIView):
+class ModelList(SearchableOrderingListMixin, GenericAPIView):
     serializer_class = ModelSerializer
     queryset = ""
     filterset_fields = ("type",)

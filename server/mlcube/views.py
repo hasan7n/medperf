@@ -11,9 +11,10 @@ from dataset.serializers import DatasetFullSerializer
 from dataset.models import Dataset
 from model.serializers import ModelSerializer
 from model.models import Model
+from utils.list_mixins import SearchableOrderingListMixin
 
 
-class MlCubeList(GenericAPIView):
+class MlCubeList(SearchableOrderingListMixin, GenericAPIView):
     serializer_class = MlCubeSerializer
     queryset = ""
     filterset_fields = ("name", "owner", "state", "is_valid")

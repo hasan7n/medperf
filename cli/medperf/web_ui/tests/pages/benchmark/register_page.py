@@ -25,8 +25,8 @@ class RegBenchmarkPage(BasePage):
         self.type(self.DESCRIPTION, description)
         self.type(self.REF_DATASET, reference_dataset)
 
-        self.select_by_text(self.DATA_PREP, data_preparator)
-        self.select_by_text(self.REF_MODEL, reference_model)
-        self.select_by_text(self.METRICS, metrics)
+        self.select_searchable_entity(self.DATA_PREP, data_preparator)
+        self.select_searchable_entity(self.REF_MODEL, reference_model)
+        self.select_searchable_entity(self.METRICS, metrics)
 
         self.click(self.REGISTER)

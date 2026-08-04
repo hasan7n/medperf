@@ -35,11 +35,7 @@ from medperf.web_ui.common import (
     initialize_state_task,
     reset_state_task,
 )
-from medperf.web_ui.utils import (
-    get_container_type,
-    build_listing_filters,
-    build_pagination_context,
-)
+from medperf.web_ui.listing import fetch_listing_page
 
 logger = logging.getLogger(__name__)
 
@@ -53,28 +49,18 @@ def datasets_ui(
     page: int = 1,
     page_size: int = 9,
     ordering: str = "created_at_desc",
+    search: Optional[str] = None,
     current_user: bool = Depends(check_user_ui),
 ):
-    filters = {}
     my_user_id = get_medperf_user_data()["id"]
-
-    if mine_only:
-        filters["owner"] = my_user_id
-
-    total_count = Dataset.get_count(filters=filters)
-
-    filters.update(
-        build_listing_filters(page=page, page_size=page_size, ordering=ordering)
-    )
-
-    datasets = Dataset.all(filters=filters)
-
-    pagination_context = build_pagination_context(
+    datasets, search_query, pagination_context = fetch_listing_page(
+        Dataset,
         page=page,
         page_size=page_size,
         ordering=ordering,
-        total_count=total_count,
-        page_items_count=len(datasets),
+        mine_only=mine_only,
+        my_user_id=my_user_id,
+        search=search,
     )
 
     return templates.TemplateResponse(
@@ -83,6 +69,7 @@ def datasets_ui(
             "request": request,
             "datasets": datasets,
             "mine_only": mine_only,
+            "search_query": search_query,
             **pagination_context,
         },
     )
@@ -251,28 +238,10 @@ def create_dataset_ui(
     request: Request,
     current_user: bool = Depends(check_user_ui),
 ):
-    ui_mode = request.app.state.ui_mode
-    context = {"request": request}
-
-    if ui_mode == request.app.state.EVALUATION_MODE:
-        benchmarks = Benchmark.all()
-        context["benchmarks"] = benchmarks
-    else:
-        my_containers = Cube.all()
-        containers = []
-        for container in my_containers:
-            container_obj = {
-                "id": container.id,
-                "name": container.name,
-                "type": get_container_type(container),
-            }
-            containers.append(container_obj)
-        data_prep_containers = [
-            c for c in containers if c["type"] == "data-prep-container"
-        ]
-        context["data_prep_containers"] = data_prep_containers
-
-    return templates.TemplateResponse("dataset/register_dataset.html", context)
+    return templates.TemplateResponse(
+        "dataset/register_dataset.html",
+        {"request": request},
+    )
 
 
 @router.post("/register/", response_class=JSONResponse)

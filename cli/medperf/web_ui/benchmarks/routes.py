@@ -22,11 +22,7 @@ from medperf.web_ui.common import (
     sort_associations_display,
     check_user_ui,
 )
-from medperf.web_ui.utils import (
-    get_container_type,
-    build_listing_filters,
-    build_pagination_context,
-)
+from medperf.web_ui.listing import fetch_listing_page
 
 from medperf.commands.association.approval import Approval
 from medperf.enums import Status
@@ -48,29 +44,18 @@ def benchmarks_ui(
     page: int = 1,
     page_size: int = 9,
     ordering: str = "created_at_desc",
+    search: Optional[str] = None,
     current_user: bool = Depends(check_user_ui),
 ):
-
-    filters = {}
     my_user_id = get_medperf_user_data()["id"]
-
-    if mine_only:
-        filters["owner"] = my_user_id
-
-    total_count = Benchmark.get_count(filters=filters)
-
-    filters.update(
-        build_listing_filters(page=page, page_size=page_size, ordering=ordering)
-    )
-
-    benchmarks = Benchmark.all(filters=filters)
-
-    pagination_context = build_pagination_context(
+    benchmarks, search_query, pagination_context = fetch_listing_page(
+        Benchmark,
         page=page,
         page_size=page_size,
         ordering=ordering,
-        total_count=total_count,
-        page_items_count=len(benchmarks),
+        mine_only=mine_only,
+        my_user_id=my_user_id,
+        search=search,
     )
 
     return templates.TemplateResponse(
@@ -79,6 +64,7 @@ def benchmarks_ui(
             "request": request,
             "benchmarks": benchmarks,
             "mine_only": mine_only,
+            "search_query": search_query,
             **pagination_context,
         },
     )
@@ -168,33 +154,9 @@ def create_benchmark_ui(
     request: Request,
     current_user: bool = Depends(check_user_ui),
 ):
-
-    my_user_id = get_medperf_user_data()["id"]
-    filters = {"owner": my_user_id}
-
-    my_containers = Cube.all(filters=filters)
-
-    containers = []
-    for container in my_containers:
-        container_obj = {
-            "id": container.id,
-            "name": container.name,
-            "type": get_container_type(container),
-        }
-        containers.append(container_obj)
-    data_prep_containers = [i for i in containers if i["type"] == "data-prep-container"]
-    metrics_containers = [i for i in containers if i["type"] == "metrics-container"]
-
-    my_models = Model.all(filters=filters)
-
     return templates.TemplateResponse(
         "benchmark/register_benchmark.html",
-        {
-            "request": request,
-            "data_prep_containers": data_prep_containers,
-            "reference_models": my_models,
-            "metrics_containers": metrics_containers,
-        },
+        {"request": request},
     )
 
 

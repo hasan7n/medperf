@@ -6,7 +6,7 @@ set -eo pipefail
 # Project ID
 export PROJECT_ID="project_id"
 
-# User email
+# User email (the GCP email address of the user who will be using MedPerf)
 export USER_EMAIL="user@example.com"
 
 # New service account name to create
@@ -207,24 +207,6 @@ echo "**************************************************************************
 ####################################################
 #################### Virtual Machine ###############
 ####################################################
-
-# # Create the VM
-# export CC_TYPE="TDX"
-# export MIN_CPU_PLATFORM="Intel Sapphire Rapids"
-# export MACHINE_TYPE="c3-standard-22"
-# gcloud compute instances create "$VM_NAME" \
-#         --confidential-compute-type="$CC_TYPE" \
-#         --shielded-secure-boot \
-#         --scopes=cloud-platform \
-#         --boot-disk-size="$BOOT_DISK_SIZE" \
-#         --zone="$VM_ZONE" \
-#         --network="$VM_NETWORK" \
-#         --maintenance-policy=TERMINATE \
-#         --min-cpu-platform="$MIN_CPU_PLATFORM" \
-#         --image-project=confidential-space-images \
-#         --image-family=confidential-space \
-#         --machine-type="$MACHINE_TYPE" \
-#         --service-account="$SERVICE_ACCOUNT_EMAIL"
 
 # Create the VM network
 gcloud compute networks create "$VM_NETWORK" --subnet-mode=auto

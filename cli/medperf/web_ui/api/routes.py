@@ -1,15 +1,49 @@
 # medperf/web_ui/api/routes.py
 import os
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Form, Depends
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Form, Depends, Query
 from fastapi.responses import JSONResponse
 
 import medperf.config as config
 from medperf.exceptions import InvalidArgumentError
 from medperf.web_ui.common import check_user_api
+from medperf.web_ui.entity_search import search_entities
 from medperf.utils import sanitize_path
 
 router = APIRouter()
+
+
+@router.get("/entity_search", response_class=JSONResponse)
+def entity_search(
+    entity_type: str = Query(...),
+    q: Optional[str] = Query(None),
+    mine_only: bool = Query(False),
+    container_type: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=50),
+    selected_id: Optional[int] = Query(None),
+    ids: Optional[str] = Query(
+        None, description="Comma-separated entity IDs to restrict results"
+    ),
+    current_user: bool = Depends(check_user_api),
+):
+    allowed_ids = None
+    if ids:
+        try:
+            allowed_ids = [int(item.strip()) for item in ids.split(",") if item.strip()]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ids parameter")
+
+    return search_entities(
+        entity_type,
+        q=q,
+        mine_only=mine_only,
+        container_type=container_type,
+        limit=limit,
+        selected_id=selected_id,
+        allowed_ids=allowed_ids,
+    )
 
 
 @router.get("/running_tasks", response_class=JSONResponse)

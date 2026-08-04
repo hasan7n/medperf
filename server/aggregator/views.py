@@ -7,9 +7,10 @@ from .models import Aggregator
 from .serializers import AggregatorSerializer
 from training.serializers import ReadTrainingExperimentSerializer
 from drf_spectacular.utils import extend_schema
+from utils.list_mixins import SearchableOrderingListMixin
 
 
-class AggregatorList(GenericAPIView):
+class AggregatorList(SearchableOrderingListMixin, GenericAPIView):
     serializer_class = AggregatorSerializer
     queryset = ""
 
@@ -19,6 +20,7 @@ class AggregatorList(GenericAPIView):
         List all aggregators
         """
         aggregators = Aggregator.objects.all()
+        aggregators = self.filter_queryset(aggregators)
         aggregators = self.paginate_queryset(aggregators)
         serializer = AggregatorSerializer(aggregators, many=True)
         return self.get_paginated_response(serializer.data)

@@ -99,7 +99,7 @@ def sort_associations_display(associations: list[dict]) -> list[dict]:
         status_order = approval_status_order.get(assoc["approval_status"], -1)
         # recent associations - first
         date_order = -parse_datetime(
-            assoc["approved_at"] or assoc["created_at"]
+            assoc.get("approved_at") or assoc["created_at"]
         ).timestamp()
         return status_order, date_order
 

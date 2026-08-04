@@ -1,9 +1,26 @@
 import uuid
+from typing import Optional, Tuple
+
 from fastapi import Request
+from starlette.middleware.wsgi import WSGIMiddleware
+
+from medperf.dashboard.preparation_dashboard import build_app
 from medperf.entities.cube import Cube
 from medperf.utils import sanitize_path
-from medperf.dashboard.preparation_dashboard import build_app
-from starlette.middleware.wsgi import WSGIMiddleware
+
+MIN_SEARCH_LENGTH = 2
+SEARCH_DEBOUNCE_MS = 300
+
+
+def normalize_search_query(search: Optional[str]) -> str:
+    return (search or "").strip()
+
+
+def apply_listing_search(filters: dict, search: Optional[str]) -> Tuple[dict, str]:
+    query = normalize_search_query(search)
+    if len(query) >= MIN_SEARCH_LENGTH:
+        filters["search"] = query
+    return filters, query
 
 
 def get_ui_ordering(ordering: str) -> str:

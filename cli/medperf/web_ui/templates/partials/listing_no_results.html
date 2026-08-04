@@ -1,0 +1,19 @@
+{% set sq = (search_query | default('', true)) %}
+{% set listing_has_search = (sq | length) >= 2 %}
+{% set listing_filters_active = mine_only or listing_has_search %}
+
+{% if listing_filters_active %}
+<div class="col-span-full flex justify-center px-2" data-testid="{{ empty_msg_testid | default('listing-no-match', true) }}-filtered">
+    <div class="w-full max-w-lg rounded-xl border border-border bg-card dark:bg-card px-6 py-10 text-center shadow-sm">
+        <div class="mb-3 text-muted-fg" aria-hidden="true">
+            <i class="fas fa-filter text-2xl"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-ink">No matching {{ entity_name }}</h3>
+        <p class="mt-3 text-sm text-muted-fg leading-relaxed">
+            Nothing here matches your current filters.
+        </p>
+    </div>
+</div>
+{% else %}
+<h3 class="col-span-full text-center py-12 text-muted-fg text-xl" {% if empty_msg_testid %}data-testid="{{ empty_msg_testid }}"{% endif %}>No {{ entity_name }} found</h3>
+{% endif %}

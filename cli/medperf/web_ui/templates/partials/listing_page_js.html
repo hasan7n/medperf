@@ -1,8 +1,11 @@
 <script>
 (function () {
-    function reloadUi(page) {
+    var MIN_SEARCH_LENGTH = 2;
+
+    function reloadUi(page, useSearchInput) {
         page = page === undefined ? 1 : page;
         if (page < 1 || !Number.isInteger(page)) return;
+        if (useSearchInput === undefined) useSearchInput = false;
 
         var switchEl = document.getElementById("switch");
         var params = new URLSearchParams({ page: String(page), mine_only: switchEl && switchEl.checked ? "true" : "false" });
@@ -22,19 +25,67 @@
             params.append("ordering", locParams.get("ordering"));
         }
 
+        var searchEl = document.getElementById("listing-search");
+        var searchQuery = "";
+        if (useSearchInput && searchEl) {
+            searchQuery = searchEl.value.trim();
+        } else {
+            searchQuery = (locParams.get("search") || "").trim();
+        }
+        if (searchQuery.length >= MIN_SEARCH_LENGTH) {
+            params.append("search", searchQuery);
+        }
+
         window.location = "{{ listing_ui_path }}?" + params.toString();
+    }
+
+    function submitSearch() {
+        var searchEl = document.getElementById("listing-search");
+        if (!searchEl) {
+            reloadUi(1, true);
+            return;
+        }
+        var query = searchEl.value.trim();
+        var locParams = new URLSearchParams(window.location.search);
+        var current = (locParams.get("search") || "").trim();
+
+        if (query.length === 0) {
+            if (current.length > 0) reloadUi(1, true);
+            return;
+        }
+        if (query.length < MIN_SEARCH_LENGTH) {
+            return;
+        }
+        if (query === current) return;
+        reloadUi(1, true);
     }
 
     ["ordering", "page-size", "switch"].forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.addEventListener("change", function () { reloadUi(1); });
+        if (el) el.addEventListener("change", function () { reloadUi(1, false); });
     });
+
+    var searchEl = document.getElementById("listing-search");
+    var searchBtn = document.getElementById("listing-search-btn");
+    if (searchEl) {
+        searchEl.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                submitSearch();
+            }
+        });
+    }
+    if (searchBtn) {
+        searchBtn.addEventListener("click", function () {
+            submitSearch();
+        });
+    }
 
     document.querySelectorAll(".page-link").forEach(function (link) {
         link.addEventListener("click", function (e) {
             e.preventDefault();
             var page = link.getAttribute("data-page");
-            if (page !== null && page !== "") reloadUi(parseInt(page, 10));
+            if (page !== null && page !== "") reloadUi(parseInt(page, 10), false);
         });
     });
 })();

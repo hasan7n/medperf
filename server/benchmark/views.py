@@ -23,9 +23,10 @@ from .permissions import (
     IsAssociatedDatasetOwner,
     IsAssociatedModelOwner,
 )
+from utils.list_mixins import SearchableOrderingListMixin
 
 
-class BenchmarkList(GenericAPIView):
+class BenchmarkList(SearchableOrderingListMixin, GenericAPIView):
     serializer_class = BenchmarkSerializer
     queryset = ""
     filterset_fields = (

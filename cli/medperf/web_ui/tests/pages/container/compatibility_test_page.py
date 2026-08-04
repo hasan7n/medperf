@@ -16,7 +16,7 @@ class CompatibilityTestPage(BasePage):
     NOT_ENCRYPTED = (By.ID, "without-encryption")
 
     def run_test(self, benchmark, model):
-        self.select_by_text(self.BENCHMARK, benchmark)
+        self.select_searchable_entity(self.BENCHMARK, benchmark)
         self.type(self.MODEL_CONFIG, model.config)
         self.type(self.MODEL_PARAMETERS, model.parameters)
         self.type(self.MODEL_ADDITIONAL, model.additional_local)

@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -11,7 +12,6 @@ from medperf.commands.certificate.server_certificate import GetServerCertificate
 from medperf.commands.aggregator.run import StartAggregator
 from medperf.entities.aggregator import Aggregator
 from medperf.entities.ca import CA
-from medperf.entities.cube import Cube
 from medperf.utils import get_pki_assets_path
 from medperf.web_ui.common import (
     check_user_api,
@@ -21,7 +21,7 @@ from medperf.web_ui.common import (
     templates,
 )
 from medperf.enums import CryptoKeyType
-from medperf.web_ui.utils import build_listing_filters, build_pagination_context
+from medperf.web_ui.listing import fetch_listing_page
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -32,11 +32,9 @@ def register_aggregator_ui(
     request: Request,
     current_user: bool = Depends(check_user_ui),
 ):
-    containers = Cube.all()
-    containers = [{"id": c.id, "name": c.name} for c in containers]
     return templates.TemplateResponse(
         "aggregators/register_aggregator.html",
-        {"request": request, "containers": containers},
+        {"request": request},
     )
 
 
@@ -92,28 +90,18 @@ def aggregators_ui(
     page: int = 1,
     page_size: int = 9,
     ordering: str = "created_at_desc",
+    search: Optional[str] = None,
     current_user: bool = Depends(check_user_ui),
 ):
-    filters = {}
     my_user_id = get_medperf_user_data()["id"]
-
-    if mine_only:
-        filters["owner"] = my_user_id
-
-    total_count = Aggregator.get_count(filters=filters)
-
-    filters.update(
-        build_listing_filters(page=page, page_size=page_size, ordering=ordering)
-    )
-
-    aggregators = Aggregator.all(filters=filters)
-
-    pagination_context = build_pagination_context(
+    aggregators, search_query, pagination_context = fetch_listing_page(
+        Aggregator,
         page=page,
         page_size=page_size,
         ordering=ordering,
-        total_count=total_count,
-        page_items_count=len(aggregators),
+        mine_only=mine_only,
+        my_user_id=my_user_id,
+        search=search,
     )
 
     return templates.TemplateResponse(
@@ -122,6 +110,7 @@ def aggregators_ui(
             "request": request,
             "aggregators": aggregators,
             "mine_only": mine_only,
+            "search_query": search_query,
             **pagination_context,
         },
     )
@@ -156,12 +145,15 @@ def aggregator_detail_ui(
 
         experiments_using_aggregator = entity.get_training_experiments()
 
+    training_allowed_ids = ",".join(str(exp.id) for exp in experiments_using_aggregator)
+
     return templates.TemplateResponse(
         "aggregators/aggregator_detail.html",
         {
             "request": request,
             "entity": entity,
             "experiments_using_aggregator": experiments_using_aggregator,
+            "training_allowed_ids": training_allowed_ids,
             "owner": owner,
             "certificate_exists": certificate_exists,
         },

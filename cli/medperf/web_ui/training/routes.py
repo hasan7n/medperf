@@ -9,7 +9,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 import medperf.config as config
 from medperf.account_management import get_medperf_user_data
 from medperf.commands.association.approval import Approval
-from medperf.commands.association.utils import get_experiment_associations
 from medperf.commands.training.submit import SubmitTrainingExp
 from medperf.commands.training.set_plan import SetPlan
 from medperf.commands.training.start_event import StartEvent
@@ -30,11 +29,7 @@ from medperf.web_ui.common import (
     sort_associations_display,
     templates,
 )
-from medperf.web_ui.utils import (
-    get_container_type,
-    build_listing_filters,
-    build_pagination_context,
-)
+from medperf.web_ui.listing import fetch_listing_page
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -45,26 +40,9 @@ def register_training_ui(
     request: Request,
     current_user: bool = Depends(check_user_ui),
 ):
-    my_user_id = get_medperf_user_data()["id"]
-    filters = {"owner": my_user_id}
-    my_containers = Cube.all(filters=filters)
-    containers = []
-    for container in my_containers:
-        container_obj = {
-            "id": container.id,
-            "name": container.name,
-            "type": get_container_type(container),
-        }
-        containers.append(container_obj)
-    data_prep_containers = [c for c in containers if c["type"] == "data-prep-container"]
-    all_containers = [c for c in containers if c not in data_prep_containers]
     return templates.TemplateResponse(
         "training/register_training_experiment.html",
-        {
-            "request": request,
-            "data_prep_containers": data_prep_containers,
-            "all_containers": all_containers,
-        },
+        {"request": request},
     )
 
 
@@ -126,28 +104,18 @@ def training_ui(
     page: int = 1,
     page_size: int = 9,
     ordering: str = "created_at_desc",
+    search: Optional[str] = None,
     current_user: bool = Depends(check_user_ui),
 ):
-    filters = {}
     my_user_id = get_medperf_user_data()["id"]
-
-    if mine_only:
-        filters["owner"] = my_user_id
-
-    total_count = TrainingExp.get_count(filters=filters)
-
-    filters.update(
-        build_listing_filters(page=page, page_size=page_size, ordering=ordering)
-    )
-
-    experiments = TrainingExp.all(filters=filters)
-
-    pagination_context = build_pagination_context(
+    experiments, search_query, pagination_context = fetch_listing_page(
+        TrainingExp,
         page=page,
         page_size=page_size,
         ordering=ordering,
-        total_count=total_count,
-        page_items_count=len(experiments),
+        mine_only=mine_only,
+        my_user_id=my_user_id,
+        search=search,
     )
 
     return templates.TemplateResponse(
@@ -156,6 +124,7 @@ def training_ui(
             "request": request,
             "experiments": experiments,
             "mine_only": mine_only,
+            "search_query": search_query,
             **pagination_context,
         },
     )
@@ -178,28 +147,25 @@ def training_detail_ui(  # noqa
         Cube.get(cube_uid=entity.fl_admin_mlcube) if entity.fl_admin_mlcube else None
     )
 
-    # Dataset associations (for owner: show pending and approved)
-    dataset_associations = []
+    datasets_associations = []
     datasets = {}
     dataset_assoc_pending = False
-    try:
-        dataset_associations = get_experiment_associations(
-            experiment_id=training_id,
-            experiment_type="training_exp",
-            component_type="dataset",
-        )
-        dataset_associations = sort_associations_display(dataset_associations)
-        dataset_assoc_pending = any(
-            a.get("approval_status") == "PENDING" for a in dataset_associations
-        )
-        for a in dataset_associations:
-            if a.get("dataset"):
-                try:
-                    datasets[a["dataset"]] = Dataset.get(a["dataset"])
-                except Exception:
-                    pass
-    except Exception as e:
-        logger.warning("Could not load training dataset associations: %s", e)
+    if is_owner:
+        try:
+            datasets_associations = TrainingExp.get_datasets_associations(
+                training_exp_uid=training_id
+            )
+            dataset_assoc_pending = any(
+                i["approval_status"] == "PENDING" for i in datasets_associations
+            )
+            datasets_associations = sort_associations_display(datasets_associations)
+            datasets = {
+                assoc["dataset"]: Dataset.get(assoc["dataset"])
+                for assoc in datasets_associations
+                if assoc["dataset"]
+            }
+        except Exception as e:
+            logger.warning("Could not load training dataset associations: %s", e)
 
     # Aggregator (one per experiment, from server)
     aggregator = None
@@ -219,18 +185,6 @@ def training_detail_ui(  # noqa
     except Exception:
         pass
 
-    # For owner: list of aggregators to choose from when adding aggregator
-    available_aggregators = []
-    if is_owner:
-        try:
-            available_aggregators = Aggregator.all()
-            available_aggregators = sorted(
-                available_aggregators,
-                key=lambda a: (a.owner != my_user_id, a.name or ""),
-            )
-        except Exception:
-            pass
-
     plan_exists = bool(entity.plan)
 
     return templates.TemplateResponse(
@@ -241,13 +195,12 @@ def training_detail_ui(  # noqa
             "prep_cube": prep_cube,
             "fl_cube": fl_cube,
             "fl_admin_cube": fl_admin_cube,
-            "dataset_associations": dataset_associations,
+            "datasets_associations": datasets_associations,
             "datasets": datasets,
             "dataset_assoc_pending": dataset_assoc_pending,
             "aggregator": aggregator,
             "is_owner": is_owner,
             "has_active_event": has_active_event,
-            "available_aggregators": available_aggregators,
             "plan_exists": plan_exists,
         },
     )

@@ -49,6 +49,31 @@ class BasePage:
         self.ensure_element_ready(select)
         Select(select).select_by_visible_text(text)
 
+    def select_searchable_entity(self, hidden_input_locator, entity_name):
+        hidden = self.find(hidden_input_locator)
+        select = hidden.find_element(
+            By.XPATH,
+            "./ancestor::div[contains(@class,'searchable-select')]",
+        )
+        query = select.find_element(By.CSS_SELECTOR, ".searchable-select-query")
+        self.ensure_element_ready(query)
+        query.click()
+        query.clear()
+        query.send_keys(entity_name)
+
+        def matching_option(_driver):
+            for option in select.find_elements(
+                By.CSS_SELECTOR, "li.searchable-select-option"
+            ):
+                if entity_name in option.text:
+                    return option
+            return None
+
+        option = self.wait.until(matching_option)
+        self.ensure_element_ready(option)
+        option.click()
+        self.wait.until(lambda _driver: bool(hidden.get_attribute("value")))
+
     def wait_for_presence_selector(self, locator):
         self.wait.until(EC.presence_of_element_located(locator))
 
@@ -111,8 +136,7 @@ class BasePage:
         return self.get_text(self.PAGE_MODAL_TITLE) == "Confirmation Prompt"
 
     def patch_event_source(self):
-        return self.driver.execute_script(
-            """
+        return self.driver.execute_script("""
             (function(){
                 window.evSourceSpy = { count: 0, messages: [] };
                 const OriginalEventSource = window.EventSource;
@@ -133,5 +157,4 @@ class BasePage:
                 PatchedEventSource.prototype = OriginalEventSource.prototype;
                 window.EventSource = PatchedEventSource;
             })();
-            """
-        )
+            """)

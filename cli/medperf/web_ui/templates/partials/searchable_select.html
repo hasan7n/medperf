@@ -1,0 +1,50 @@
+{# Searchable entity picker. Requires searchable_select.js on the page. #}
+<div
+    class="searchable-select relative {{ extra_class | default('w-full', true) }}"
+    data-entity-type="{{ entity_type }}"
+    data-input-name="{{ input_name }}"
+    data-input-id="{{ input_id }}"
+    data-placeholder="{{ placeholder | default('Search to select…', true) }}"
+    data-mine-only="{{ 'true' if mine_only else 'false' }}"
+    {% if container_type %}data-container-type="{{ container_type }}"{% endif %}
+    {% if allowed_ids %}data-allowed-ids="{{ allowed_ids }}"{% endif %}
+    {% if selected_value %}data-selected-value="{{ selected_value }}"{% endif %}
+    {% if selected_label %}data-selected-label="{{ selected_label }}"{% endif %}
+    {% if disabled %}data-disabled="true"{% endif %}
+    {% if required %}data-required="true"{% endif %}
+    {% if extra_class %}data-extra-class="{{ extra_class }}"{% endif %}
+>
+    <input type="hidden" id="{{ input_id }}" {% if input_name %}name="{{ input_name }}"{% endif %} value="{{ selected_value | default('', true) }}">
+    <div class="searchable-select-control relative">
+        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-muted-fg" aria-hidden="true">
+            <i class="fas fa-search text-sm"></i>
+        </span>
+        <input
+            type="text"
+            class="searchable-select-query w-full px-4 py-3 pl-9 pr-10 rounded-xl border-2 border-border-strong dark:border-border dark:bg-card-muted dark:text-ink focus:outline-none focus:border-brand-accent"
+            placeholder="{{ placeholder | default('Search to select…', true) }}"
+            value="{{ selected_label | default('', true) }}"
+            autocomplete="off"
+            role="combobox"
+            aria-expanded="false"
+            aria-controls="{{ input_id }}-listbox"
+            aria-autocomplete="list"
+            {% if disabled %}disabled{% endif %}
+        >
+        <button
+            type="button"
+            class="searchable-select-clear absolute inset-y-0 right-0 flex items-center pr-3 text-muted-fg hover:text-ink {% if not selected_value %}hidden{% endif %}"
+            aria-label="Clear selection"
+            tabindex="-1"
+            {% if disabled %}disabled{% endif %}
+        >
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <ul
+        id="{{ input_id }}-listbox"
+        class="searchable-select-results absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-xl border border-border bg-card dark:bg-card shadow-lg py-1 hidden"
+        role="listbox"
+    ></ul>
+    <p class="searchable-select-hint mt-1 text-xs text-muted-fg hidden"></p>
+</div>

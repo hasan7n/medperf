@@ -1,4 +1,5 @@
 from typing import List
+from urllib.parse import urlencode
 import requests
 import logging
 
@@ -73,7 +74,7 @@ class REST(Comms):
         filters = dict(filters)
         filters.update({"is_valid": True, "limit": 1, "offset": 0})
 
-        query_str = "&".join([f"{k}={v}" for k, v in filters.items()])
+        query_str = urlencode(filters)
         paginated_url = f"{url}?{query_str}"
 
         res = self.__auth_get(paginated_url)
@@ -126,7 +127,7 @@ class REST(Comms):
 
         while len(el_list) < num_elements:
             filters.update({"limit": page_size, "offset": offset})
-            query_str = "&".join([f"{k}={v}" for k, v in filters.items()])
+            query_str = urlencode(filters)
             paginated_url = f"{url}?{query_str}"
             res = self.__auth_get(paginated_url)
             if res.status_code != 200:

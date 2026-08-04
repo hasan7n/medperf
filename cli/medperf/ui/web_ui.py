@@ -117,7 +117,7 @@ class WebUI(CLI):
         Returns:
             str: user input
         """
-        msg = msg.replace(" [Y/n]", "")
+        msg = msg.replace("[Y/n]", "").strip()
         self.set_event(
             Event(
                 task_id=self.task_id,

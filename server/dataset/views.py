@@ -11,9 +11,10 @@ from .serializers import (
     DatasetPublicSerializer,
     DatasetDetailSerializer,
 )
+from utils.list_mixins import SearchableOrderingListMixin
 
 
-class DatasetList(GenericAPIView):
+class DatasetList(SearchableOrderingListMixin, GenericAPIView):
     serializer_class = DatasetPublicSerializer
     queryset = ""
 
@@ -23,6 +24,7 @@ class DatasetList(GenericAPIView):
         List all datasets
         """
         datasets = Dataset.objects.all()
+        datasets = self.filter_queryset(datasets)
         datasets = self.paginate_queryset(datasets)
         serializer = DatasetPublicSerializer(datasets, many=True)
         return self.get_paginated_response(serializer.data)

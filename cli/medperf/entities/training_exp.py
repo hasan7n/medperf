@@ -1,5 +1,8 @@
 import os
-from medperf.commands.association.utils import get_experiment_associations
+from medperf.commands.association.utils import (
+    get_experiment_associations,
+    get_user_associations,
+)
 import yaml
 from typing import List
 import medperf.config as config
@@ -114,6 +117,16 @@ class TrainingExp(Entity):
         )
         datasets_uids = [assoc["dataset"] for assoc in associations]
         return datasets_uids
+
+    @classmethod
+    def get_datasets_associations(cls, training_exp_uid: int) -> List[dict]:
+        """Retrieves dataset associations for a training experiment."""
+        associations = get_user_associations(
+            experiment_type="training_exp",
+            component_type="dataset",
+            approval_status=None,
+        )
+        return [a for a in associations if a["training_exp"] == training_exp_uid]
 
     @classmethod
     def get_datasets_with_users(cls, training_exp_uid: int) -> List[int]:

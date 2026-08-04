@@ -9,9 +9,10 @@ from drf_spectacular.utils import extend_schema
 from .models import Asset
 from .serializers import AssetSerializer, AssetDetailSerializer
 from .permissions import IsAdmin, IsAssetOwner
+from utils.list_mixins import SearchableOrderingListMixin
 
 
-class AssetList(GenericAPIView):
+class AssetList(SearchableOrderingListMixin, GenericAPIView):
     serializer_class = AssetSerializer
     queryset = ""
     filterset_fields = ("name", "owner", "state", "is_valid")

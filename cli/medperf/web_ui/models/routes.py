@@ -18,7 +18,9 @@ from medperf.web_ui.common import (
     templates,
     check_user_ui,
 )
-from medperf.web_ui.utils import build_listing_filters, build_pagination_context
+from typing import Optional
+
+from medperf.web_ui.listing import fetch_listing_page
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -31,28 +33,18 @@ def models_ui(
     page: int = 1,
     page_size: int = 9,
     ordering: str = "created_at_desc",
+    search: Optional[str] = None,
     current_user: bool = Depends(check_user_ui),
 ):
-    filters = {}
     my_user_id = get_medperf_user_data()["id"]
-
-    if mine_only:
-        filters["owner"] = my_user_id
-
-    total_count = Model.get_count(filters=filters)
-
-    filters.update(
-        build_listing_filters(page=page, page_size=page_size, ordering=ordering)
-    )
-
-    models = Model.all(filters=filters)
-
-    pagination_context = build_pagination_context(
+    models, search_query, pagination_context = fetch_listing_page(
+        Model,
         page=page,
         page_size=page_size,
         ordering=ordering,
-        total_count=total_count,
-        page_items_count=len(models),
+        mine_only=mine_only,
+        my_user_id=my_user_id,
+        search=search,
     )
 
     return templates.TemplateResponse(
@@ -61,6 +53,7 @@ def models_ui(
             "request": request,
             "models": models,
             "mine_only": mine_only,
+            "search_query": search_query,
             **pagination_context,
         },
     )
