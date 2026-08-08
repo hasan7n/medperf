@@ -9,10 +9,40 @@
 {% if benchmark_register_running %}
 {% set form_data = request.app.state.task.formData %}
 {% endif %}
+{% set selected_topology = form_data.get('topology', '') if benchmark_register_running else '' %}
 
 <div class="container mx-auto px-4 py-8 max-w-3xl">
     <h1 class="text-3xl font-bold text-ink text-center mb-4">Register a New Benchmark</h1>
-    <form id="benchmark-register-form" class="space-y-6" action="/benchmarks/register" method="post" data-panel-title="Registering benchmark" data-confirm-message="register this benchmark?">
+
+    {# Step 1. The topology decides which components the benchmark needs, so it
+       is chosen before anything else and the form is built around the answer. #}
+    <div id="topology-step" class="space-y-4 {% if selected_topology %}hidden{% endif %}">
+        <p class="text-secondary text-center">First, choose how your benchmark runs models.</p>
+        <div class="grid gap-4">
+            <button type="button" class="topology-option text-left p-5 rounded-xl border-2 border-border-strong dark:border-border hover:border-brand-accent focus:outline-none focus:border-brand-accent cursor-pointer" data-topology="byo_inference_script">
+                <span class="block font-semibold text-ink mb-1">Models bring their own inference</span>
+                <span class="block text-sm text-secondary">Participants submit container models that run inference themselves. Your benchmark supplies a metrics container that scores their predictions.</span>
+            </button>
+            <button type="button" class="topology-option text-left p-5 rounded-xl border-2 border-border-strong dark:border-border hover:border-brand-accent focus:outline-none focus:border-brand-accent cursor-pointer" data-topology="end_to_end_script">
+                <span class="block font-semibold text-ink mb-1">One script does everything</span>
+                <span class="block text-sm text-secondary">Participants submit model assets (weights). Your benchmark script loads a model, runs inference and computes the metrics in a single step.</span>
+            </button>
+            <button type="button" class="topology-option text-left p-5 rounded-xl border-2 border-border-strong dark:border-border hover:border-brand-accent focus:outline-none focus:border-brand-accent cursor-pointer" data-topology="inference_script">
+                <span class="block font-semibold text-ink mb-1">Your script infers, your container scores</span>
+                <span class="block text-sm text-secondary">Participants submit model assets (weights). Your benchmark script loads a model and produces predictions; a separate metrics container scores them.</span>
+            </button>
+        </div>
+    </div>
+
+    <form id="benchmark-register-form" class="space-y-6 {% if not selected_topology %}hidden{% endif %}" action="/benchmarks/register" method="post" data-panel-title="Registering benchmark" data-confirm-message="register this benchmark?" data-task-running="{{ 'true' if task_running else 'false' }}">
+        <input type="hidden" name="topology" id="topology" value="{{ selected_topology }}">
+        <div class="flex items-center justify-between gap-4 p-4 rounded-xl bg-card-muted">
+            <div>
+                <span class="block text-sm text-secondary">Topology</span>
+                <span id="topology-label" class="font-semibold text-ink"></span>
+            </div>
+            <button type="button" id="change-topology-btn" class="btn btn-secondary cursor-pointer" {% if task_running %}disabled{% endif %}>Change</button>
+        </div>
         <div class="flex flex-wrap gap-4">
             <label class="inline-flex items-center gap-2 cursor-pointer text-ink"><input type="radio" name="skip_compatibility_tests" id="skip-tests" value="true" class="rounded-full border-border-strong text-brand focus:ring-brand-accent dark:border-border accent-brand" {% if task_running %}disabled{% endif %}> Skip Compatibility Tests</label>
             <label class="inline-flex items-center gap-2 cursor-pointer text-ink"><input type="radio" name="skip_compatibility_tests" id="noskip-tests" value="false" checked class="rounded-full border-border-strong text-brand focus:ring-brand-accent dark:border-border accent-brand" {% if task_running %}disabled{% endif %}> Require Compatibility Tests</label>
@@ -47,6 +77,7 @@
             <div class="flex flex-wrap items-stretch gap-2">
                 {% set entity_type = "container" %}
                 {% set container_type = "data-prep-container" %}
+                {% set model_type = none %}
                 {% set input_name = "data_preparation_container" %}
                 {% set input_id = "data-preparation-container" %}
                 {% set placeholder = "Search data preparation containers…" %}
@@ -59,28 +90,72 @@
                 <span class="inline-flex items-center px-3 tooltip-icon text-brand-accent" title="{{ tooltips.register_benchmark_data_preparation_container_id }}"><i class="fas fa-info-circle text-lg"></i></span>
             </div>
         </div>
-        <div>
-            <label for="reference-model" class="block text-secondary font-semibold mb-2">Reference Model</label>
+
+        {# The reference model is a container in byo_inference_script and an asset
+           in the script topologies, so each gets its own picker and only the
+           relevant one is enabled. #}
+        <div class="topology-field" data-topologies="byo_inference_script">
+            <label for="reference-model-container" class="block text-secondary font-semibold mb-2">Reference Model (container)</label>
             <div class="flex flex-wrap items-stretch gap-2">
                 {% set entity_type = "model" %}
                 {% set container_type = none %}
+                {% set model_type = "CONTAINER" %}
                 {% set input_name = "reference_model" %}
-                {% set input_id = "reference-model" %}
-                {% set placeholder = "Search your models…" %}
+                {% set input_id = "reference-model-container" %}
+                {% set placeholder = "Search your container models…" %}
                 {% set mine_only = true %}
                 {% set required = true %}
                 {% set extra_class = "flex-1 min-w-0" %}
-                {% set selected_value = form_data.get('reference_model', '') if benchmark_register_running else '' %}
+                {% set selected_value = form_data.get('reference_model', '') if benchmark_register_running and selected_topology == 'byo_inference_script' else '' %}
                 {% set disabled = task_running %}
                 {% include "partials/searchable_select.html" %}
                 <span class="inline-flex items-center px-3 tooltip-icon text-brand-accent" title="{{ tooltips.register_benchmark_reference_model_id }}"><i class="fas fa-info-circle text-lg"></i></span>
             </div>
         </div>
-        <div>
+        <div class="topology-field" data-topologies="end_to_end_script inference_script">
+            <label for="reference-model-asset" class="block text-secondary font-semibold mb-2">Reference Model (asset)</label>
+            <div class="flex flex-wrap items-stretch gap-2">
+                {% set entity_type = "model" %}
+                {% set container_type = none %}
+                {% set model_type = "ASSET" %}
+                {% set input_name = "reference_model" %}
+                {% set input_id = "reference-model-asset" %}
+                {% set placeholder = "Search your asset models…" %}
+                {% set mine_only = true %}
+                {% set required = true %}
+                {% set extra_class = "flex-1 min-w-0" %}
+                {% set selected_value = form_data.get('reference_model', '') if benchmark_register_running and selected_topology != 'byo_inference_script' else '' %}
+                {% set disabled = task_running %}
+                {% include "partials/searchable_select.html" %}
+                <span class="inline-flex items-center px-3 tooltip-icon text-brand-accent" title="{{ tooltips.register_benchmark_reference_model_id }}"><i class="fas fa-info-circle text-lg"></i></span>
+            </div>
+        </div>
+
+        <div class="topology-field" data-topologies="end_to_end_script inference_script">
+            <label for="benchmark-script" class="block text-secondary font-semibold mb-2">Benchmark Script Container</label>
+            <div class="flex flex-wrap items-stretch gap-2">
+                {% set entity_type = "container" %}
+                {% set container_type = "non-data-prep-container" %}
+                {% set model_type = none %}
+                {% set input_name = "benchmark_script" %}
+                {% set input_id = "benchmark-script" %}
+                {% set placeholder = "Search benchmark script containers…" %}
+                {% set mine_only = true %}
+                {% set required = true %}
+                {% set extra_class = "flex-1 min-w-0" %}
+                {% set selected_value = form_data.get('benchmark_script', '') if benchmark_register_running else '' %}
+                {% set disabled = task_running %}
+                {% include "partials/searchable_select.html" %}
+                <span class="inline-flex items-center px-3 tooltip-icon text-brand-accent" title="{{ tooltips.register_benchmark_benchmark_script_id }}"><i class="fas fa-info-circle text-lg"></i></span>
+            </div>
+        </div>
+
+        <div class="topology-field" data-topologies="byo_inference_script inference_script">
             <label for="evaluator-container" class="block text-secondary font-semibold mb-2">Metrics Container</label>
             <div class="flex flex-wrap items-stretch gap-2">
                 {% set entity_type = "container" %}
                 {% set container_type = "metrics-container" %}
+                {% set model_type = none %}
                 {% set input_name = "evaluator_container" %}
                 {% set input_id = "evaluator-container" %}
                 {% set placeholder = "Search metrics containers…" %}

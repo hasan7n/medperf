@@ -79,7 +79,16 @@ def benchmark_detail_ui(
     benchmark = Benchmark.get(benchmark_id)
     data_preparation_container = Cube.get(cube_uid=benchmark.data_preparation_mlcube)
     reference_model = Model.get(benchmark.reference_model)
-    metrics_container = Cube.get(cube_uid=benchmark.data_evaluator_mlcube)
+    metrics_container = (
+        Cube.get(cube_uid=benchmark.data_evaluator_mlcube)
+        if benchmark.data_evaluator_mlcube is not None
+        else None
+    )
+    benchmark_script = (
+        Cube.get(cube_uid=benchmark.benchmark_script)
+        if benchmark.benchmark_script is not None
+        else None
+    )
     datasets_associations = []
     models_associations = []
     datasets = {}
@@ -136,6 +145,7 @@ def benchmark_detail_ui(
             "data_preparation_container": data_preparation_container,
             "reference_model": reference_model,
             "metrics_container": metrics_container,
+            "benchmark_script": benchmark_script,
             "datasets_associations": datasets_associations,  #
             "models_associations": models_associations,  #
             "datasets": datasets,
@@ -168,7 +178,9 @@ def register_benchmark(
     reference_dataset_tarball_url: str = Form(""),
     data_preparation_container: str = Form(...),
     reference_model: str = Form(...),
-    evaluator_container: str = Form(...),
+    topology: str = Form(...),
+    evaluator_container: Optional[str] = Form(None),
+    benchmark_script: Optional[str] = Form(None),
     skip_data_preparation_step: bool = Form(...),
     skip_compatibility_tests: bool = Form(...),
     current_user: bool = Depends(check_user_api),
@@ -182,7 +194,9 @@ def register_benchmark(
         "demo_dataset_tarball_hash": "",
         "data_preparation_mlcube": data_preparation_container,
         "reference_model": reference_model,
+        "topology": topology,
         "data_evaluator_mlcube": evaluator_container,
+        "benchmark_script": benchmark_script,
         "state": "OPERATION",
     }
     initialize_state_task(request, task_name="register_benchmark")

@@ -12,6 +12,7 @@ from medperf.commands.benchmark.update_associations_poilcy import (
     UpdateAssociationsPolicy,
 )
 from medperf.commands.benchmark.update_committee_members import UpdateCommitteeMembers
+from medperf.enums import BenchmarkTopology
 
 app = typer.Typer()
 
@@ -91,8 +92,38 @@ def submit(
     reference_model: int = typer.Option(
         ..., "--reference-model", "-m", help="Reference Model UID"
     ),
+    topology: BenchmarkTopology = typer.Option(
+        BenchmarkTopology.BYO_INFERENCE_SCRIPT.value,
+        "--topology",
+        "-t",
+        help=(
+            "How the benchmark's parts fit together."
+            " byo_inference_script: container models bring their own inference,"
+            " the benchmark only evaluates."
+            " end_to_end_script: asset models, and one benchmark script that runs"
+            " inference and metrics together."
+            " inference_script: asset models, a benchmark script that runs"
+            " inference, and a separate evaluator container."
+        ),
+    ),
     evaluator_container: int = typer.Option(
-        ..., "--evaluator-container", "-e", help="Evaluator container UID"
+        None,
+        "--evaluator-container",
+        "-e",
+        help=(
+            "Evaluator container UID."
+            " Required for every topology except end_to_end_script."
+        ),
+    ),
+    benchmark_script: int = typer.Option(
+        None,
+        "--benchmark-script",
+        "-s",
+        help=(
+            "Benchmark script container UID: the container that loads an asset"
+            " model. Required for the end_to_end_script and inference_script"
+            " topologies, and rejected for byo_inference_script."
+        ),
     ),
     skip_data_preparation_step: bool = typer.Option(
         False,
@@ -119,7 +150,9 @@ def submit(
         "demo_dataset_tarball_hash": demo_hash,
         "data_preparation_mlcube": data_preparation_container,
         "reference_model": reference_model,
+        "topology": topology.value,
         "data_evaluator_mlcube": evaluator_container,
+        "benchmark_script": benchmark_script,
         "state": "OPERATION" if operational else "DEVELOPMENT",
     }
     SubmitBenchmark.run(

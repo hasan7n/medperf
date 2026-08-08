@@ -2,6 +2,7 @@ import os
 from typing import List, Optional
 from medperf.account_management.account_management import get_medperf_user_data
 from medperf.commands.execution.execution_flow import ExecutionFlow
+from medperf.commands.execution.plan import resolve_plan
 from medperf.entities.execution import Execution
 from tabulate import tabulate
 from medperf.commands.execution.utils import filter_latest_executions
@@ -90,7 +91,7 @@ class BenchmarkExecution:
         self.models_uids = models_uids
         self.models_input_file = models_input_file
         self.ui = config.ui
-        self.evaluator = None
+        self.plan = None
         self.ignore_model_errors = ignore_model_errors
         self.ignore_failed_experiments = ignore_failed_experiments
         self.existing_executions = {}
@@ -102,8 +103,11 @@ class BenchmarkExecution:
         self.benchmark = Benchmark.get(self.benchmark_uid)
         self.ui.print(f"Benchmark Execution: {self.benchmark.name}")
         self.dataset = Dataset.get(self.data_uid)
-        evaluator_uid = self.benchmark.data_evaluator_mlcube
-        self.evaluator = self.__get_cube(evaluator_uid, "Evaluator")
+        self.plan = resolve_plan(self.benchmark)
+        if self.plan.evaluator is not None:
+            self.__download_cube(self.plan.evaluator, "Evaluator")
+        if self.plan.script is not None:
+            self.__download_cube(self.plan.script, "Benchmark script")
 
     def validate(self):
         dset_prep_cube = self.dataset.data_preparation_mlcube
@@ -178,12 +182,10 @@ class BenchmarkExecution:
             execution.model: execution for execution in benchmark_dset_executions
         }
 
-    def __get_cube(self, uid: int, name: str) -> Cube:
-        cube = Cube.get(uid)
+    def __download_cube(self, cube: Cube, name: str):
         self.ui.text = f"Retrieving {name} container '{cube.name}'"
         cube.download_run_files()
         self.ui.print(f"> {name} Container '{cube.name}' download complete")
-        return cube
 
     def run_experiments(self) -> list[Execution]:
         for model_uid in self.models_uids:
@@ -221,10 +223,9 @@ class BenchmarkExecution:
             try:
                 model = Model.get(model_uid)
                 execution_summary = ExecutionFlow.run(
-                    benchmark_id=self.benchmark_uid,
+                    plan=self.plan,
                     dataset=self.dataset,
                     model=model,
-                    evaluator=self.evaluator,
                     execution=execution,
                     ignore_model_errors=self.ignore_model_errors,
                 )

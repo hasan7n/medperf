@@ -2,9 +2,11 @@ import logging
 from pathlib import Path
 
 from medperf.commands.execution.execution_flow import ExecutionFlow
+from medperf.commands.execution.plan import BenchmarkPlan
 from medperf.entities.dataset import Dataset
 from medperf.entities.benchmark import Benchmark
 from medperf.entities.report import TestReport
+from medperf.enums import BenchmarkTopology
 from medperf.exceptions import InvalidArgumentError
 from medperf.utils import sanitize_path
 from .validate_params import CompatibilityTestParamsValidator
@@ -24,6 +26,7 @@ class CompatibilityTestExecution:
         no_cache: bool = False,
         skip_data_preparation_step: bool = False,
         model_decryption_key: Path = None,
+        benchmark_script: str = None,
     ) -> tuple[str, dict]:
         """Execute a test workflow. Components of a complete workflow should be passed.
         When only the benchmark is provided, it implies the following workflow will be used:
@@ -61,6 +64,8 @@ class CompatibilityTestExecution:
             no_cache (bool): Whether to ignore cached results of the test execution. Defaults to False.
             offline (bool): Whether to disable communication to the MedPerf server and rely only on
             local copies of the server assets. Defaults to False.
+            benchmark_script (str, optional): benchmark script mlcube uid or local path.
+            Required for asset models, which cannot run themselves.
 
         Returns:
             (str): Prepared Dataset UID used for the test. Could be the one provided or a generated one.
@@ -76,6 +81,7 @@ class CompatibilityTestExecution:
             no_cache,
             skip_data_preparation_step,
             model_decryption_key=model_decryption_key,
+            benchmark_script=benchmark_script,
         )
         test_exec.validate()
         test_exec.set_data_source()
@@ -83,6 +89,7 @@ class CompatibilityTestExecution:
         with config.ui.interactive():
             test_exec.prepare_cubes()
             test_exec.prepare_model()
+            test_exec.resolve_topology()
             test_exec.prepare_dataset()
         test_exec.initialize_report()
         results = test_exec.cached_results()
@@ -104,11 +111,13 @@ class CompatibilityTestExecution:
         no_cache: bool = False,
         skip_data_preparation_step: bool = False,
         model_decryption_key: Path = None,
+        benchmark_script: str = None,
     ):
         self.benchmark_uid = benchmark
         self.data_prep = data_prep
         self.model = model
         self.evaluator = evaluator
+        self.benchmark_script = benchmark_script
         self.data_uid = data_uid
         self.no_cache = no_cache
         self.skip_data_preparation_step = skip_data_preparation_step
@@ -120,6 +129,8 @@ class CompatibilityTestExecution:
         self.data_prep_cube = None
         self.model_obj = None
         self.evaluator_cube = None
+        self.benchmark_script_cube = None
+        self.topology = None
 
         # Decryption key is used for compatibility test of encrypted containers
         self.model_decryption_key = sanitize_path(model_decryption_key)
@@ -130,6 +141,7 @@ class CompatibilityTestExecution:
             self.model,
             self.evaluator,
             self.data_uid,
+            self.benchmark_script,
         )
 
     def validate(self):
@@ -148,7 +160,9 @@ class CompatibilityTestExecution:
         if self.data_source != "prepared":
             self.data_prep = self.data_prep or benchmark.data_preparation_mlcube
         self.model = self.model or benchmark.reference_model
+        self.topology = benchmark.topology_enum
         self.evaluator = self.evaluator or benchmark.data_evaluator_mlcube
+        self.benchmark_script = self.benchmark_script or benchmark.benchmark_script
         if self.data_source == "benchmark":
             self.demo_dataset_url = benchmark.demo_dataset_tarball_url
             self.demo_dataset_hash = benchmark.demo_dataset_tarball_hash
@@ -166,14 +180,50 @@ class CompatibilityTestExecution:
             )
             self.data_prep_cube = prepare_cube(self.data_prep)
 
-        logging.info(f"Establishing the evaluator container: {self.evaluator}")
-        self.evaluator_cube = prepare_cube(self.evaluator)
+        if self.evaluator:
+            logging.info(f"Establishing the evaluator container: {self.evaluator}")
+            self.evaluator_cube = prepare_cube(self.evaluator)
+
+        if self.benchmark_script:
+            logging.info(
+                f"Establishing the benchmark script container: {self.benchmark_script}"
+            )
+            self.benchmark_script_cube = prepare_cube(self.benchmark_script)
 
     def prepare_model(self):
         logging.info(f"Establishing the model container: {self.model}")
         self.model_obj = prepare_model(
             self.model, decryption_key_file_path=self.model_decryption_key
         )
+
+    def resolve_topology(self):
+        """Determines the topology of the workflow under test.
+
+        A benchmark states its own topology. Without one, the topology follows
+        from the kind of model and the containers the caller supplied."""
+        if self.topology is not None:
+            return
+
+        if self.model_obj.is_container():
+            self.topology = BenchmarkTopology.BYO_INFERENCE_SCRIPT
+        elif not self.benchmark_script_cube:
+            raise InvalidArgumentError(
+                "An asset model cannot run itself. Provide a benchmark script"
+                " that loads it, or test against a benchmark."
+            )
+        elif self.evaluator_cube:
+            self.topology = BenchmarkTopology.INFERENCE_SCRIPT
+        else:
+            self.topology = BenchmarkTopology.END_TO_END_SCRIPT
+
+        if self.topology.requires_evaluator and not self.evaluator_cube:
+            raise InvalidArgumentError(
+                f"A {self.topology.value} workflow requires a metrics container"
+            )
+        if not self.topology.requires_benchmark_script and self.benchmark_script_cube:
+            raise InvalidArgumentError(
+                f"A {self.topology.value} workflow does not use a benchmark script"
+            )
 
     def prepare_dataset(self):
         """Assigns the data_uid used for testing and retrieves the dataset.
@@ -205,7 +255,15 @@ class CompatibilityTestExecution:
             "prepared_data_hash": self.data_uid,
             "data_preparation_mlcube": self.data_prep_cube.identifier,
             "model": self.model_obj.identifier,
-            "data_evaluator_mlcube": self.evaluator_cube.identifier,
+            "topology": self.topology.value,
+            "data_evaluator_mlcube": (
+                self.evaluator_cube.identifier if self.evaluator_cube else None
+            ),
+            "benchmark_script": (
+                self.benchmark_script_cube.identifier
+                if self.benchmark_script_cube
+                else None
+            ),
         }
         self.report = TestReport(**report_data)
 
@@ -234,11 +292,16 @@ class CompatibilityTestExecution:
         Returns:
             dict: returns the results of the test execution.
         """
-        execution_summary = ExecutionFlow.run(
+        plan = BenchmarkPlan(
+            topology=self.topology,
             benchmark_id=self.benchmark_uid,
+            script=self.benchmark_script_cube,
+            evaluator=self.evaluator_cube,
+        )
+        execution_summary = ExecutionFlow.run(
+            plan=plan,
             dataset=self.dataset,
             model=self.model_obj,
-            evaluator=self.evaluator_cube,
             ignore_model_errors=False,
         )
         return execution_summary["results"]

@@ -9,6 +9,7 @@ from medperf.entities.interface import Entity
 from medperf.entities.schemas import BenchmarkSchema
 from medperf.account_management import get_medperf_user_data
 from medperf.entities.utils import handle_validation_error
+from medperf.enums import BenchmarkTopology
 
 
 class Benchmark(Entity):
@@ -65,7 +66,9 @@ class Benchmark(Entity):
         self.demo_dataset_generated_uid = self._model.demo_dataset_generated_uid
         self.data_preparation_mlcube = self._model.data_preparation_mlcube
         self.reference_model = self._model.reference_model
+        self.topology = self._model.topology
         self.data_evaluator_mlcube = self._model.data_evaluator_mlcube
+        self.benchmark_script = self._model.benchmark_script
         self.metadata = self._model.metadata
         self.user_metadata = self._model.user_metadata
         self.is_active = self._model.is_active
@@ -91,6 +94,12 @@ class Benchmark(Entity):
     @property
     def local_id(self):
         return self.name
+
+    @property
+    def topology_enum(self) -> BenchmarkTopology:
+        """The benchmark's topology as an enum. `self.topology` is the raw
+        string, since the underlying schema is configured with `use_enum_values`."""
+        return BenchmarkTopology(self.topology)
 
     @staticmethod
     def remote_prefilter(filters: dict) -> callable:
@@ -196,7 +205,17 @@ class Benchmark(Entity):
             "Created At": self.created_at,
             "Data Preparation Container": int(self.data_preparation_mlcube),
             "Reference Model": int(self.reference_model),
-            "Data Evaluator Container": int(self.data_evaluator_mlcube),
+            "Topology": self.topology,
+            "Data Evaluator Container": (
+                int(self.data_evaluator_mlcube)
+                if self.data_evaluator_mlcube is not None
+                else "N/A"
+            ),
+            "Benchmark Script": (
+                int(self.benchmark_script)
+                if self.benchmark_script is not None
+                else "N/A"
+            ),
             "State": self.state,
             "Approval Status": self.approval_status,
             "Registered": self.is_registered,

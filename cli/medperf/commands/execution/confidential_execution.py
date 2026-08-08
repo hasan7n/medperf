@@ -6,7 +6,7 @@ from time import time
 import yaml
 
 from medperf.asset_management.gcp_utils import CCWorkloadID
-from medperf.entities.cube import Cube
+from medperf.commands.execution.plan import BenchmarkPlan
 from medperf.entities.model import Model
 from medperf.entities.dataset import Dataset
 from medperf.entities.execution import Execution
@@ -23,26 +23,28 @@ from medperf.enums import CryptoKeyType
 
 
 class ConfidentialExecution:
+    """Runs an `end_to_end_script` benchmark inside a confidential VM.
+
+    The benchmark script loads the model asset, runs inference and computes the
+    metrics in one step, so nothing but the encrypted results leaves the VM."""
+
     @classmethod
     def run(
         cls,
-        benchmark_id: int,
+        plan: BenchmarkPlan,
         dataset: Dataset,
         model: Model,
-        script: Cube,
         execution: Execution = None,
         ignore_model_errors=False,
     ):
         """Benchmark execution flow.
 
         Args:
-            benchmark_uid (int): UID of the desired benchmark
-            data_uid (str): Registered Dataset UID
-            model_uid (int): UID of model to execute
+            plan (BenchmarkPlan): the benchmark's resolved components
+            dataset (Dataset): Registered Dataset
+            model (Model): the asset model to execute
         """
-        execution_flow = cls(
-            benchmark_id, dataset, model, script, execution, ignore_model_errors
-        )
+        execution_flow = cls(plan, dataset, model, execution, ignore_model_errors)
         execution_flow.get_operator()
         execution_flow.validate()
         execution_flow.prepare()
@@ -55,19 +57,19 @@ class ConfidentialExecution:
 
     def __init__(
         self,
-        benchmark_id: int,
+        plan: BenchmarkPlan,
         dataset: Dataset,
         model: Model,
-        script: Cube,
         execution: Execution = None,
         ignore_model_errors=False,
     ):
         self.comms = config.comms
         self.ui = config.ui
-        self.benchmark_id = benchmark_id
+        self.plan = plan
+        self.benchmark_id = plan.benchmark_id
         self.dataset = dataset
         self.model = model
-        self.script = script
+        self.script = plan.script
         self.execution = execution
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
@@ -120,11 +122,11 @@ class ConfidentialExecution:
         workload = CCWorkloadID(
             data_hash=self.dataset.generated_uid,
             model_hash=self.asset.asset_hash,
-            script_hash=self.script.image_hash,
+            script_hash=self.plan.script_hash,
             result_collector_hash=get_string_hash(result_collector_public_key),
             data_id=self.dataset.id,
-            model_id=self.asset.id,
-            script_id=self.script.id,
+            model_id=self.model.id,
+            script_id=self.plan.script_id,
         )
 
         self.workload = workload

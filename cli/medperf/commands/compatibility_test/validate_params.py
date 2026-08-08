@@ -11,12 +11,14 @@ class CompatibilityTestParamsValidator:
         model: str = None,
         evaluator: str = None,
         data_uid: str = None,
+        benchmark_script: str = None,
     ):
         self.benchmark_uid = benchmark
         self.data_prep = data_prep
         self.model = model
         self.evaluator = evaluator
         self.data_uid = data_uid
+        self.benchmark_script = benchmark_script
 
     def __validate_cubes(self):
         if not self.model and not self.benchmark_uid:
@@ -24,9 +26,10 @@ class CompatibilityTestParamsValidator:
                 "A model or a benchmark should at least be specified"
             )
 
-        if not self.evaluator and not self.benchmark_uid:
+        if not self.evaluator and not self.benchmark_script and not self.benchmark_uid:
             raise InvalidArgumentError(
-                "A metrics container or a benchmark should at least be specified"
+                "A metrics container, a benchmark script, or a benchmark"
+                " should at least be specified"
             )
 
     def __validate_prepared_data_source(self):
@@ -53,7 +56,9 @@ class CompatibilityTestParamsValidator:
 
         redundant_bmk_demo = self.data_uid is not None
         redundant_bmk_model = self.model is not None
-        redundant_bmk_evaluator = self.evaluator is not None
+        redundant_bmk_evaluator = (
+            self.evaluator is not None or self.benchmark_script is not None
+        )
         redundant_bmk_preparator = (
             self.data_prep is not None or self.data_uid is not None
         )

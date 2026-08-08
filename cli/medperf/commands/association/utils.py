@@ -65,6 +65,7 @@ def get_experiment_associations(
         },
         "benchmark": {
             "model": config.comms.get_benchmark_models_associations,
+            "dataset": config.comms.get_benchmark_datasets_associations,
         },
     }
     try:
@@ -80,6 +81,43 @@ def get_experiment_associations(
     # Add it, just to work with other utils
     for assoc in assocs:
         assoc[experiment_type] = experiment_id
+    return _post_process_associtations(
+        assocs, experiment_type, component_type, approval_status
+    )
+
+
+def get_component_associations(
+    component_id: int,
+    component_type: str,
+    experiment_type: str,
+    approval_status: str = None,
+):
+    """Retrieves the experiments a single component is associated to.
+
+    The mirror image of `get_experiment_associations`: it walks from a dataset
+    or a model to the experiments it takes part in, applying the same latest-
+    association and approval-status filtering."""
+    comms_functions = {
+        "model": {
+            "benchmark": config.comms.get_model_benchmarks_associations,
+        },
+        "dataset": {
+            "benchmark": config.comms.get_dataset_benchmarks_associations,
+        },
+    }
+    try:
+        comms_func = comms_functions[component_type][experiment_type]
+    except KeyError:
+        raise MedperfException(
+            f"Internal error: Getting associations list between {component_type}"
+            f" and {experiment_type} is not implemented"
+        )
+
+    assocs = comms_func(component_id)
+    # `assocs` here doesn't contain the component key.
+    # Add it, just to work with other utils
+    for assoc in assocs:
+        assoc[component_type] = component_id
     return _post_process_associtations(
         assocs, experiment_type, component_type, approval_status
     )

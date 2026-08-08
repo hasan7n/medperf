@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from django.conf import settings
 from .models import Benchmark
-from .utils import resolve_committee_member_emails
+from .utils import resolve_committee_member_emails, validate_topology
 
 
 class BenchmarkSerializer(serializers.ModelSerializer):
@@ -31,11 +31,24 @@ class BenchmarkSerializer(serializers.ModelSerializer):
                 "User can own at most one pending benchmark"
             )
 
+        validate_topology(
+            data.get("topology"),
+            data.get("reference_model"),
+            data.get("data_evaluator_mlcube"),
+            data.get("benchmark_script"),
+        )
+
         if "state" in data and data["state"] == "OPERATION":
+            components = [
+                data["data_preparation_mlcube"],
+                data["reference_model"],
+                data.get("data_evaluator_mlcube"),
+                data.get("benchmark_script"),
+            ]
             dev_mlcubes = [
-                data["data_preparation_mlcube"].state == "DEVELOPMENT",
-                data["reference_model"].state == "DEVELOPMENT",
-                data["data_evaluator_mlcube"].state == "DEVELOPMENT",
+                component.state == "DEVELOPMENT"
+                for component in components
+                if component is not None
             ]
             if any(dev_mlcubes):
                 raise serializers.ValidationError(
@@ -100,10 +113,16 @@ class BenchmarkApprovalSerializer(serializers.ModelSerializer):
 
     def validate_state(self, state):
         if state == "OPERATION" and self.instance.state != "OPERATION":
+            components = [
+                self.instance.data_preparation_mlcube,
+                self.instance.reference_model,
+                self.instance.data_evaluator_mlcube,
+                self.instance.benchmark_script,
+            ]
             dev_mlcubes = [
-                self.instance.data_preparation_mlcube.state == "DEVELOPMENT",
-                self.instance.reference_model.state == "DEVELOPMENT",
-                self.instance.data_evaluator_mlcube.state == "DEVELOPMENT",
+                component.state == "DEVELOPMENT"
+                for component in components
+                if component is not None
             ]
             if any(dev_mlcubes):
                 raise serializers.ValidationError(
@@ -132,6 +151,18 @@ class BenchmarkApprovalSerializer(serializers.ModelSerializer):
                         raise serializers.ValidationError(
                             "User cannot update non editable fields in Operation mode"
                         )
+
+        # Validate the topology against the benchmark as it will be after this
+        # update, so that editing one component cannot break the combination.
+        def merged(field):
+            return data[field] if field in data else getattr(self.instance, field)
+
+        validate_topology(
+            merged("topology"),
+            merged("reference_model"),
+            merged("data_evaluator_mlcube"),
+            merged("benchmark_script"),
+        )
         return data
 
 

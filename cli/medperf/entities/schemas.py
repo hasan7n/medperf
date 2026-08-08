@@ -2,7 +2,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, validator
 from typing import Optional, Union
 
-from medperf.enums import Status, CryptoKeyType
+from medperf.enums import Status, CryptoKeyType, BenchmarkTopology
 
 
 class MedperfSchema(BaseModel):
@@ -53,7 +53,9 @@ class BenchmarkSchema(MedperfSchema):
     demo_dataset_generated_uid: Optional[str]
     data_preparation_mlcube: int
     reference_model: int
-    data_evaluator_mlcube: int
+    topology: BenchmarkTopology = BenchmarkTopology.BYO_INFERENCE_SCRIPT
+    data_evaluator_mlcube: Optional[int]
+    benchmark_script: Optional[int]
     metadata: dict = {}
     user_metadata: dict = {}
     is_active: bool = True
@@ -62,6 +64,36 @@ class BenchmarkSchema(MedperfSchema):
     model_auto_approval_allow_list: list[str] = []
     model_auto_approval_mode: str = "NEVER"
     committee_member_emails: list[str] = []
+
+    @validator("data_evaluator_mlcube", always=True)
+    def check_evaluator(cls, v, *, values, **kwargs):
+        return cls._check_topology_component(
+            values, v, "data_evaluator_mlcube", "requires_evaluator"
+        )
+
+    @validator("benchmark_script", always=True)
+    def check_benchmark_script(cls, v, *, values, **kwargs):
+        return cls._check_topology_component(
+            values, v, "benchmark_script", "requires_benchmark_script"
+        )
+
+    @staticmethod
+    def _check_topology_component(values, value, field_name, requirement):
+        # `topology` is declared before both components, so it is already
+        # validated by the time this runs. It is absent only if it failed.
+        if "topology" not in values:
+            return value
+        topology = BenchmarkTopology(values["topology"])
+        required = getattr(topology, requirement)
+        if required and value is None:
+            raise ValueError(
+                f"A {topology.value} benchmark must define a {field_name}"
+            )
+        if not required and value is not None:
+            raise ValueError(
+                f"A {topology.value} benchmark must not define a {field_name}"
+            )
+        return value
 
 
 class CASchema(MedperfSchema):
@@ -165,7 +197,9 @@ class TestReportSchema(MedperfSchema):
     prepared_data_hash: Optional[str]
     data_preparation_mlcube: Optional[Union[int, str]]
     model: Union[int, str]
-    data_evaluator_mlcube: Union[int, str]
+    topology: str = BenchmarkTopology.BYO_INFERENCE_SCRIPT.value
+    data_evaluator_mlcube: Optional[Union[int, str]]
+    benchmark_script: Optional[Union[int, str]]
     results: Optional[dict]
 
 

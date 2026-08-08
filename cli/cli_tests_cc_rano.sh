@@ -103,12 +103,12 @@ echo "\n"
 
 ##########################################################
 echo "====================================="
-echo "Submit evaluator container (cc chestxray)"
+echo "Submit benchmark script container (cc chestxray)"
 echo "====================================="
-print_eval medperf container submit --name cc-eval -m $RANO_SCRIPT --operational
-checkFailed "Evaluator container submission failed"
-EVAL_UID=$(medperf container ls | grep cc-eval | head -n 1 | tr -s ' ' | cut -d ' ' -f 2)
-echo "EVAL_UID=$EVAL_UID" >> "$LAST_ENV_FILE"
+print_eval medperf container submit --name cc-script -m $RANO_SCRIPT --operational
+checkFailed "Benchmark script container submission failed"
+SCRIPT_UID=$(medperf container ls | grep cc-script | head -n 1 | tr -s ' ' | cut -d ' ' -f 2)
+echo "SCRIPT_UID=$SCRIPT_UID" >> "$LAST_ENV_FILE"
 ##########################################################
 
 echo "\n"
@@ -130,7 +130,7 @@ echo "\n"
 echo "====================================="
 echo "Submit CC benchmark"
 echo "====================================="
-print_eval medperf benchmark submit --name cc-bmk --description "CC-benchmark-test" --demo-url https://storage.googleapis.com/medperf-storage/rano-inference/reference_dataset.tar.gz --data-preparation-container $PREP_UID --reference-model $REF_MODEL_UID --evaluator-container $EVAL_UID --operational --skip-compatibility-tests
+print_eval medperf benchmark submit --name cc-bmk --description "CC-benchmark-test" --demo-url https://storage.googleapis.com/medperf-storage/rano-inference/reference_dataset.tar.gz --data-preparation-container $PREP_UID --reference-model $REF_MODEL_UID --topology end_to_end_script --benchmark-script $SCRIPT_UID --operational --skip-compatibility-tests
 checkFailed "CC Benchmark submission failed"
 BMK_UID=$(medperf benchmark ls | grep cc-bmk | tail -n 1 | tr -s ' ' | cut -d ' ' -f 2)
 echo "BMK_UID=$BMK_UID" >> "$LAST_ENV_FILE"

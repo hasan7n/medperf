@@ -41,6 +41,19 @@ class BenchmarkTest(MedPerfTest):
         )
         eval = self.create_mlcube(eval).data
 
+        # components only the asset-model topologies use
+        self.set_credentials(ref_model_owner)
+        asset_ref_model = self.mock_asset_model(
+            name="asset_ref_model", state="OPERATION"
+        )
+        asset_ref_model = self.create_model(asset_ref_model).data
+
+        self.set_credentials(bmk_owner)
+        script = self.mock_mlcube(
+            name="script", container_config={"script": "script"}, state="OPERATION"
+        )
+        script = self.create_mlcube(script).data
+
         # setup globals
         self.bmk_owner = bmk_owner
         self.prep_mlcube_owner = prep_mlcube_owner
@@ -51,6 +64,8 @@ class BenchmarkTest(MedPerfTest):
         self.prep = prep
         self.ref_model = ref_model
         self.eval = eval
+        self.asset_ref_model = asset_ref_model
+        self.script = script
 
         self.url = self.api_prefix + "/benchmarks/"
         self.set_credentials(None)
@@ -364,6 +379,144 @@ class BenchmarkGetListTest(BenchmarkTest):
                 self.assertNotIn(
                     key, self.private_fields, f"{key} shouldn't be visible"
                 )
+
+
+@parameterized_class([{"actor": "bmk_owner"}])
+class BenchmarkTopologyPostTest(BenchmarkTest):
+    """Test module for the topology rules of POST /benchmarks
+
+    Each topology fixes the kind of reference model it accepts and which of the
+    evaluator / benchmark script it needs. Every other combination is rejected.
+    """
+
+    def setUp(self):
+        super(BenchmarkTopologyPostTest, self).setUp()
+        self.generic_setup()
+        self.set_credentials(self.actor)
+
+    def __benchmark(self, topology, reference_model, evaluator, script):
+        benchmark = self.mock_benchmark(
+            self.prep["id"],
+            reference_model,
+            evaluator,
+            topology=topology,
+            benchmark_script=script,
+        )
+        return benchmark
+
+    @parameterized.expand(
+        [
+            ("byo_inference_script", "container", True, False),
+            ("end_to_end_script", "asset", False, True),
+            ("inference_script", "asset", True, True),
+        ]
+    )
+    def test_valid_topology_combination_is_accepted(
+        self, topology, model_kind, with_eval, with_script
+    ):
+        # Arrange
+        reference_model = (
+            self.ref_model["id"]
+            if model_kind == "container"
+            else self.asset_ref_model["id"]
+        )
+        benchmark = self.__benchmark(
+            topology,
+            reference_model,
+            self.eval["id"] if with_eval else None,
+            self.script["id"] if with_script else None,
+        )
+
+        # Act
+        response = self.client.post(self.url, benchmark, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["topology"], topology)
+
+    @parameterized.expand(
+        [
+            # a component the topology does not use
+            ("byo_inference_script", "container", True, True),
+            ("end_to_end_script", "asset", True, True),
+            # a component the topology requires, missing
+            ("byo_inference_script", "container", False, False),
+            ("end_to_end_script", "asset", False, False),
+            ("inference_script", "asset", False, True),
+            ("inference_script", "asset", True, False),
+            # the wrong kind of reference model
+            ("byo_inference_script", "asset", True, False),
+            ("end_to_end_script", "container", False, True),
+            ("inference_script", "container", True, True),
+        ]
+    )
+    def test_invalid_topology_combination_is_rejected(
+        self, topology, model_kind, with_eval, with_script
+    ):
+        # Arrange
+        reference_model = (
+            self.ref_model["id"]
+            if model_kind == "container"
+            else self.asset_ref_model["id"]
+        )
+        benchmark = self.__benchmark(
+            topology,
+            reference_model,
+            self.eval["id"] if with_eval else None,
+            self.script["id"] if with_script else None,
+        )
+
+        # Act
+        response = self.client.post(self.url, benchmark, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unknown_topology_is_rejected(self):
+        # Arrange
+        benchmark = self.__benchmark(
+            "fused_script", self.ref_model["id"], self.eval["id"], None
+        )
+
+        # Act
+        response = self.client.post(self.url, benchmark, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_missing_topology_is_rejected(self):
+        """The migration backfilled existing rows, but new benchmarks must choose"""
+        # Arrange
+        benchmark = self.mock_benchmark(
+            self.prep["id"], self.ref_model["id"], self.eval["id"]
+        )
+        del benchmark["topology"]
+
+        # Act
+        response = self.client.post(self.url, benchmark, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_operational_state_requires_operational_benchmark_script(self):
+        # Arrange
+        self.set_credentials(self.bmk_owner)
+        dev_script = self.mock_mlcube(
+            name="dev_script",
+            container_config={"dev_script": "dev_script"},
+            state="DEVELOPMENT",
+        )
+        dev_script = self.create_mlcube(dev_script).data
+        benchmark = self.__benchmark(
+            "end_to_end_script", self.asset_ref_model["id"], None, dev_script["id"]
+        )
+        benchmark["state"] = "OPERATION"
+
+        # Act
+        response = self.client.post(self.url, benchmark, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class PermissionTest(BenchmarkTest):

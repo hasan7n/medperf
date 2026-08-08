@@ -51,6 +51,16 @@ def run(
             " Optional. Defaults to benchmark evaluator."
         ),
     ),
+    benchmark_script: str = typer.Option(
+        None,
+        "--benchmark-script",
+        "-s",
+        help=(
+            "UID or local path to the benchmark script container config file."
+            " Required for asset models, which cannot run themselves."
+            " Optional. Defaults to the benchmark's script."
+        ),
+    ),
     no_cache: bool = typer.Option(
         False, "--no-cache", help="Execute the test even if results already exist"
     ),
@@ -84,6 +94,7 @@ def run(
         no_cache=no_cache,
         skip_data_preparation_step=skip_data_preparation_step,
         model_decryption_key=model_decryption_key,
+        benchmark_script=benchmark_script,
     )
     config.ui.print("✅ Done!")
 
@@ -94,7 +105,7 @@ def list():
     """List previously executed tests reports."""
     EntityList.run(
         TestReport,
-        fields=["UID", "Data Source", "Model", "Evaluator"],
+        fields=["UID", "Data Source", "Model", "Topology", "Evaluator"],
         unregistered=True,
     )
 

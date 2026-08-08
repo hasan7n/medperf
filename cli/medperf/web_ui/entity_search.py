@@ -54,6 +54,16 @@ def _filter_container_type(containers: list, container_type: Optional[str]) -> l
     return typed
 
 
+def _filter_model_type(models: list, model_type: Optional[str]) -> list:
+    """Restricts a model search to assets or containers.
+
+    A benchmark's topology accepts only one kind, so the picker should not
+    offer the other one."""
+    if not model_type:
+        return models
+    return [model for model in models if model.type == model_type]
+
+
 def _apply_allowed_ids(items: list, allowed_ids: Optional[List[int]]) -> list:
     if not allowed_ids:
         return items
@@ -67,6 +77,7 @@ def search_entities(  # noqa
     q: Optional[str] = None,
     mine_only: bool = False,
     container_type: Optional[str] = None,
+    model_type: Optional[str] = None,
     limit: int = 20,
     selected_id: Optional[int] = None,
     allowed_ids: Optional[List[int]] = None,
@@ -86,6 +97,9 @@ def search_entities(  # noqa
             if entity_type == "container" and container_type:
                 filtered = _filter_container_type([entity], container_type)
                 if not filtered:
+                    return {"results": []}
+            if entity_type == "model" and model_type:
+                if not _filter_model_type([entity], model_type):
                     return {"results": []}
             return {"results": [_entity_option(entity, entity_type)]}
         except Exception:
@@ -107,6 +121,10 @@ def search_entities(  # noqa
 
     if entity_type == "container":
         items = _filter_container_type(items, container_type)
+        items = items[:limit]
+
+    if entity_type == "model":
+        items = _filter_model_type(items, model_type)
         items = items[:limit]
 
     return {"results": [_entity_option(item, entity_type) for item in items]}

@@ -263,9 +263,26 @@ medperf benchmark submit \
    --demo-url "{{ demo_url }}" \
    --data-preparation-container 1 \
    --reference-model 1 \
+   --topology byo_inference_script \
    --evaluator-container 3 \
    --operational
 ```
+
+### Benchmark topologies
+
+`--topology` states how your benchmark runs models. It decides the kind of model
+participants may associate and which containers your benchmark must supply:
+
+| Topology | Models are | Benchmark supplies |
+| --- | --- | --- |
+| `byo_inference_script` (default) | containers that run inference themselves | `--evaluator-container` |
+| `end_to_end_script` | assets (weights) | `--benchmark-script`, which runs inference and metrics in one step |
+| `inference_script` | assets (weights) | `--benchmark-script` for inference, plus `--evaluator-container` for metrics |
+
+The two asset topologies are what confidential computing builds on: because the
+benchmark owns the container that loads the weights, that container's image hash
+is the one a confidential VM attests with. See
+[Confidential Computing](../concepts/confidential_computing.md).
 
 The MedPerf client will first automatically run a compatibility test between the containers using the demo dataset. If the test is successful, the benchmark will be submitted along with the compatibility test results.
 

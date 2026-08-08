@@ -55,6 +55,7 @@ def populate_mock_benchmarks(api_server, admin_token):
                 "demo_dataset_generated_uid": "730d2474d8f22340d9da89fa2eb925fcb95683e0",
                 "data_preparation_mlcube": 1,
                 "reference_model": mock_model,
+                "topology": "byo_inference_script",
                 "data_evaluator_mlcube": 1,
                 "state": "OPERATION",
             },

@@ -177,7 +177,7 @@ class TestPrepareCubes:
 
     def test_prep_cube_is_not_prepared_if_data_is_prepared(self, mocker):
         # Arrange
-        exec_instance = CompatibilityTestExecution(data_prep=1)
+        exec_instance = CompatibilityTestExecution(data_prep=1, evaluator=2)
         exec_instance.data_source = "prepared"
 
         spy = mocker.patch(PATCH_RUN.format("prepare_cube"))
@@ -187,6 +187,23 @@ class TestPrepareCubes:
 
         # Assert
         assert spy.call_count == 1
+        assert spy.call_args_list[0][0][0] == 2
+
+    def test_only_the_provided_containers_are_prepared(self, mocker):
+        """A topology without an evaluator must not try to prepare one"""
+        # Arrange
+        exec_instance = CompatibilityTestExecution(data_prep=1, benchmark_script=3)
+        exec_instance.data_source = "prepared"
+
+        spy = mocker.patch(PATCH_RUN.format("prepare_cube"))
+
+        # Act
+        exec_instance.prepare_cubes()
+
+        # Assert
+        assert spy.call_count == 1
+        assert spy.call_args_list[0][0][0] == 3
+        assert exec_instance.evaluator_cube is None
 
 
 class TestPrepareDataset:

@@ -230,6 +230,7 @@ def create_benchmark(api_server, benchmark_owner_token, assets_path):
             "demo_dataset_generated_uid": "730d2474d8f22340d9da89fa2eb925fcb95683e0",
             "data_preparation_mlcube": data_preprocessor_mlcube,
             "reference_model": reference_model_executor,
+            "topology": "byo_inference_script",
             "data_evaluator_mlcube": data_evaluator_mlcube,
         },
         "id",

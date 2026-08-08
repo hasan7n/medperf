@@ -474,6 +474,105 @@ class CommitteeMemberModelBenchmarksPostTest(ModelBenchmarksTest):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 
+@parameterized_class(
+    [
+        {"actor": "model_owner"},
+        {"actor": "bmk_owner"},
+    ]
+)
+class TopologyModelBenchmarksPostTest(ModelBenchmarksTest):
+    """Test module for the topology rules of POST /models/benchmarks
+
+    A benchmark's topology decides the kind of model it runs, so associating a
+    model of the other kind is rejected at request time rather than surfacing
+    as a failure once someone tries to execute it.
+    """
+
+    def setUp(self):
+        super(TopologyModelBenchmarksPostTest, self).setUp()
+        self.generic_setup()
+
+    def __create_asset_model_benchmark(self):
+        """An end_to_end_script benchmark: asset reference model, script, no evaluator"""
+        self.set_credentials(self.bmk_prep_mlcube_owner)
+        prep = self.create_mlcube(
+            self.mock_mlcube(
+                name="prep", container_config={"prep": "prep"}, state="OPERATION"
+            )
+        ).data
+
+        self.set_credentials(self.ref_model_owner)
+        ref_model = self.create_model(
+            self.mock_asset_model(name="asset_ref_model", state="OPERATION")
+        ).data
+
+        self.set_credentials(self.bmk_owner)
+        script = self.create_mlcube(
+            self.mock_mlcube(
+                name="script", container_config={"script": "script"}, state="OPERATION"
+            )
+        ).data
+        benchmark = self.mock_benchmark(
+            prep["id"],
+            ref_model["id"],
+            None,
+            topology="end_to_end_script",
+            benchmark_script=script["id"],
+        )
+        return self.create_benchmark(benchmark).data
+
+    def test_container_model_cannot_join_an_asset_benchmark(self):
+        # Arrange
+        benchmark = self.__create_asset_model_benchmark()
+        self.set_credentials(self.model_owner)
+        model = self.create_model(self.mock_model(state="OPERATION")).data
+        self.set_credentials(self.actor)
+        testassoc = self.mock_model_association(benchmark["id"], model["id"])
+
+        # Act
+        response = self.client.post(self.url, testassoc, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_asset_model_can_join_an_asset_benchmark(self):
+        # Arrange
+        benchmark = self.__create_asset_model_benchmark()
+        self.set_credentials(self.model_owner)
+        model = self.create_model(
+            self.mock_asset_model(name="asset_model", state="OPERATION")
+        ).data
+        self.set_credentials(self.actor)
+        testassoc = self.mock_model_association(benchmark["id"], model["id"])
+
+        # Act
+        response = self.client.post(self.url, testassoc, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_asset_model_cannot_join_a_container_benchmark(self):
+        # Arrange
+        _, _, _, benchmark = self.shortcut_create_benchmark(
+            self.bmk_prep_mlcube_owner,
+            self.ref_model_owner,
+            self.eval_mlcube_owner,
+            self.bmk_owner,
+        )
+        self.set_credentials(self.model_owner)
+        model = self.create_model(
+            self.mock_asset_model(name="asset_model", state="OPERATION")
+        ).data
+        self.set_credentials(self.actor)
+        testassoc = self.mock_model_association(benchmark["id"], model["id"])
+
+        # Act
+        response = self.client.post(self.url, testassoc, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
 class PermissionTest(ModelBenchmarksTest):
     """Test module for permissions of /models/benchmarks endpoint
     Non-permitted actions: POST for all users except model_owner, bmk_owner,

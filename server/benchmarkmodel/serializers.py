@@ -3,6 +3,7 @@ from django.utils import timezone
 from benchmark.models import Benchmark
 from model.models import Model
 
+from benchmark.utils import expected_model_type
 from .models import BenchmarkModel
 from utils.associations import (
     validate_approval_status_on_creation,
@@ -37,6 +38,14 @@ class BenchmarkModelListSerializer(serializers.ModelSerializer):
         if model_state != "OPERATION":
             raise serializers.ValidationError(
                 "Association requests can be made only on an operational model"
+            )
+
+        # model kind must match what the benchmark's topology runs
+        required_type = expected_model_type(benchmark.topology)
+        if model_obj.type != required_type:
+            raise serializers.ValidationError(
+                f"A {benchmark.topology} benchmark runs {required_type} models,"
+                f" but the given model is a {model_obj.type}"
             )
 
         # approval status
