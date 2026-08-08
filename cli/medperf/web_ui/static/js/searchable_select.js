@@ -17,7 +17,6 @@
         var entityType = root.dataset.entityType;
         var mineOnly = root.dataset.mineOnly === "true";
         var containerType = root.dataset.containerType || "";
-        var modelType = root.dataset.modelType || "";
         var allowedIds = root.dataset.allowedIds || "";
         var disabled = root.dataset.disabled === "true";
 
@@ -113,7 +112,6 @@
                 limit: "20",
             });
             if (containerType) params.append("container_type", containerType);
-            if (modelType) params.append("model_type", modelType);
             if (allowedIds) params.append("ids", allowedIds);
             if (options.selectedId) {
                 params.append("selected_id", String(options.selectedId));

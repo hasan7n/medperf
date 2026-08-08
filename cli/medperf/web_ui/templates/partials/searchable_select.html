@@ -7,7 +7,6 @@
     data-placeholder="{{ placeholder | default('Search to select…', true) }}"
     data-mine-only="{{ 'true' if mine_only else 'false' }}"
     {% if container_type %}data-container-type="{{ container_type }}"{% endif %}
-    {% if model_type %}data-model-type="{{ model_type }}"{% endif %}
     {% if allowed_ids %}data-allowed-ids="{{ allowed_ids }}"{% endif %}
     {% if selected_value %}data-selected-value="{{ selected_value }}"{% endif %}
     {% if selected_label %}data-selected-label="{{ selected_label }}"{% endif %}

@@ -5,18 +5,18 @@ var REDIRECT_BASE = "/benchmarks/ui/display/";
 var TOPOLOGIES = {
     byo_inference_script: {
         label: "Models bring their own inference",
-        referenceModelInput: "reference-model-container",
-        requires: ["evaluator-container"]
+        modelKind: "a container model, which runs inference itself",
+        requires: ["reference-model", "evaluator-container"]
     },
     end_to_end_script: {
         label: "One script does everything",
-        referenceModelInput: "reference-model-asset",
-        requires: ["benchmark-script"]
+        modelKind: "an asset model (weights), which your benchmark script loads",
+        requires: ["reference-model", "benchmark-script"]
     },
     inference_script: {
         label: "Your script infers, your container scores",
-        referenceModelInput: "reference-model-asset",
-        requires: ["benchmark-script", "evaluator-container"]
+        modelKind: "an asset model (weights), which your benchmark script loads",
+        requires: ["reference-model", "benchmark-script", "evaluator-container"]
     }
 };
 
@@ -54,6 +54,11 @@ function applyTopology(topology) {
     var labelEl = document.getElementById("topology-label");
     if (labelEl) labelEl.textContent = spec.label;
 
+    /* The picker offers every model, so say which kind this topology takes.
+       The server rejects the wrong kind either way. */
+    var hintEl = document.getElementById("reference-model-hint");
+    if (hintEl) hintEl.textContent = "This topology takes " + spec.modelKind + ".";
+
     setTopologyFieldsState(topology);
 
     document.getElementById("topology-step").classList.add("hidden");
@@ -70,8 +75,7 @@ function requiredSelectionsFilled(topology) {
     var spec = TOPOLOGIES[topology];
     if (!spec) return false;
 
-    var ids = spec.requires.concat([spec.referenceModelInput]);
-    return ids.every(function (id) {
+    return spec.requires.every(function (id) {
         var el = document.getElementById(id);
         return el && el.value && Number(el.value) > 0;
     });

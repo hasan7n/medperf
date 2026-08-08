@@ -21,7 +21,6 @@ def entity_search(
     q: Optional[str] = Query(None),
     mine_only: bool = Query(False),
     container_type: Optional[str] = Query(None),
-    model_type: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=50),
     selected_id: Optional[int] = Query(None),
     ids: Optional[str] = Query(
@@ -41,7 +40,6 @@ def entity_search(
         q=q,
         mine_only=mine_only,
         container_type=container_type,
-        model_type=model_type,
         limit=limit,
         selected_id=selected_id,
         allowed_ids=allowed_ids,

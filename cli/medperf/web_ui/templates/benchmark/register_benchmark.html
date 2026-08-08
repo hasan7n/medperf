@@ -77,7 +77,6 @@
             <div class="flex flex-wrap items-stretch gap-2">
                 {% set entity_type = "container" %}
                 {% set container_type = "data-prep-container" %}
-                {% set model_type = none %}
                 {% set input_name = "data_preparation_container" %}
                 {% set input_id = "data-preparation-container" %}
                 {% set placeholder = "Search data preparation containers…" %}
@@ -91,44 +90,23 @@
             </div>
         </div>
 
-        {# The reference model is a container in byo_inference_script and an asset
-           in the script topologies, so each gets its own picker and only the
-           relevant one is enabled. #}
-        <div class="topology-field" data-topologies="byo_inference_script">
-            <label for="reference-model-container" class="block text-secondary font-semibold mb-2">Reference Model (container)</label>
+        <div>
+            <label for="reference-model" class="block text-secondary font-semibold mb-2">Reference Model</label>
             <div class="flex flex-wrap items-stretch gap-2">
                 {% set entity_type = "model" %}
                 {% set container_type = none %}
-                {% set model_type = "CONTAINER" %}
                 {% set input_name = "reference_model" %}
-                {% set input_id = "reference-model-container" %}
-                {% set placeholder = "Search your container models…" %}
+                {% set input_id = "reference-model" %}
+                {% set placeholder = "Search your models…" %}
                 {% set mine_only = true %}
                 {% set required = true %}
                 {% set extra_class = "flex-1 min-w-0" %}
-                {% set selected_value = form_data.get('reference_model', '') if benchmark_register_running and selected_topology == 'byo_inference_script' else '' %}
+                {% set selected_value = form_data.get('reference_model', '') if benchmark_register_running else '' %}
                 {% set disabled = task_running %}
                 {% include "partials/searchable_select.html" %}
                 <span class="inline-flex items-center px-3 tooltip-icon text-brand-accent" title="{{ tooltips.register_benchmark_reference_model_id }}"><i class="fas fa-info-circle text-lg"></i></span>
             </div>
-        </div>
-        <div class="topology-field" data-topologies="end_to_end_script inference_script">
-            <label for="reference-model-asset" class="block text-secondary font-semibold mb-2">Reference Model (asset)</label>
-            <div class="flex flex-wrap items-stretch gap-2">
-                {% set entity_type = "model" %}
-                {% set container_type = none %}
-                {% set model_type = "ASSET" %}
-                {% set input_name = "reference_model" %}
-                {% set input_id = "reference-model-asset" %}
-                {% set placeholder = "Search your asset models…" %}
-                {% set mine_only = true %}
-                {% set required = true %}
-                {% set extra_class = "flex-1 min-w-0" %}
-                {% set selected_value = form_data.get('reference_model', '') if benchmark_register_running and selected_topology != 'byo_inference_script' else '' %}
-                {% set disabled = task_running %}
-                {% include "partials/searchable_select.html" %}
-                <span class="inline-flex items-center px-3 tooltip-icon text-brand-accent" title="{{ tooltips.register_benchmark_reference_model_id }}"><i class="fas fa-info-circle text-lg"></i></span>
-            </div>
+            <p id="reference-model-hint" class="text-sm text-muted-fg mt-2"></p>
         </div>
 
         <div class="topology-field" data-topologies="end_to_end_script inference_script">
@@ -136,7 +114,6 @@
             <div class="flex flex-wrap items-stretch gap-2">
                 {% set entity_type = "container" %}
                 {% set container_type = "non-data-prep-container" %}
-                {% set model_type = none %}
                 {% set input_name = "benchmark_script" %}
                 {% set input_id = "benchmark-script" %}
                 {% set placeholder = "Search benchmark script containers…" %}
@@ -155,7 +132,6 @@
             <div class="flex flex-wrap items-stretch gap-2">
                 {% set entity_type = "container" %}
                 {% set container_type = "metrics-container" %}
-                {% set model_type = none %}
                 {% set input_name = "evaluator_container" %}
                 {% set input_id = "evaluator-container" %}
                 {% set placeholder = "Search metrics containers…" %}
