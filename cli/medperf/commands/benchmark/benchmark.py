@@ -96,24 +96,13 @@ def submit(
         BenchmarkTopology.BYO_INFERENCE_SCRIPT.value,
         "--topology",
         "-t",
-        help=(
-            "How the benchmark's parts fit together."
-            " byo_inference_script: container models bring their own inference,"
-            " the benchmark only evaluates."
-            " end_to_end_script: asset models, and one benchmark script that runs"
-            " inference and metrics together."
-            " inference_script: asset models, a benchmark script that runs"
-            " inference, and a separate evaluator container."
-        ),
+        help="The benchmark topology.",
     ),
     evaluator_container: int = typer.Option(
         None,
         "--evaluator-container",
         "-e",
-        help=(
-            "Evaluator container UID."
-            " Required for every topology except end_to_end_script."
-        ),
+        help="Evaluator container UID.",
     ),
     benchmark_script: int = typer.Option(
         None,
@@ -122,7 +111,7 @@ def submit(
         help=(
             "Benchmark script container UID: the container that loads an asset"
             " model. Required for the end_to_end_script and inference_script"
-            " topologies, and rejected for byo_inference_script."
+            " topologies."
         ),
     ),
     skip_data_preparation_step: bool = typer.Option(

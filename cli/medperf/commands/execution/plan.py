@@ -49,8 +49,7 @@ class BenchmarkPlan:
         """The image hash a confidential workload must attest with."""
         if self.script is None:
             raise InvalidArgumentError(
-                f"A {self.topology.value} benchmark has no benchmark script,"
-                " and therefore cannot run confidentially"
+                f"A {self.topology.value} benchmark has no benchmark script"
             )
         return self.script.image_hash
 
