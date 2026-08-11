@@ -32,6 +32,19 @@ class AssetVault(ABC):
         )
         self.set_permitted_identities(list(identities))
 
+    def workload_config(self) -> dict:
+        """What the workload is told, so it can fetch the key at run time.
+
+        This travels to the confidential VM as environment the operator can
+        read, so it must carry no secrets. Backends whose configuration holds
+        one -- a broker's admin token, say -- override this."""
+        return {**self.config, "backend": self.backend}
+
+    @property
+    @abstractmethod
+    def backend(self) -> str:
+        """The name a workload configuration uses to select this vault."""
+
     @abstractmethod
     def verify(self) -> None:
         """Fails unless the owner can administer this vault."""

@@ -118,6 +118,35 @@ An `inference_script` benchmark is the exception: its predictions are scored
 on-prem against ground truth labels only the data owner holds, so only the data
 owner can operate one whatever the policies say.
 
+## Where the key lives
+
+By default MedPerf wraps your encryption key with Google Cloud KMS and lets IAM
+decide which workloads may unwrap it. Follow the key material in that setup:
+the ciphertext is in GCS, the wrapped key is in GCS, and the wrapping key is in
+KMS — Google holds everything needed to decrypt your asset, and what stops it is
+Google enforcing its own IAM against itself.
+
+If that is not a trust you want to make, run your own key broker instead. See
+[`kbs/README.md`](https://github.com/mlcommons/medperf/blob/main/kbs/README.md).
+Point an asset at it by naming the backend in its configuration file:
+
+```json
+{
+    "backend": "kbs",
+    "url": "https://kbs.hospital.example:8200",
+    "audience": "https://kbs.hospital.example",
+    "admin_token": "..."
+}
+```
+
+The admin token stays on your machine. The configuration the confidential VM
+receives is built field by field and does not include it.
+
+The backend is chosen per asset, so a broker-backed dataset and a KMS-backed
+model can take part in the same execution — as long as the benchmark script
+supports both. A configuration that names no backend is a Google Cloud one, so
+nothing you already configured has to change.
+
 ## What's next?
 
 You can now run the model that required confidential computing, by clicking the button `Run` near the model of interest. After execution finishes, submit the results by clicking the `Submit` button that will later appear.

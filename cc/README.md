@@ -8,13 +8,17 @@ components store the encrypted asset, decide which workloads may have its key,
 and run one.
 
 ```text
-identity   what a workload is, and which terms each kind of owner pins
-policy     where a workload must run for the key to be released
-workload   the environment contract a confidential workload reads
-vault      where an asset's ciphertext lives, and who may have its key
-operator   starting a confidential workload and fetching its output
-gcp/       KMS, IAM, GCS and Confidential Space, and nothing else
+identity     what a workload is, and which terms each kind of owner pins
+policy       where a workload must run for the key to be released
+workload     the environment contract a confidential workload reads
+attestation  verifying a Confidential Space token
+vault        where an asset's ciphertext lives, and who may have its key
+operator     starting a confidential workload and fetching its output
+gcp/         KMS, IAM, GCS and Confidential Space, and nothing else
 ```
+
+Each stands alone. A key broker needs `identity` and `attestation`; an asset
+owner needs `vault`. Nothing here knows what a benchmark is.
 
 Two boundaries are drawn deliberately:
 
@@ -26,8 +30,12 @@ Two boundaries are drawn deliberately:
 ## Installing
 
 ```bash
-pip install -e cc/
+pip install -e 'cc/[gcp]'
 ```
+
+Core dependencies are `pydantic`, `cryptography` and `requests`. The cloud
+libraries live behind the `gcp` extra, so a key broker deployment carries
+neither them nor the MedPerf client.
 
 Not published to PyPI, so anything depending on it — the MedPerf client
 included — installs it from source first.

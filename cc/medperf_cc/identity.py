@@ -98,3 +98,23 @@ class WorkloadBinding(BaseModel):
 
     def identity_of(self, workload: WorkloadIdentity) -> str:
         return "::".join(getattr(workload, TERM_FIELDS[term]) for term in self.terms)
+
+    def identity_from_claims(self, claims: dict) -> str:
+        """The same identity, read out of an attestation the workload presented.
+
+        Byte for byte what `identity_of` produces, which is what lets a backend
+        that evaluates the policy itself match one written for a backend that
+        has the cloud evaluate it."""
+        return "::".join(
+            str(claim_at(claims, TERM_CLAIMS[term]) or "") for term in self.terms
+        )
+
+
+def claim_at(claims: dict, path: str):
+    """Reads a dotted claim path out of a decoded token."""
+    value = claims
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value

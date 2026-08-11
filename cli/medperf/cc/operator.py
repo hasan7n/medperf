@@ -7,7 +7,7 @@ encryption does: the private key that opens the results belongs to the client.
 from colorama import Fore, Style
 
 import medperf.config as medperf_config
-from medperf.cc.config import runner_for
+from medperf.cc.config import runner_for, vault_for
 from medperf.cc.errors import as_medperf_error
 from medperf.encryption import AsymmetricEncryption, SymmetricEncryption
 from medperf.entities.user import User
@@ -19,9 +19,20 @@ from medperf.utils import (
     tmp_path_for_cc_asset_key,
     untar,
 )
-from medperf_cc.identity import WorkloadIdentity
+from medperf_cc.identity import AssetKind, WorkloadIdentity
 from medperf_cc.operator import WorkloadRunner
 from medperf_cc.workload import workload_env
+
+
+def workload_configs(dataset, model):
+    """What the workload is told about where to fetch each asset from.
+
+    Never the stored configuration: this travels to the VM as environment the
+    operator can read, so a key broker's admin token must not go with it."""
+    return (
+        vault_for(dataset, AssetKind.DATA).workload_config(),
+        vault_for(model, AssetKind.MODEL).workload_config(),
+    )
 
 
 @as_medperf_error()

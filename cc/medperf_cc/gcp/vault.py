@@ -21,7 +21,9 @@ from medperf_cc.gcp.storage import (
 from medperf_cc.gcp.workload_identity import update_workload_identity_pool_oidc_provider
 from medperf_cc.identity import TERM_CLAIMS, AssetKind
 from medperf_cc.policy import AssetPolicy
-from medperf_cc.vault import AssetVault
+from medperf_cc.vault.base import AssetVault
+
+GCP_KMS_BACKEND = "gcp_kms"
 
 KMS_DECRYPTER_ROLE = "roles/cloudkms.cryptoKeyDecrypter"
 GCS_VIEWER_ROLE = "roles/storage.objectViewer"
@@ -49,6 +51,10 @@ class GCPVault(AssetVault):
     def __init__(self, config: dict, kind: AssetKind, policy: AssetPolicy):
         super().__init__(config, kind, policy)
         self.gcp = GCPAssetConfig(**config)
+
+    @property
+    def backend(self) -> str:
+        return GCP_KMS_BACKEND
 
     def verify(self) -> None:
         credentials = get_user_credentials()

@@ -14,6 +14,10 @@ class RecordingVault(AssetVault):
         super().__init__({}, kind, AssetPolicy())
         self.permitted = None
 
+    @property
+    def backend(self):
+        return "recording"
+
     def verify(self):
         pass
 

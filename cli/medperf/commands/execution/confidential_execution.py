@@ -13,7 +13,11 @@ from medperf.exceptions import DecryptionError, ExecutionError, CommunicationErr
 
 from medperf.account_management import get_medperf_user_object
 from medperf.cc.config import runner_for
-from medperf.cc.operator import download_results, run_workload
+from medperf.cc.operator import (
+    download_results,
+    run_workload,
+    workload_configs,
+)
 from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
@@ -98,8 +102,9 @@ class ConfidentialExecution:
         )
 
     def prepare(self):
-        self.dataset_cc_config = self.dataset.get_cc_config()
-        self.model_cc_config = self.model.get_cc_config()
+        self.dataset_cc_config, self.model_cc_config = workload_configs(
+            self.dataset, self.model
+        )
         self.runner = runner_for(self.operator)
         self.asset = self.model.asset_obj
 

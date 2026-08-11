@@ -11,6 +11,7 @@ from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.cc.operator import (
     run_workload,
     download_results,
+    workload_configs,
     workload_results_exists,
     wait_for_workload,
 )
@@ -121,8 +122,9 @@ class ConfidentialModelContainerExecution:
         )
 
     def prepare(self):
-        self.dataset_cc_config = self.dataset.get_cc_config()
-        self.model_cc_config = self.model.get_cc_config()
+        self.dataset_cc_config, self.model_cc_config = workload_configs(
+            self.dataset, self.model
+        )
         self.runner = runner_for(self.operator)
         self.asset = self.model.asset_obj
 

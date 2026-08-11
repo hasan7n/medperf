@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 from google.auth.credentials import Credentials
 from google.auth import load_credentials_from_dict
 import os
@@ -32,6 +33,9 @@ class GCPAssetConfig:
     key_location: str
     wip: str
     wip_provider: str
+    # The name that selected this manager, carried along so that the config can
+    # be handed over as it arrived.
+    backend: Optional[str] = None
 
     @property
     def full_key_name(self) -> str:
