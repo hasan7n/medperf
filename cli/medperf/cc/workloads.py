@@ -7,7 +7,7 @@ associations and for turning them into workload identities live here once.
 """
 
 import base64
-from typing import Iterable, List
+from typing import List
 
 from medperf.commands.association.utils import (
     get_component_associations,
@@ -18,7 +18,6 @@ from medperf.entities.benchmark import Benchmark
 from medperf.entities.certificate import Certificate
 from medperf.enums import Status
 from medperf.utils import get_string_hash
-from medperf_cc.gcp import CCWorkloadID
 
 
 def get_associated_benchmarks(component_id: int, component_type: str) -> List[Benchmark]:
@@ -61,22 +60,3 @@ def public_key_hash(certificate: Certificate) -> str:
     """The result collector identity a workload attests with."""
     public_key_b64 = base64.b64encode(certificate.public_key())
     return get_string_hash(public_key_b64)
-
-
-def dedup_workloads(
-    workloads: Iterable[CCWorkloadID], for_model: bool = False
-) -> List[CCWorkloadID]:
-    """Collapses workloads that map to the same principal.
-
-    The same identity is reachable through more than one association — two
-    benchmarks sharing a benchmark script, for instance — and each duplicate
-    would otherwise become a redundant member of the cloud IAM policy."""
-    seen = set()
-    deduped = []
-    for workload in workloads:
-        identity = workload.id_for_model if for_model else workload.id
-        if identity in seen:
-            continue
-        seen.add(identity)
-        deduped.append(workload)
-    return deduped

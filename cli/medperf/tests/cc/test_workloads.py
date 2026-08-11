@@ -1,7 +1,6 @@
 import pytest
 
 from medperf.cc.workloads import (
-    dedup_workloads,
     get_approved_component_ids,
     get_associated_benchmarks,
     get_confidential_plan,
@@ -9,45 +8,8 @@ from medperf.cc.workloads import (
 from medperf.enums import BenchmarkTopology
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.cube import TestCube
-from medperf_cc.gcp import CCWorkloadID
 
 PATCH_CC_WORKLOADS = "medperf.cc.workloads.{}"
-
-
-def workload(script_hash="s", model_hash="m", data_hash="d", collector_hash="c"):
-    return CCWorkloadID(
-        script_hash=script_hash,
-        model_hash=model_hash,
-        data_hash=data_hash,
-        result_collector_hash=collector_hash,
-        model_id=1,
-        script_id=2,
-        data_id=3,
-    )
-
-
-def test_dedup_workloads_collapses_repeated_identities():
-    # Arrange
-    workloads = [workload(), workload(), workload(data_hash="other")]
-
-    # Act
-    deduped = dedup_workloads(workloads)
-
-    # Assert
-    assert len(deduped) == 2
-
-
-def test_dedup_workloads_for_model_ignores_data_and_collector():
-    """A model-side grant only pins the script and the model, so two workloads
-    that differ only in data collapse into one principal"""
-    # Arrange
-    workloads = [workload(), workload(data_hash="other", collector_hash="other")]
-
-    # Act
-    deduped = dedup_workloads(workloads, for_model=True)
-
-    # Assert
-    assert len(deduped) == 1
 
 
 @pytest.mark.parametrize("component_type", ["model", "dataset"])

@@ -1,14 +1,10 @@
 from medperf import config
 from medperf.account_management.account_management import get_medperf_user_object
-from medperf.cc.assets import sync_cc_metadata, update_model_cc_policy
-from medperf.cc.workloads import (
-    dedup_workloads,
-    get_associated_benchmarks,
-    get_confidential_plan,
-)
+from medperf.cc.assets import set_permitted_workloads, sync_cc_metadata
+from medperf.cc.workloads import get_associated_benchmarks, get_confidential_plan
 from medperf.entities.model import Model
 from medperf.exceptions import MedperfException
-from medperf_cc.gcp import CCWorkloadID
+from medperf_cc.identity import AssetKind, WorkloadIdentity
 
 
 def get_permitted_workloads(model: Model):
@@ -29,7 +25,7 @@ def get_permitted_workloads(model: Model):
         if plan is None:
             continue
         permitted_workloads.append(
-            CCWorkloadID.for_model_policy(
+            WorkloadIdentity(
                 model_hash=asset.asset_hash,
                 script_hash=plan.script_hash,
                 model_id=model.id,
@@ -37,7 +33,7 @@ def get_permitted_workloads(model: Model):
             )
         )
 
-    return dedup_workloads(permitted_workloads, for_model=True)
+    return permitted_workloads
 
 
 class ModelUpdateCCPolicy:
@@ -51,5 +47,5 @@ class ModelUpdateCCPolicy:
         with config.ui.interactive():
             config.ui.text = "Updating model confidential computing policy"
             permitted_workloads = get_permitted_workloads(model)
-            update_model_cc_policy(model, permitted_workloads)
+            set_permitted_workloads(model, AssetKind.MODEL, permitted_workloads)
             sync_cc_metadata(model, config.comms.update_model)

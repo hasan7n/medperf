@@ -7,11 +7,13 @@ translates its own domain into a workload identity and an asset policy; these
 components store the encrypted asset, decide which workloads may have its key,
 and run one.
 
-```
-gcp/                     Google Cloud: KMS, GCS, workload identity, Confidential Space
-asset_policy_manager     which workloads may decrypt an asset, and from where
-asset_storage_manager    where an asset's ciphertext lives
-cc_operator              starting a confidential workload and fetching its output
+```text
+identity   what a workload is, and which terms each kind of owner pins
+policy     where a workload must run for the key to be released
+workload   the environment contract a confidential workload reads
+vault      where an asset's ciphertext lives, and who may have its key
+operator   starting a confidential workload and fetching its output
+gcp/       KMS, IAM, GCS and Confidential Space, and nothing else
 ```
 
 Two boundaries are drawn deliberately:

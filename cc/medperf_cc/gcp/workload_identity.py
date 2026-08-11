@@ -1,5 +1,5 @@
 import logging
-from .types import GCPAssetConfig
+from .config import GCPAssetConfig
 from googleapiclient.discovery import build
 
 

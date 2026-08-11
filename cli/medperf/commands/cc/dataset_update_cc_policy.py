@@ -1,8 +1,7 @@
 from medperf import config
 from medperf.account_management.account_management import get_medperf_user_object
-from medperf.cc.assets import sync_cc_metadata, update_dataset_cc_policy
+from medperf.cc.assets import set_permitted_workloads, sync_cc_metadata
 from medperf.cc.workloads import (
-    dedup_workloads,
     get_approved_component_ids,
     get_associated_benchmarks,
     get_confidential_plan,
@@ -14,7 +13,7 @@ from medperf.entities.dataset import Dataset
 from medperf.entities.model import Model
 from medperf.enums import CryptoKeyType
 from medperf.exceptions import MedperfException
-from medperf_cc.gcp import CCWorkloadID
+from medperf_cc.identity import AssetKind, WorkloadIdentity
 
 
 def get_permitted_workloads(dataset: Dataset):
@@ -40,7 +39,7 @@ def get_permitted_workloads(dataset: Dataset):
             if not model.requires_cc():
                 continue
             permitted_workloads.append(
-                CCWorkloadID(
+                WorkloadIdentity(
                     data_hash=dataset.generated_uid,
                     model_hash=model.asset_obj.asset_hash,
                     script_hash=plan.script_hash,
@@ -51,7 +50,7 @@ def get_permitted_workloads(dataset: Dataset):
                 )
             )
 
-    return dedup_workloads(permitted_workloads)
+    return permitted_workloads
 
 
 def _get_user_certificate() -> Certificate:
@@ -78,5 +77,5 @@ class DatasetUpdateCCPolicy:
         with config.ui.interactive():
             config.ui.text = "Updating dataset confidential computing policy"
             permitted_workloads = get_permitted_workloads(dataset)
-            update_dataset_cc_policy(dataset, permitted_workloads)
+            set_permitted_workloads(dataset, AssetKind.DATA, permitted_workloads)
             sync_cc_metadata(dataset, config.comms.update_dataset)

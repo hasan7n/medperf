@@ -1,7 +1,8 @@
 import logging
 from google.cloud import compute_v1
 import time
-from .types import GCPOperatorConfig, CCWorkloadID
+from medperf_cc.identity import WorkloadIdentity
+from .config import GCPOperatorConfig
 
 
 # taken and adapted from
@@ -91,7 +92,7 @@ def run_workload(config: GCPOperatorConfig, metadata: dict[str, str]):
 
 
 def wait_for_workload_completion(
-    config: GCPOperatorConfig, workload_config: CCWorkloadID
+    config: GCPOperatorConfig, workload: WorkloadIdentity
 ):
 
     client = compute_v1.InstancesClient()

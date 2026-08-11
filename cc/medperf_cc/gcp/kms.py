@@ -1,6 +1,6 @@
 from google.cloud import kms_v1 as kms
 from google.iam.v1 import policy_pb2
-from .types import GCPAssetConfig
+from .config import GCPAssetConfig
 import logging
 
 

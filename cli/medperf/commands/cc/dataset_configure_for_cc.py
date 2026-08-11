@@ -1,6 +1,6 @@
 from medperf.entities.dataset import Dataset
 from medperf.cc.assets import setup_dataset_for_cc
-from medperf.cc.config import validate_cc_config
+from medperf.cc.config import validate_cc_config, validate_cc_policy
 import json
 from medperf import config
 from medperf.exceptions import InvalidEntityError
@@ -18,6 +18,7 @@ class DatasetConfigureForCC:
     @classmethod
     def run(cls, data_uid: int, cc_config: dict, cc_policy: dict):
         validate_cc_config(cc_config, "dataset" + str(data_uid))
+        validate_cc_policy(cc_policy)
         dataset = Dataset.get(data_uid)
         dataset.set_cc_config(cc_config)
         dataset.set_cc_policy(cc_policy)

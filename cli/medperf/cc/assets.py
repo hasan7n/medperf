@@ -1,8 +1,8 @@
 """Preparing a dataset or a model for confidential execution.
 
 Encryption happens here rather than inside `medperf_cc`: the key is the asset
-owner's, so it never has to leave the client. The components downstream only
-transport the ciphertext and decide which workloads may have the key.
+owner's, so it never has to leave the client. The vault only transports the
+ciphertext and enforces which workloads may have the key.
 """
 
 import os
@@ -11,6 +11,7 @@ import secrets
 from tqdm import tqdm
 
 from medperf import config as medperf_config
+from medperf.cc.config import vault_for
 from medperf.cc.errors import as_medperf_error
 from medperf.encryption import SymmetricEncryption
 from medperf.entities.dataset import Dataset
@@ -23,9 +24,8 @@ from medperf.utils import (
     tar,
     tmp_path_for_cc_asset_key,
 )
-from medperf_cc.asset_policy_manager import AssetPolicyManager
-from medperf_cc.asset_storage_manager import AssetStorageManager
-from medperf_cc.gcp import CCWorkloadID
+from medperf_cc.identity import AssetKind, WorkloadIdentity
+from medperf_cc.vault import AssetVault
 
 
 def generate_encryption_key():
@@ -36,21 +36,15 @@ def generate_encryption_key():
 def setup_dataset_for_cc(dataset: Dataset):
     if not dataset.is_cc_configured():
         return
-    cc_config = dataset.get_cc_config()
-    cc_policy = dataset.get_cc_policy()
-    __verify_cloud_environment(cc_config)
 
-    # policy setup
-    medperf_config.ui.text = "Generating encryption key"
-    encryption_key = generate_encryption_key()
-    __setup_policy(cc_config, cc_policy, encryption_key)
+    vault = vault_for(dataset, AssetKind.DATA)
+    medperf_config.ui.text = "Verifying Cloud Environment"
+    vault.verify()
 
-    # storage
     medperf_config.ui.text = "Compressing dataset"
     asset_path = generate_tmp_path()
     tar(asset_path, [dataset.data_path, dataset.labels_path])
-    __store_asset(cc_config, asset_path, encryption_key)
-    del encryption_key
+    __publish(vault, asset_path)
     remove_path(asset_path)
 
 
@@ -58,53 +52,23 @@ def setup_dataset_for_cc(dataset: Dataset):
 def setup_model_for_cc(model: Model):
     if not model.is_cc_configured():
         return
-    cc_config = model.get_cc_config()
-    cc_policy = model.get_cc_policy()
-    if not model.is_asset():
-        raise MedperfException(
-            f"Model {model.id} is not a file-based asset and cannot be set up for confidential computing."
-        )
-    asset = model.asset_obj
-    asset_path = asset.get_archive_path()
+    __require_asset_model(model)
 
-    __verify_cloud_environment(cc_config)
+    vault = vault_for(model, AssetKind.MODEL)
+    medperf_config.ui.text = "Verifying Cloud Environment"
+    vault.verify()
 
-    # policy setup
-    medperf_config.ui.text = "Generating encryption key"
-    encryption_key = generate_encryption_key()
-    __setup_policy(cc_config, cc_policy, encryption_key, for_model=True)
-
-    # storage
-    __store_asset(cc_config, asset_path, encryption_key)
-    del encryption_key
+    __publish(vault, model.asset_obj.get_archive_path())
 
 
 @as_medperf_error()
-def update_dataset_cc_policy(dataset: Dataset, permitted_workloads: list[CCWorkloadID]):
-    if not dataset.is_cc_configured():
-        raise MedperfException(
-            f"Dataset {dataset.id} does not have a configuration for confidential computing."
-        )
+def set_permitted_workloads(
+    entity, kind: AssetKind, permitted_workloads: list[WorkloadIdentity]
+):
+    if kind is AssetKind.MODEL:
+        __require_asset_model(entity)
 
-    cc_config = dataset.get_cc_config()
-    asset_policy_manager = AssetPolicyManager(cc_config)
-    asset_policy_manager.configure_policy(permitted_workloads)
-
-
-@as_medperf_error()
-def update_model_cc_policy(model: Model, permitted_workloads: list[CCWorkloadID]):
-    if not model.is_cc_configured():
-        raise MedperfException(
-            f"Model {model.id} does not have a configuration for confidential computing."
-        )
-    cc_config = model.get_cc_config()
-    if not model.is_asset():
-        raise MedperfException(
-            f"Model {model.id} is not a file-based asset and cannot be set up for confidential computing."
-        )
-
-    asset_policy_manager = AssetPolicyManager(cc_config, for_model=True)
-    asset_policy_manager.configure_policy(permitted_workloads)
+    vault_for(entity, kind).set_permitted(permitted_workloads)
 
 
 def sync_cc_metadata(entity, update_comms_fn):
@@ -117,29 +81,28 @@ def sync_cc_metadata(entity, update_comms_fn):
     update_comms_fn(entity.id, body)
 
 
-def __verify_cloud_environment(cc_config: dict):
-    medperf_config.ui.text = "Verifying Cloud Environment"
-    AssetStorageManager(cc_config).setup()
+def __require_asset_model(model: Model):
+    if not model.is_asset():
+        raise MedperfException(
+            f"Model {model.id} is not a file-based asset and cannot be set up for confidential computing."
+        )
 
 
-def __setup_policy(
-    cc_config: dict, cc_policy: dict, encryption_key: bytes, for_model: bool = False
-):
-    medperf_config.ui.text = "Publishing the encryption key and the access policy"
-    AssetPolicyManager(cc_config, for_model=for_model).setup_policy(
-        cc_policy, encryption_key
-    )
+def __publish(vault: AssetVault, asset_path: str):
+    medperf_config.ui.text = "Generating encryption key"
+    encryption_key = generate_encryption_key()
 
-
-def __store_asset(cc_config: dict, asset_path: str, encryption_key: bytes):
     medperf_config.ui.text = "Encrypting asset locally"
     encrypted_asset_path = __encrypt_asset(asset_path, encryption_key)
 
+    medperf_config.ui.text = "Publishing the encryption key and the access policy"
+    vault.publish_key(encryption_key)
+    del encryption_key
+
     medperf_config.ui.text = "Uploading Encrypted asset to GCP bucket"
-    asset_storage_manager = AssetStorageManager(cc_config)
     with open(encrypted_asset_path, "rb") as in_file:
         with __upload_progress(in_file) as file_obj:
-            asset_storage_manager.store_asset(file_obj)
+            vault.publish_asset(file_obj)
     remove_path(encrypted_asset_path)
 
 

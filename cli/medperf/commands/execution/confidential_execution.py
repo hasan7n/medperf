@@ -14,12 +14,13 @@ import medperf.config as config
 from medperf.exceptions import DecryptionError, ExecutionError, CommunicationError
 
 from medperf.account_management import get_medperf_user_object
+from medperf.cc.config import runner_for
 from medperf.cc.operator import download_results, run_workload
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
 from medperf.containers.runners.docker_utils import full_docker_image_name
 from medperf.enums import CryptoKeyType
-from medperf_cc.gcp import CCWorkloadID
+from medperf_cc.identity import WorkloadIdentity
 
 
 class ConfidentialExecution:
@@ -73,9 +74,9 @@ class ConfidentialExecution:
         self.execution = execution
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
+        self.runner = None
         self.dataset_cc_config = None
         self.model_cc_config = None
-        self.operator_cc_config = None
 
     def get_operator(self):
         self.operator = get_medperf_user_object()
@@ -97,7 +98,7 @@ class ConfidentialExecution:
     def prepare(self):
         self.dataset_cc_config = self.dataset.get_cc_config()
         self.model_cc_config = self.model.get_cc_config()
-        self.operator_cc_config = self.operator.get_cc_config()
+        self.runner = runner_for(self.operator)
         self.asset = self.model.asset_obj
 
     def set_pending_status(self):
@@ -119,7 +120,7 @@ class ConfidentialExecution:
 
         public_key_bytes = cert_obj.public_key()
         result_collector_public_key = base64.b64encode(public_key_bytes)
-        workload = CCWorkloadID(
+        workload = WorkloadIdentity(
             data_hash=self.dataset.generated_uid,
             model_hash=self.asset.asset_hash,
             script_hash=self.plan.script_hash,
@@ -137,11 +138,11 @@ class ConfidentialExecution:
         docker_image = self.script.parser.get_setup_args()
         docker_image = full_docker_image_name(docker_image)
         run_workload(
+            self.runner,
             docker_image,
             self.workload,
             self.dataset_cc_config,
             self.model_cc_config,
-            self.operator_cc_config,
             self.result_collector_public_key.decode("utf-8"),
         )
 
@@ -156,7 +157,7 @@ class ConfidentialExecution:
             raise DecryptionError("Missing Private Key")
 
         download_results(
-            self.operator_cc_config, self.workload, private_key_bytes, results_path
+            self.runner, self.workload, private_key_bytes, results_path
         )
 
         results_file = os.path.join(results_path, "results", "results.yaml")

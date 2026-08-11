@@ -1,6 +1,6 @@
 from medperf.entities.model import Model
 from medperf.cc.assets import setup_model_for_cc
-from medperf.cc.config import validate_cc_config
+from medperf.cc.config import validate_cc_config, validate_cc_policy
 import json
 from medperf import config
 from medperf.exceptions import InvalidEntityError
@@ -18,6 +18,7 @@ class ModelConfigureForCC:
     @classmethod
     def run(cls, model_uid: int, cc_config: dict, cc_policy: dict):
         validate_cc_config(cc_config, "model" + str(model_uid))
+        validate_cc_policy(cc_policy)
         model = Model.get(model_uid)
         model.set_cc_config(cc_config)
         model.set_cc_policy(cc_policy)

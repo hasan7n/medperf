@@ -1,6 +1,6 @@
 from typing import Union
 from google.cloud import storage
-from .types import GCPAssetConfig, GCPOperatorConfig
+from .config import GCPAssetConfig, GCPOperatorConfig
 
 
 def upload_file_to_gcs(
