@@ -21,6 +21,14 @@ class Benchmark(models.Model):
         ("ALWAYS", "ALWAYS"),
         ("ALLOWLIST", "ALLOWLIST"),
     )
+
+    # How the benchmark's parts fit together. Each topology fixes the kind of
+    # model it accepts and which containers it needs; see `validate_topology`.
+    BENCHMARK_TOPOLOGY = (
+        ("byo_inference_script", "byo_inference_script"),
+        ("end_to_end_script", "end_to_end_script"),
+        ("inference_script", "inference_script"),
+    )
     name = models.CharField(max_length=128, unique=True)
     description = models.CharField(max_length=256, blank=True)
     docs_url = models.CharField(max_length=100, blank=True)
@@ -38,10 +46,20 @@ class Benchmark(models.Model):
         on_delete=models.PROTECT,
         related_name="reference_model_benchmark",
     )
+    topology = models.CharField(choices=BENCHMARK_TOPOLOGY, max_length=100)
     data_evaluator_mlcube = models.ForeignKey(
         "mlcube.MlCube",
         on_delete=models.PROTECT,
         related_name="data_evaluator_mlcube",
+        null=True,
+        blank=True,
+    )
+    benchmark_script = models.ForeignKey(
+        "mlcube.MlCube",
+        on_delete=models.PROTECT,
+        related_name="benchmark_script",
+        null=True,
+        blank=True,
     )
     metadata = models.JSONField(default=dict, blank=True, null=True)
     state = models.CharField(

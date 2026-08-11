@@ -18,17 +18,25 @@ REPO_BASE_DIR = Path(__file__).resolve().parent.parent
 
 def populate_mock_benchmarks(api_server, admin_token):
     demo_url = "https://storage.googleapis.com/medperf-storage/chestxray_tutorial/demo_data.tar.gz"
+    # The mock benchmarks below are byo_inference_script, which runs container
+    # models, so the mock reference model has to be a container one.
     mock_model = api_server.request(
         "/models/",
         "POST",
         admin_token,
         {
             "name": "mock_model",
-            "type": "ASSET",
-            "asset": {
+            "type": "CONTAINER",
+            "container": {
                 "name": "mock_model",
-                "asset_url": "local",
-                "asset_hash": "71faabd59139bee698010a0ae3a69e16d97bc4f2dde799d9e187b94ff9157c00",
+                "container_config": {
+                    "container_type": "DockerImage",
+                    "tasks": {"infer": {}},
+                },
+                "parameters_config": {},
+                "image_hash": "sha256:71faabd59139bee698010a0ae3a69e16d97bc4f2dde799d9e187b94ff9157c00",
+                "additional_files_tarball_url": "",
+                "additional_files_tarball_hash": "",
                 "state": "OPERATION",
                 "is_valid": True,
             },
@@ -55,6 +63,7 @@ def populate_mock_benchmarks(api_server, admin_token):
                 "demo_dataset_generated_uid": "730d2474d8f22340d9da89fa2eb925fcb95683e0",
                 "data_preparation_mlcube": 1,
                 "reference_model": mock_model,
+                "topology": "byo_inference_script",
                 "data_evaluator_mlcube": 1,
                 "state": "OPERATION",
             },

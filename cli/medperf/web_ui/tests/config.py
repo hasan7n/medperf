@@ -55,6 +55,8 @@ BMK_LABELS_PATH = "medperf_tutorial/demo_data/labels"
 # Benchmark Registration Inputs
 BMK_NAME = "tutorial_bmk"
 BMK_DESC = "MedPerf demo bmk"
+# The tutorial's models are containers that run inference themselves
+BMK_TOPOLOGY = "byo_inference_script"
 REF_DATASET_TARBALL = (
     "https://storage.googleapis.com/medperf-storage/chestxray_tutorial/demo_data.tar.gz"
 )

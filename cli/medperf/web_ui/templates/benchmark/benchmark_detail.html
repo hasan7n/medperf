@@ -101,6 +101,10 @@
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t-2 border-border">
         <div>
+            <p class="text-sm text-muted-fg mb-2 font-semibold">Topology</p>
+            <span class="text-ink font-medium">{{ entity.topology }}</span>
+        </div>
+        <div>
             <p class="text-sm text-muted-fg mb-2 font-semibold">Data Preparation Container</p>
             {{ container_macros.container_link(data_preparation_container) }}
         </div>
@@ -108,10 +112,18 @@
             <p class="text-sm text-muted-fg mb-2 font-semibold">Reference Model</p>
             {{ model_macros.model_link(reference_model) }}
         </div>
+        {% if benchmark_script %}
+        <div>
+            <p class="text-sm text-muted-fg mb-2 font-semibold">Benchmark Script Container</p>
+            {{ container_macros.container_link(benchmark_script) }}
+        </div>
+        {% endif %}
+        {% if metrics_container %}
         <div>
             <p class="text-sm text-muted-fg mb-2 font-semibold">Metrics Container</p>
             {{ container_macros.container_link(metrics_container) }}
         </div>
+        {% endif %}
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t-2 border-border">
         <div>

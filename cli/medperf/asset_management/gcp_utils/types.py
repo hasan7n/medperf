@@ -1,15 +1,42 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
 class CCWorkloadID(BaseModel):
-    data_hash: str
+    """Identifies a confidential workload.
+
+    Two identities are derived from it, and only the `*_hash` fields take part
+    in either. The `*_id` fields exist to build human readable storage paths.
+
+    - `id`: what a data owner's policy binds. It pins all four parties, so a
+      data owner authorizes one exact (script, data, model, collector) combination.
+    - `id_for_model`: what a model owner's policy binds. It pins only the script
+      and the model, so a model owner authorizes an image to load their weights
+      regardless of which dataset it is pointed at. Model-side workloads are
+      built with `for_model_policy`, which leaves the unused fields empty.
+    """
+
     model_hash: str
     script_hash: str
-    result_collector_hash: str
-    data_id: int
     model_id: int
     script_id: int
-    execution_id: int = None
+    data_hash: str = ""
+    result_collector_hash: str = ""
+    data_id: Optional[int] = None
+    execution_id: Optional[int] = None
+
+    @classmethod
+    def for_model_policy(
+        cls, model_hash: str, script_hash: str, model_id: int, script_id: int
+    ) -> "CCWorkloadID":
+        """Builds a workload carrying only what `id_for_model` consumes."""
+        return cls(
+            model_hash=model_hash,
+            script_hash=script_hash,
+            model_id=model_id,
+            script_id=script_id,
+        )
 
     @property
     def id(self):

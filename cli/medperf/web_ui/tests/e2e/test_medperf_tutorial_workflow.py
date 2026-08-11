@@ -241,6 +241,11 @@ def test_benchmark_registration(driver):
     assert "/benchmarks/register/ui" in page.current_url
     assert page.find(page.REGISTER).is_enabled() is False
 
+    # The topology is chosen before anything else, so the form stays hidden
+    # until it is answered
+    assert page.find(page.TOPOLOGY_STEP).is_displayed() is True
+    assert page.find(page.FORM).is_displayed() is False
+
     page_modal = page.find(page.PAGE_MODAL)
     panel = page.find(page.PANEL)
 
@@ -254,6 +259,7 @@ def test_benchmark_registration(driver):
         data_preparator=tests_config.DATA_PREP_NAME,
         reference_model=tests_config.REF_MODEL_NAME,
         metrics=tests_config.METRICS_NAME,
+        topology=tests_config.BMK_TOPOLOGY,
     )
 
     old_url = page.current_url
@@ -279,7 +285,41 @@ def test_benchmark_registration(driver):
     assert "/benchmarks/ui/display/" in page.current_url
 
 
-@pytest.mark.dependency(name="benchmark_logout", depends=["register_benchmark"])
+@pytest.mark.dependency(
+    name="benchmark_topology_form", depends=["register_benchmark"]
+)
+def test_benchmark_registration_form_follows_the_topology(driver):
+    """The chosen topology decides which components the form asks for.
+
+    Fields a topology does not use are disabled as well as hidden, so they are
+    left out of the submitted form data entirely."""
+    page = RegBenchmarkPage(driver)
+    page.open(BASE_URL.format("/benchmarks/register/ui"))
+    page.wait_for_presence_selector(page.NAVBAR)
+
+    page.select_topology("byo_inference_script")
+    assert page.selected_topology() == "byo_inference_script"
+    assert page.is_field_enabled(page.METRICS) is True
+    assert page.is_field_enabled(page.BENCHMARK_SCRIPT) is False
+
+    page.click(page.CHANGE_TOPOLOGY)
+    assert page.find(page.TOPOLOGY_STEP).is_displayed() is True
+
+    page.select_topology("end_to_end_script")
+    assert page.selected_topology() == "end_to_end_script"
+    assert page.is_field_enabled(page.METRICS) is False
+    assert page.is_field_enabled(page.BENCHMARK_SCRIPT) is True
+
+    page.click(page.CHANGE_TOPOLOGY)
+    page.select_topology("inference_script")
+    assert page.selected_topology() == "inference_script"
+    assert page.is_field_enabled(page.METRICS) is True
+    assert page.is_field_enabled(page.BENCHMARK_SCRIPT) is True
+
+
+@pytest.mark.dependency(
+    name="benchmark_logout", depends=["benchmark_topology_form"]
+)
 def test_benchmark_logout(driver):
     page = BasePage(driver)
     page.open(BASE_URL.format("/benchmarks/ui"))

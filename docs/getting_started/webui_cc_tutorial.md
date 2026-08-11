@@ -4,7 +4,7 @@
 
 This tutorial simulates the scenario running a confidential model on a dataset in a confidential VM. There are three roles that you will play in this tutorial:
 
-- Benchmark owner: an entity that will define the benchmark by implementing a data preparation container, an inference container, and a metrics container. A dataset participating in the benchmark will run these three stages sequentially: data preparation, then inference, and finally metrics calculation. The inference will happen on the cloud in a confidential VM, while the data preparation and the metrics will happen on-prem. The inference container will take as an input the data owner's dataset and the model owner's model weights.
+- Benchmark owner: an entity that will define the benchmark by implementing a data preparation container, a benchmark script container that runs the inference, and a metrics container. A dataset participating in the benchmark will run these three stages sequentially: data preparation, then inference, and finally metrics calculation. The inference will happen on the cloud in a confidential VM, while the data preparation and the metrics will happen on-prem. The benchmark script will take as an input the data owner's dataset and the model owner's model weights.
 
 - Model owner: an entity that owns sensitive pretrained model weights and wishes to benchmark them.
 - Data owner: an entity that owns senstitive clinical dataset and wishes to run a benchmark on it.
@@ -110,7 +110,7 @@ The tutorial components are located in your workspace under `medperf_tutorial`:
 ```txt
 medperf_tutorial/
 ├── data_preparator/                          # Data preparation container
-├── cc_chestxray/                             # Confidential VM inference container
+├── cc_chestxray/                             # Benchmark script (runs in the confidential VM)
 ├── metrics/                                  # Metrics container (scores predictions locally)
 ├── sample_raw_data/                          # Raw chest X-ray data (images + labels)
 └── cnn_weights.tar.gz                        # Model owner's weights tarball
@@ -118,7 +118,7 @@ medperf_tutorial/
 
 ### Benchmark script
 
-The benchmark inference container is the script that runs inside the confidential VM. As a benchmark owner, you build it from a template so that it conforms to the interface MedPerf expects (it receives the input data, the input labels, and the model files, and writes its output to a results directory).
+The benchmark script is the container that runs inside the confidential VM. As a benchmark owner, you build it from a template so that it conforms to the interface MedPerf expects (it receives the input data, the input labels, and the model files, and writes its output to a results directory).
 
 For this tutorial you do not need to build anything. A ready-made implementation is provided at `medperf_tutorial/cc_chestxray` and is what will be used in the walkthrough below.
 
@@ -130,13 +130,24 @@ First, login as the benchmark owner:
 
 ### Defining the benchmark components
 
-The benchmark is built from three components:
+This benchmark has the **`inference_script`** topology: participating models are
+weights (assets) rather than containers, your benchmark script produces the
+predictions inside the confidential VM, and a separate metrics container scores
+them on-prem. That is what makes confidential computing possible — because the
+benchmark owns the container that loads someone else's weights, its image hash
+is the one a confidential VM attests with.
+
+The benchmark is built from four components:
 
 - **Data Preparator Container:** Transforms raw data into a format ready to be ingested by the model. In this tutorial it turns chest X-ray images and labels into numpy arrays. Its implementation is in `medperf_tutorial/data_preparator`.
 
-- **Reference Model Inference Container:** The container that runs inside the confidential VM. It loads model weights, runs inference on the data, and outputs predictions. This is the container implemented in `medperf_tutorial/cc_chestxray`.
+- **Benchmark Script Container:** The container that runs inside the confidential VM. It loads model weights, runs inference on the data, and outputs predictions. This is the container implemented in `medperf_tutorial/cc_chestxray`.
 
 - **Metrics Container:** An evaluator container that runs locally to score the predictions produced by the VM against the ground-truth labels (computing Accuracy and AUC). Its implementation is in `medperf_tutorial/metrics`.
+
+- **Reference Model:** A set of example weights, registered as an asset, that your
+  benchmark script can load. It plays the same role as any participating model
+  and gives you something to test the benchmark against.
 
 ### Register the Data Preparator Container
 
@@ -159,9 +170,9 @@ For the Data Preparator container, fill in:
 
 Leave `Additional Files URL` empty, keep `Not Encrypted` selected, and click `Register container`.
 
-### Register the Reference Model Inference Container
+### Register the Benchmark Script Container
 
-The reference model inference container is the inference script that will run inside the confidential VM.
+The benchmark script is the container that will run inside the confidential VM.
 
 Navigate to the `Containers` tab at the top, and click on the `Register a New Container` button.
 
@@ -197,9 +208,32 @@ For the metrics container, fill in:
 
 Leave `Additional Files URL` empty, keep `Not Encrypted` selected, and click `Register container`.
 
+### Register the Reference Model Weights
+
+A benchmark in this topology runs weights, not containers, so its reference model
+is an asset like any participating model.
+
+Navigate to the `Models` tab at the top, and click on the `Register a New Asset Model` button.
+
+Fill in:
+
+- An asset name, e.g. `cc-cnn-weights`.
+- Select `Remote Asset`.
+- In the `Asset URL` field, enter:
+
+    ```
+    https://storage.googleapis.com/medperf-storage/chestxray_tutorial/cnn_weights.tar.gz
+    ```
+
+Click `Register`.
+
 ### Register the benchmark
 
 Navigate to the `Benchmarks` tab at the top, and click on the `Register Benchmark` button.
+
+You are first asked how your benchmark runs models. Choose **Your script infers,
+your container scores** — the `inference_script` topology described above. The
+form then asks for the components that topology needs.
 
 Fill in the form:
 
@@ -207,10 +241,15 @@ Fill in the form:
 - **Benchmark Name**: e.g. `cc-bmk`.
 - **Description**: e.g. `CC benchmark test`.
 - **Data Preparation Container**: select `cc-prep` from the dropdown.
-- **Reference Model**: select `cc-inference-script` from the dropdown.
+- **Reference Model**: select `cc-cnn-weights` from the dropdown.
+- **Benchmark Script Container**: select `cc-inference-script` from the dropdown.
 - **Metrics Container**: select `cc-metrics` from the dropdown.
 
 Click `Register Benchmark`.
+
+!!! note
+    Only asset models can be associated with this benchmark. A request to
+    associate a container model is rejected when it is made.
 
 ## 2. Model Owner: Register a model
 

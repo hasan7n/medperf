@@ -1,23 +1,118 @@
 var REDIRECT_BASE = "/benchmarks/ui/display/";
 
+/* Which components each topology asks for. Mirrors TOPOLOGY_RULES on the
+   server, so the form can only produce combinations the server accepts. */
+var TOPOLOGIES = {
+    byo_inference_script: {
+        label: "Models bring their own inference",
+        modelKind: "a container model, which runs inference itself",
+        requires: ["reference-model", "evaluator-container"]
+    },
+    end_to_end_script: {
+        label: "One script does everything",
+        modelKind: "an asset model (weights), which your benchmark script loads",
+        requires: ["reference-model", "benchmark-script"]
+    },
+    inference_script: {
+        label: "Your script infers, your container scores",
+        modelKind: "an asset model (weights), which your benchmark script loads",
+        requires: ["reference-model", "benchmark-script", "evaluator-container"]
+    }
+};
+
+function currentTopology() {
+    var el = document.getElementById("topology");
+    return el ? el.value : "";
+}
+
+function taskIsRunning() {
+    var form = document.getElementById("benchmark-register-form");
+    return Boolean(form && form.dataset.taskRunning === "true");
+}
+
+/* Enables the fields a topology uses and disables the rest. A disabled input is
+   left out of the submitted FormData, so the server never receives a component
+   the chosen topology does not use. While a task is running every field stays
+   disabled, and only the show/hide part applies. */
+function setTopologyFieldsState(topology) {
+    var locked = taskIsRunning();
+    document.querySelectorAll(".topology-field").forEach(function (field) {
+        var applies = topology
+            && (field.dataset.topologies || "").split(" ").indexOf(topology) !== -1;
+        field.classList.toggle("hidden", !applies);
+        field.querySelectorAll("input, select, textarea, button").forEach(function (el) {
+            el.disabled = locked || !applies;
+        });
+    });
+}
+
+function applyTopology(topology) {
+    var spec = TOPOLOGIES[topology];
+    if (!spec) return;
+
+    document.getElementById("topology").value = topology;
+    var labelEl = document.getElementById("topology-label");
+    if (labelEl) labelEl.textContent = spec.label;
+
+    /* The picker offers every model, so say which kind this topology takes.
+       The server rejects the wrong kind either way. */
+    var hintEl = document.getElementById("reference-model-hint");
+    if (hintEl) hintEl.textContent = "This topology takes " + spec.modelKind + ".";
+
+    setTopologyFieldsState(topology);
+
+    document.getElementById("topology-step").classList.add("hidden");
+    document.getElementById("benchmark-register-form").classList.remove("hidden");
+
+    /* Choosing an option further down the list leaves the page scrolled there.
+       The form that replaces the chooser starts at the top of the page, so show
+       it from its beginning instead of from wherever the chooser was read. */
+    window.scrollTo({ top: 0 });
+    checkBenchmarkFormValidity();
+}
+
+function showTopologyStep() {
+    document.getElementById("benchmark-register-form").classList.add("hidden");
+    document.getElementById("topology-step").classList.remove("hidden");
+}
+
+function requiredSelectionsFilled(topology) {
+    var spec = TOPOLOGIES[topology];
+    if (!spec) return false;
+
+    return spec.requires.every(function (id) {
+        var el = document.getElementById(id);
+        return el && el.value && Number(el.value) > 0;
+    });
+}
+
 function checkBenchmarkFormValidity() {
+    var topology = currentTopology();
     var nameEl = document.getElementById("name");
     var descEl = document.getElementById("description");
     var urlEl = document.getElementById("reference-dataset-tarball-url");
     var dataPrepEl = document.getElementById("data-preparation-container");
-    var refModelEl = document.getElementById("reference-model");
-    var evalEl = document.getElementById("evaluator-container");
     var skipTestsEl = document.getElementById("skip-tests");
     var noSkipTestsEl = document.getElementById("noskip-tests");
+
     var nameValue = nameEl ? nameEl.value.trim() : "";
     var descriptionValue = descEl ? descEl.value.trim() : "";
     var referenceDatasetTarballUrlValue = urlEl ? urlEl.value.trim() : "";
     var dataPreparationContainerValue = dataPrepEl && dataPrepEl.value ? Number(dataPrepEl.value) : 0;
-    var referenceModelValue = refModelEl && refModelEl.value ? Number(refModelEl.value) : 0;
-    var evaluatorContainerValue = evalEl && evalEl.value ? Number(evalEl.value) : 0;
     var skipTestsValue = skipTestsEl && skipTestsEl.checked ? true : false;
-    var noskipTestsValue = noSkipTestsEl && noSkipTestsEl.checked ? true: false;
-    var isValid = nameValue.length > 0 && descriptionValue.length > 0 && (noskipTestsValue ? referenceDatasetTarballUrlValue.length > 0 : (!referenceDatasetTarballUrlValue.length && skipTestsValue))  && dataPreparationContainerValue > 0 && referenceModelValue > 0 && evaluatorContainerValue > 0;
+    var noskipTestsValue = noSkipTestsEl && noSkipTestsEl.checked ? true : false;
+
+    var demoDatasetValid = noskipTestsValue
+        ? referenceDatasetTarballUrlValue.length > 0
+        : (!referenceDatasetTarballUrlValue.length && skipTestsValue);
+
+    var isValid = Boolean(topology)
+        && nameValue.length > 0
+        && descriptionValue.length > 0
+        && demoDatasetValid
+        && dataPreparationContainerValue > 0
+        && requiredSelectionsFilled(topology);
+
     var btn = document.getElementById("register-benchmark-btn");
     if (btn) btn.disabled = !isValid;
 }
@@ -31,7 +126,16 @@ function init() {
             el.addEventListener("change", checkBenchmarkFormValidity);
         });
     }
-    checkBenchmarkFormValidity();
+
+    document.querySelectorAll(".topology-option").forEach(function (el) {
+        el.addEventListener("click", function () {
+            applyTopology(el.dataset.topology);
+        });
+    });
+
+    var changeBtn = document.getElementById("change-topology-btn");
+    if (changeBtn) changeBtn.addEventListener("click", showTopologyStep);
+
     document.querySelectorAll("input[name='skip_compatibility_tests']").forEach(function (el) {
         el.addEventListener("change", function () {
             var skipTestsEl = document.getElementById("skip-tests");
@@ -43,8 +147,18 @@ function init() {
             } else {
                 if (demoContainer) demoContainer.style.display = "block";
             }
+            checkBenchmarkFormValidity();
         });
     });
+
+    /* A resumed task already carries a topology; otherwise the chooser stands. */
+    var topology = currentTopology();
+    if (topology) {
+        applyTopology(topology);
+    } else {
+        setTopologyFieldsState("");
+        checkBenchmarkFormValidity();
+    }
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
 else init();

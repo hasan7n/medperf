@@ -53,7 +53,9 @@ class TestReport(Entity):
         self.prepared_data_hash = self._model.prepared_data_hash
         self.data_preparation_mlcube = self._model.data_preparation_mlcube
         self.model = self._model.model
+        self.topology = self._model.topology
         self.data_evaluator_mlcube = self._model.data_evaluator_mlcube
+        self.benchmark_script = self._model.benchmark_script
         self.results = self._model.results
 
     @property
@@ -98,12 +100,16 @@ class TestReport(Entity):
         return {
             "UID": self.local_id,
             "Data Source": data_source,
-            "Model": (
-                self.model if isinstance(self.model, int) else self.model[:27] + "..."
-            ),
-            "Evaluator": (
-                self.data_evaluator_mlcube
-                if isinstance(self.data_evaluator_mlcube, int)
-                else self.data_evaluator_mlcube[:27] + "..."
-            ),
+            "Model": self.__shorten(self.model),
+            "Topology": self.topology,
+            "Evaluator": self.__shorten(self.data_evaluator_mlcube),
+            "Benchmark Script": self.__shorten(self.benchmark_script),
         }
+
+    @staticmethod
+    def __shorten(identifier):
+        if identifier is None:
+            return "N/A"
+        if isinstance(identifier, int):
+            return identifier
+        return identifier[:27] + "..."

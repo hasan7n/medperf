@@ -155,7 +155,26 @@ Finally, now after having the containers registered, you can register the benchm
 
 Navigate to the `Benchmarks` tab at the top, and click on the `Register a new benchmark` button.
 
-You need to keep at hand the following information:
+The first thing you are asked is **how your benchmark runs models**. This is the
+benchmark's topology, and it decides which components the rest of the form asks
+for, so the form only appears once you have chosen:
+
+- **Models bring their own inference** — participants submit container models
+  that run inference themselves, and your benchmark supplies a metrics container
+  that scores their predictions. This is what this tutorial uses.
+- **One script does everything** — participants submit model assets (weights),
+  and a single benchmark script you provide loads a model, runs inference and
+  computes the metrics in one step.
+- **Your script infers, your container scores** — participants submit model
+  assets, your benchmark script produces the predictions, and a separate metrics
+  container scores them.
+
+The last two are what confidential computing builds on, since your benchmark
+owns the container that loads someone else's weights. See the
+[confidential computing tutorial](webui_cc_tutorial.md).
+
+Choose **Models bring their own inference**, then keep at hand the following
+information:
 
 - The Demo/Toy Dataset URL. Here, the URL will be:
 
@@ -164,6 +183,11 @@ You need to keep at hand the following information:
     ```
 
 - The names you used for the three containers that you have registered in the previous steps.
+
+If you pick a different topology later, note that a benchmark accepts only one
+kind of model: container models for `Models bring their own inference`, and
+asset models for the other two. An association request with the wrong kind is
+rejected when it is made.
 
 ![Benchmark Owner Registers Benchmark](../images/webui/benchmark_registration.png)
 
