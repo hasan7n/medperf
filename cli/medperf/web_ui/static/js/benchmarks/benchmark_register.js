@@ -63,6 +63,11 @@ function applyTopology(topology) {
 
     document.getElementById("topology-step").classList.add("hidden");
     document.getElementById("benchmark-register-form").classList.remove("hidden");
+
+    /* Choosing an option further down the list leaves the page scrolled there.
+       The form that replaces the chooser starts at the top of the page, so show
+       it from its beginning instead of from wherever the chooser was read. */
+    window.scrollTo({ top: 0 });
     checkBenchmarkFormValidity();
 }
 
