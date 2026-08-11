@@ -90,6 +90,7 @@ def model_detail_ui(
         container_object = model.container_obj
 
     cc_config_defaults = model.get_cc_config()
+    cc_policy = model.get_cc_policy()
     cc_configured = model.is_cc_configured()
     cc_initialized = model.is_cc_initialized()
     cc_last_synced = model.get_last_synced()
@@ -106,6 +107,7 @@ def model_detail_ui(
             "benchmarks_associations": benchmark_associations,  #
             "benchmarks": benchmarks,
             "cc_config_defaults": cc_config_defaults,
+            "cc_policy": cc_policy,
             "cc_configured": cc_configured,
             "cc_initialized": cc_initialized,
             "cc_last_synced": cc_last_synced,
@@ -155,6 +157,8 @@ def edit_cc_config(
     key_location: str = Form(""),
     wip: str = Form(""),
     wip_provider: str = Form(""),
+    bind_peer_asset: bool = Form(False),
+    bind_result_collector: bool = Form(False),
     current_user: bool = Depends(check_user_api),
 ):
     args = {
@@ -167,13 +171,20 @@ def edit_cc_config(
         "wip": wip,
         "wip_provider": wip_provider,
     }
+    # An unchecked box is simply absent from the form, so both choices are read
+    # as stated rather than left to the asset kind's default.
+    policy = {
+        "bind_peer_asset": bind_peer_asset,
+        "allowed_result_collectors": ["data_owner"] if bind_result_collector else [],
+    }
     if not configure_cc:
         args = {}
+        policy = {}
 
     initialize_state_task(request, task_name="model_update_cc_config")
     return_response = {"status": "", "error": ""}
     try:
-        ModelConfigureForCC.run(entity_id, args, {})
+        ModelConfigureForCC.run(entity_id, args, policy)
         return_response["status"] = "success"
         notification_message = "Successfully updated model CC config!"
     except Exception as exp:

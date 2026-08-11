@@ -1,6 +1,8 @@
 import pytest
 
 from medperf.cc.workloads import (
+    __peer_datasets,
+    __peer_models,
     get_approved_component_ids,
     get_associated_benchmarks,
     get_confidential_plan,
@@ -8,6 +10,8 @@ from medperf.cc.workloads import (
 from medperf.enums import BenchmarkTopology
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.cube import TestCube
+from medperf_cc.identity import AssetKind
+from medperf_cc.policy import AssetPolicy
 
 PATCH_CC_WORKLOADS = "medperf.cc.workloads.{}"
 
@@ -76,3 +80,40 @@ def test_confidential_plan_is_resolved_for_script_benchmarks(mocker):
     # Assert
     assert plan.script.id == 7
     assert plan.evaluator is None
+
+
+@pytest.mark.parametrize(
+    "kind,binds_peer", [(AssetKind.DATA, True), (AssetKind.MODEL, False)]
+)
+def test_a_grant_that_pins_no_peer_enumerates_none(mocker, kind, binds_peer):
+    """The same grant covers every peer, so there is nothing to name"""
+    # Arrange
+    spy = mocker.patch(PATCH_CC_WORKLOADS.format("get_approved_component_ids"))
+    policy = AssetPolicy(bind_peer_asset=False)
+    peers = __peer_models if kind is AssetKind.DATA else __peer_datasets
+
+    # Act
+    result = peers(TestBenchmark(), policy)
+
+    # Assert
+    assert result == [None]
+    spy.assert_not_called()
+
+
+def test_a_data_owner_pinning_the_model_skips_models_that_are_not_confidential(mocker):
+    # Arrange
+    mocker.patch(
+        PATCH_CC_WORKLOADS.format("get_approved_component_ids"), return_value=[1, 2]
+    )
+    confidential = mocker.MagicMock(**{"requires_cc.return_value": True})
+    plain = mocker.MagicMock(**{"requires_cc.return_value": False})
+    mocker.patch(
+        PATCH_CC_WORKLOADS.format("Model.get"),
+        side_effect=lambda model_id: confidential if model_id == 1 else plain,
+    )
+
+    # Act
+    models = __peer_models(TestBenchmark(), AssetPolicy(bind_peer_asset=True))
+
+    # Assert
+    assert models == [confidential]

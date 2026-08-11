@@ -9,12 +9,13 @@ silently stop matching.
 import pytest
 
 from medperf_cc.gcp.vault import workload_uid_assertion
-from medperf_cc.identity import TERM_CLAIMS, AssetKind, WorkloadBinding, WorkloadIdentity
+from medperf_cc.identity import TERM_CLAIMS, AssetKind, WorkloadIdentity
+from medperf_cc.policy import AssetPolicy
 
 
 @pytest.mark.parametrize("kind", [AssetKind.DATA, AssetKind.MODEL])
 def test_the_assertion_and_the_identity_have_the_same_shape(kind):
-    binding = WorkloadBinding.for_asset(kind)
+    binding = AssetPolicy().binding(kind)
     workload = WorkloadIdentity(
         script_hash="s", data_hash="d", model_hash="m",
         result_collector_hash="c", script_id=1,
@@ -26,7 +27,7 @@ def test_the_assertion_and_the_identity_have_the_same_shape(kind):
 
 
 def test_the_assertion_reads_the_terms_in_binding_order():
-    binding = WorkloadBinding.for_asset(AssetKind.DATA)
+    binding = AssetPolicy().binding(AssetKind.DATA)
 
     assertion = workload_uid_assertion(binding)
 

@@ -96,6 +96,7 @@ def dataset_detail_ui(  # noqa
     ui_mode = request.app.state.ui_mode
 
     cc_config_defaults = dataset.get_cc_config()
+    cc_policy = dataset.get_cc_policy()
     cc_configured = dataset.is_cc_configured()
     cc_initialized = dataset.is_cc_initialized()
     cc_last_synced = dataset.get_last_synced()
@@ -108,6 +109,7 @@ def dataset_detail_ui(  # noqa
         "is_owner": is_owner,
         "report_exists": report_exists,
         "cc_config_defaults": cc_config_defaults,
+        "cc_policy": cc_policy,
         "cc_configured": cc_configured,
         "cc_initialized": cc_initialized,
         "cc_last_synced": cc_last_synced,
@@ -636,6 +638,8 @@ def edit_cc_config(
     key_location: str = Form(""),
     wip: str = Form(""),
     wip_provider: str = Form(""),
+    bind_peer_asset: bool = Form(False),
+    bind_result_collector: bool = Form(False),
     current_user: bool = Depends(check_user_api),
 ):
     args = {
@@ -648,12 +652,19 @@ def edit_cc_config(
         "wip": wip,
         "wip_provider": wip_provider,
     }
+    # An unchecked box is simply absent from the form, so both choices are read
+    # as stated rather than left to the asset kind's default.
+    policy = {
+        "bind_peer_asset": bind_peer_asset,
+        "allowed_result_collectors": ["data_owner"] if bind_result_collector else [],
+    }
     if not configure_cc:
         args = {}
+        policy = {}
     initialize_state_task(request, task_name="data_update_cc_config")
     return_response = {"status": "", "error": ""}
     try:
-        DatasetConfigureForCC.run(entity_id, args, {})
+        DatasetConfigureForCC.run(entity_id, args, policy)
         return_response["status"] = "success"
         notification_message = "Successfully updated dataset CC config!"
     except Exception as exp:

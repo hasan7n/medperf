@@ -104,22 +104,26 @@ class Certificate(Entity):
 
     @classmethod
     def get_user_certificate(cls, key_type: CryptoKeyType):
-        user_id = get_medperf_user_data()["id"]
-        user_certificates = Certificate.all(
+        return cls.get_owner_certificate(get_medperf_user_data()["id"], key_type)
+
+    @classmethod
+    def get_owner_certificate(cls, owner_id: int, key_type: CryptoKeyType):
+        """The certificate a given user holds, or None if they hold none."""
+        owner_certificates = Certificate.all(
             filters={
-                "owner": user_id,
+                "owner": owner_id,
                 "ca": config.certificate_authority_id,
                 "key_type": key_type.value,
             }
         )
-        if len(user_certificates) == 0:
+        if len(owner_certificates) == 0:
             return
 
-        if len(user_certificates) > 1:
+        if len(owner_certificates) > 1:
             raise MedperfException(
                 "Internal Error: Multiple certificates have been found"
             )
-        return user_certificates[0]
+        return owner_certificates[0]
 
     @classmethod
     def get_local_user_certificate(cls, key_type: CryptoKeyType):

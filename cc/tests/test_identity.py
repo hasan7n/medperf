@@ -1,8 +1,6 @@
 import pytest
 
 from medperf_cc.identity import (
-    COLLECTOR_TERM,
-    DATA_TERM,
     TERM_CLAIMS,
     TERM_FIELDS,
     TERM_ORDER,
@@ -32,20 +30,19 @@ def test_every_term_has_a_claim_and_a_field():
     assert set(TERM_FIELDS) == set(TERM_ORDER)
 
 
-def test_a_data_owner_pins_all_four_parties(workload):
-    binding = WorkloadBinding.for_asset(AssetKind.DATA)
+def test_an_identity_reads_the_terms_it_binds_in_order(workload):
+    binding = WorkloadBinding(terms=TERM_ORDER)
 
     assert binding.identity_of(workload) == (
         "scripthash::datahash::modelhash::collectorhash"
     )
 
 
-def test_a_model_owner_pins_only_the_script_and_the_model(workload):
-    binding = WorkloadBinding.for_asset(AssetKind.MODEL)
+def test_an_identity_leaves_out_what_is_not_bound(workload):
+    binding = WorkloadBinding(terms=["script", "model"])
 
     assert binding.identity_of(workload) == "scripthash::modelhash"
-    assert not binding.binds(DATA_TERM)
-    assert not binding.binds(COLLECTOR_TERM)
+    assert not binding.binds("data")
 
 
 def test_an_asset_kind_knows_its_own_term_and_its_peer():

@@ -9,7 +9,7 @@ ask for the key.
 from abc import ABC, abstractmethod
 from typing import List
 
-from medperf_cc.identity import AssetKind, WorkloadBinding, WorkloadIdentity
+from medperf_cc.identity import AssetKind, WorkloadIdentity
 from medperf_cc.policy import AssetPolicy
 
 
@@ -18,7 +18,7 @@ class AssetVault(ABC):
         self.config = config
         self.kind = kind
         self.policy = policy
-        self.binding = WorkloadBinding.for_asset(kind)
+        self.binding = policy.binding(kind)
 
     def set_permitted(self, workloads: List[WorkloadIdentity]) -> None:
         """Replaces the set of workloads allowed to decrypt this asset.

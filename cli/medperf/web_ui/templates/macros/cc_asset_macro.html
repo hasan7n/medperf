@@ -1,4 +1,9 @@
-{% macro gcp_asset(defaults, configured, initialized, last_synced, entity_id, entity_type, task_running=false) %}
+{% macro gcp_asset(defaults, configured, initialized, last_synced, entity_id, entity_type, task_running=false, policy={}) %}
+{% set peer_label = "model" if entity_type == "dataset" else "dataset" %}
+{# An unset choice takes the asset kind's default: a data owner authorizes one
+   exact combination, a model owner authorizes an image regardless of what it
+   is pointed at. #}
+{% set binds_by_default = entity_type == "dataset" %}
 {% set fields = [
 ("project_id", "GCP Project ID"),
 ("project_number", "GCP Project Number"),
@@ -36,6 +41,28 @@
                        value="{{ defaults.get(field_name, '') }}" {% if task_running %}disabled{% endif %}>
             </div>
             {% endfor %}
+
+            {# How narrowly the grant is scoped. The benchmark script and this
+               asset's own hash are always pinned; these two are the choice. #}
+            <div class="pt-2 border-t-2 border-border space-y-3">
+                <p class="text-secondary font-semibold">Grant scope</p>
+                <label class="flex items-start gap-3 cursor-pointer text-ink">
+                    <input type="checkbox" name="bind_peer_asset" value="true" class="mt-1 rounded border-border-strong text-brand focus:ring-brand-accent accent-brand"
+                           {% if policy.get('bind_peer_asset', binds_by_default) %}checked{% endif %} {% if task_running %}disabled{% endif %}>
+                    <span>
+                        <span class="block font-semibold">Pin the {{ peer_label }}</span>
+                        <span class="block text-sm text-muted-fg">Authorize one exact {{ peer_label }} rather than any. You will need to sync again whenever a {{ peer_label }} joins a benchmark.</span>
+                    </span>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer text-ink">
+                    <input type="checkbox" name="bind_result_collector" value="true" class="mt-1 rounded border-border-strong text-brand focus:ring-brand-accent accent-brand"
+                           {% if policy.get('allowed_result_collectors', binds_by_default) %}checked{% endif %} {% if task_running %}disabled{% endif %}>
+                    <span>
+                        <span class="block font-semibold">Pin the result collector</span>
+                        <span class="block text-sm text-muted-fg">Have the cloud check the key the results are encrypted for, which is the data owner's.</span>
+                    </span>
+                </label>
+            </div>
         </div>
         <div class="flex flex-wrap gap-3 pt-2">
             <button type="submit" id="apply-cc-asset-btn" class="btn btn-primary disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed" disabled>Configure</button>

@@ -1,23 +1,27 @@
 """Turning benchmark associations into permitted workload identities.
 
 A confidential computing policy answers one question: which workloads may
-decrypt this asset? Both the dataset-side and the model-side policy build that
-answer out of benchmark associations, so the rules for reading those
-associations and for turning them into workload identities live here once.
+decrypt this asset? Both sides build that answer out of benchmark associations,
+and what each of them has to enumerate follows from the terms its owner pins:
+an owner who does not pin the peer asset grants the same identity for every
+peer, so there is nothing to enumerate.
 """
 
-import base64
-from typing import List
+from typing import List, Optional
 
+from medperf.cc.config import policy_of
+from medperf.cc.parties import collector_key_hashes, party_owners
 from medperf.commands.association.utils import (
     get_component_associations,
     get_experiment_associations,
 )
 from medperf.commands.execution.plan import BenchmarkPlan, resolve_plan
 from medperf.entities.benchmark import Benchmark
-from medperf.entities.certificate import Certificate
+from medperf.entities.dataset import Dataset
+from medperf.entities.model import Model
 from medperf.enums import Status
-from medperf.utils import get_string_hash
+from medperf_cc.identity import AssetKind, WorkloadIdentity
+from medperf_cc.policy import AssetPolicy
 
 
 def get_associated_benchmarks(component_id: int, component_type: str) -> List[Benchmark]:
@@ -56,7 +60,84 @@ def get_confidential_plan(benchmark: Benchmark) -> BenchmarkPlan:
     return resolve_plan(benchmark)
 
 
-def public_key_hash(certificate: Certificate) -> str:
-    """The result collector identity a workload attests with."""
-    public_key_b64 = base64.b64encode(certificate.public_key())
-    return get_string_hash(public_key_b64)
+def get_dataset_workloads(dataset: Dataset) -> List[WorkloadIdentity]:
+    """The workloads a data owner authorizes to read their data."""
+    policy = policy_of(dataset)
+    collectors = policy.result_collectors(AssetKind.DATA)
+
+    workloads = []
+    for benchmark in get_associated_benchmarks(dataset.id, "dataset"):
+        plan = get_confidential_plan(benchmark)
+        if plan is None:
+            continue
+        for model in __peer_models(benchmark, policy):
+            owners = party_owners(benchmark, dataset=dataset, model=model)
+            for collector_hash in collector_key_hashes(collectors, owners):
+                workloads.append(
+                    WorkloadIdentity(
+                        data_hash=dataset.generated_uid,
+                        model_hash=model.asset_obj.asset_hash if model else "",
+                        script_hash=plan.script_hash,
+                        result_collector_hash=collector_hash,
+                        data_id=dataset.id,
+                        model_id=model.id if model else None,
+                        script_id=plan.script_id,
+                    )
+                )
+    return workloads
+
+
+def get_model_workloads(model: Model) -> List[WorkloadIdentity]:
+    """The workloads a model owner authorizes to load their weights."""
+    policy = policy_of(model)
+    collectors = policy.result_collectors(AssetKind.MODEL)
+    asset_hash = model.asset_obj.asset_hash
+
+    workloads = []
+    for benchmark in get_associated_benchmarks(model.id, "model"):
+        plan = get_confidential_plan(benchmark)
+        if plan is None:
+            continue
+        for dataset in __peer_datasets(benchmark, policy):
+            owners = party_owners(benchmark, dataset=dataset, model=model)
+            for collector_hash in collector_key_hashes(collectors, owners):
+                workloads.append(
+                    WorkloadIdentity(
+                        data_hash=dataset.generated_uid if dataset else "",
+                        model_hash=asset_hash,
+                        script_hash=plan.script_hash,
+                        result_collector_hash=collector_hash,
+                        data_id=dataset.id if dataset else None,
+                        model_id=model.id,
+                        script_id=plan.script_id,
+                    )
+                )
+    return workloads
+
+
+def __peer_models(benchmark: Benchmark, policy: AssetPolicy) -> List[Optional[Model]]:
+    """The models a data owner's grant has to name, one at a time.
+
+    A grant that does not pin the model is the same grant whichever model runs,
+    so there is nothing to enumerate: None stands for "any"."""
+    if not policy.binds_peer_asset(AssetKind.DATA):
+        return [None]
+
+    models = [
+        Model.get(model_id)
+        for model_id in get_approved_component_ids(benchmark.id, "model")
+    ]
+    return [model for model in models if model.requires_cc()]
+
+
+def __peer_datasets(
+    benchmark: Benchmark, policy: AssetPolicy
+) -> List[Optional[Dataset]]:
+    """The datasets a model owner's grant has to name, one at a time."""
+    if not policy.binds_peer_asset(AssetKind.MODEL):
+        return [None]
+
+    return [
+        Dataset.get(dataset_id)
+        for dataset_id in get_approved_component_ids(benchmark.id, "dataset")
+    ]

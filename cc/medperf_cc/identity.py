@@ -52,15 +52,6 @@ class AssetKind(Enum):
         return MODEL_TERM if self is AssetKind.DATA else DATA_TERM
 
 
-# Which terms each kind of asset owner pins. A data owner authorizes one exact
-# combination of parties; a model owner says only "this image may load my
-# weights", and leaves which data it may then read to the data owner's policy.
-BOUND_TERMS = {
-    AssetKind.DATA: [SCRIPT_TERM, DATA_TERM, MODEL_TERM, COLLECTOR_TERM],
-    AssetKind.MODEL: [SCRIPT_TERM, MODEL_TERM],
-}
-
-
 class WorkloadIdentity(BaseModel):
     """The hashes a workload attests with, plus ids used for storage paths.
 
@@ -95,13 +86,12 @@ class WorkloadIdentity(BaseModel):
 
 
 class WorkloadBinding(BaseModel):
-    """The terms one asset owner pins, in canonical order."""
+    """The terms one asset owner pins, in canonical order.
+
+    Built from an `AssetPolicy`, which is what decides how many of them there
+    are; the order they come in is fixed here."""
 
     terms: List[str]
-
-    @classmethod
-    def for_asset(cls, kind: AssetKind) -> "WorkloadBinding":
-        return cls(terms=BOUND_TERMS[kind])
 
     def binds(self, term: str) -> bool:
         return term in self.terms
