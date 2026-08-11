@@ -639,7 +639,7 @@ def edit_cc_config(
     wip: str = Form(""),
     wip_provider: str = Form(""),
     bind_peer_asset: bool = Form(False),
-    bind_result_collector: bool = Form(False),
+    allowed_result_collectors: List[str] = Form([]),
     current_user: bool = Depends(check_user_api),
 ):
     args = {
@@ -656,7 +656,7 @@ def edit_cc_config(
     # as stated rather than left to the asset kind's default.
     policy = {
         "bind_peer_asset": bind_peer_asset,
-        "allowed_result_collectors": ["data_owner"] if bind_result_collector else [],
+        "allowed_result_collectors": allowed_result_collectors,
     }
     if not configure_cc:
         args = {}

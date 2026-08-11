@@ -7,17 +7,19 @@ a key, which is the only form the attestation ever sees it in.
 
 import base64
 import logging
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from medperf.account_management import get_medperf_user_data, is_user_logged_in
+from medperf.cc.config import policy_of
 from medperf.commands.certificate.utils import current_user_certificate_status
 from medperf.entities.benchmark import Benchmark
 from medperf.entities.certificate import Certificate
 from medperf.entities.dataset import Dataset
 from medperf.entities.model import Model
 from medperf.enums import CryptoKeyType
-from medperf.exceptions import MedperfException
+from medperf.exceptions import ExecutionError, MedperfException
 from medperf.utils import get_string_hash
+from medperf_cc.identity import AssetKind
 from medperf_cc.policy import Party
 
 
@@ -56,6 +58,14 @@ def owner_key_hash(owner_id: int) -> Optional[str]:
     return public_key_hash(certificate) if certificate else None
 
 
+def collector_public_key() -> bytes:
+    """The key the results of an execution are encrypted for.
+
+    The operator's own: results are encrypted for whoever decrypts them, and
+    the operator is the one who downloads them."""
+    return base64.b64encode(current_user_certificate().public_key())
+
+
 def party_owners(
     benchmark: Benchmark, dataset: Dataset = None, model: Model = None
 ) -> dict:
@@ -66,6 +76,11 @@ def party_owners(
     if model is not None:
         owners[Party.MODEL_OWNER] = model.owner
     return owners
+
+
+def parties_of(user_id: int, owners: dict) -> Set[Party]:
+    """The roles one user holds. Holding any one of the allowed roles is enough."""
+    return {party for party, owner_id in owners.items() if owner_id == user_id}
 
 
 def collector_key_hashes(collectors: List[Party], owners: dict) -> List[str]:
@@ -87,3 +102,37 @@ def collector_key_hashes(collectors: List[Party], owners: dict) -> List[str]:
             continue
         hashes.append(key_hash)
     return hashes
+
+
+def check_operator_is_allowed(
+    operator_id: int, benchmark_id: int, dataset: Dataset, model: Model
+):
+    """Refuses an execution neither asset owner would release its results to.
+
+    Both owners must accept the operator, because the workload needs both keys.
+    The cloud enforces this too, but only by withholding a key from a VM that
+    has already started, which the operator sees as a workload that produces
+    nothing.
+
+    Skipped without a benchmark: a compatibility test runs the user's own
+    components, so there are no association-derived roles to check."""
+    if benchmark_id is None:
+        return
+
+    benchmark = Benchmark.get(benchmark_id)
+    held = parties_of(operator_id, party_owners(benchmark, dataset, model))
+
+    for label, entity, kind in (
+        ("Dataset", dataset, AssetKind.DATA),
+        ("Model", model, AssetKind.MODEL),
+    ):
+        collectors = policy_of(entity).result_collectors(kind)
+        if not collectors:
+            continue
+        if not held.intersection(collectors):
+            allowed = ", ".join(party.value for party in collectors)
+            raise ExecutionError(
+                f"The {label.lower()} owner only releases results to: {allowed}."
+                " The current user holds none of those roles in this execution,"
+                " and so cannot operate it."
+            )

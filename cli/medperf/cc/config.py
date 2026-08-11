@@ -5,19 +5,13 @@ into the components that act on it.
 """
 
 from medperf.entities.user import User
-from medperf.exceptions import InvalidArgumentError
 from medperf_cc.gcp.config import GCPAssetConfig, GCPOperatorConfig
 from medperf_cc.gcp.operator import ConfidentialSpaceRunner
 from medperf_cc.gcp.vault import GCPVault
 from medperf_cc.identity import AssetKind
 from medperf_cc.operator import WorkloadRunner
-from medperf_cc.policy import AssetPolicy, Party
+from medperf_cc.policy import AssetPolicy
 from medperf_cc.vault import AssetVault
-
-# Every confidential execution encrypts its results for the data owner, so no
-# other party's key can appear in an attestation. Naming one would be a policy
-# that could never be satisfied, which is worse than not offering it.
-SUPPORTED_RESULT_COLLECTORS = [Party.DATA_OWNER]
 
 
 def validate_cc_config(cc_config: dict, asset_name_prefix: str):
@@ -38,18 +32,7 @@ def validate_cc_operator_config(cc_config: dict):
 
 
 def validate_cc_policy(cc_policy: dict):
-    policy = AssetPolicy(**(cc_policy or {}))
-
-    unsupported = [
-        party.value
-        for party in (policy.allowed_result_collectors or [])
-        if party not in SUPPORTED_RESULT_COLLECTORS
-    ]
-    if unsupported:
-        raise InvalidArgumentError(
-            "Results can currently only be released to the data owner,"
-            f" not to: {', '.join(unsupported)}."
-        )
+    AssetPolicy(**(cc_policy or {}))
 
 
 def policy_of(entity) -> AssetPolicy:

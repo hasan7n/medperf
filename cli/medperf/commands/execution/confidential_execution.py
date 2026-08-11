@@ -1,4 +1,3 @@
-import base64
 import logging
 import os
 from time import time
@@ -9,13 +8,13 @@ from medperf.commands.execution.plan import BenchmarkPlan
 from medperf.entities.model import Model
 from medperf.entities.dataset import Dataset
 from medperf.entities.execution import Execution
-from medperf.entities.certificate import Certificate
 import medperf.config as config
 from medperf.exceptions import DecryptionError, ExecutionError, CommunicationError
 
 from medperf.account_management import get_medperf_user_object
 from medperf.cc.config import runner_for
 from medperf.cc.operator import download_results, run_workload
+from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
 from medperf.containers.runners.docker_utils import full_docker_image_name
@@ -94,6 +93,9 @@ class ConfidentialExecution:
             raise ExecutionError(
                 "User does not have a configuration to operate a confidential execution."
             )
+        check_operator_is_allowed(
+            self.operator.id, self.benchmark_id, self.dataset, self.model
+        )
 
     def prepare(self):
         self.dataset_cc_config = self.dataset.get_cc_config()
@@ -105,21 +107,7 @@ class ConfidentialExecution:
         self.__send_report("pending")
 
     def setup_workload(self):
-        if self.dataset.owner == self.operator.id:
-            cert_obj = Certificate.get_user_certificate(CryptoKeyType.RSA)
-        else:
-            datasets_certs, _ = Certificate.get_benchmark_datasets_certificates(
-                self.benchmark_id
-            )
-            for cert in datasets_certs:
-                if cert.owner == self.dataset.owner:
-                    cert_obj = cert
-                    break
-            else:
-                raise ExecutionError("Dataset not associated.")
-
-        public_key_bytes = cert_obj.public_key()
-        result_collector_public_key = base64.b64encode(public_key_bytes)
+        result_collector_public_key = collector_public_key()
         workload = WorkloadIdentity(
             data_hash=self.dataset.generated_uid,
             model_hash=self.asset.asset_hash,

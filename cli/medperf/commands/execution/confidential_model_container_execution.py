@@ -1,15 +1,13 @@
-import base64
-
 from medperf.commands.execution.plan import BenchmarkPlan
 from medperf.entities.model import Model
 from medperf.entities.dataset import Dataset
 from medperf.entities.execution import Execution
-from medperf.entities.certificate import Certificate
 import medperf.config as config
 from medperf.exceptions import DecryptionError, ExecutionError
 
 from medperf.account_management import get_medperf_user_object
 from medperf.cc.config import runner_for
+from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.cc.operator import (
     run_workload,
     download_results,
@@ -17,10 +15,7 @@ from medperf.cc.operator import (
     wait_for_workload,
 )
 from medperf.utils import get_string_hash
-from medperf.commands.certificate.utils import (
-    current_user_certificate_status,
-    load_user_private_key,
-)
+from medperf.commands.certificate.utils import load_user_private_key
 from medperf.commands.execution.container_execution import ContainerExecution
 from medperf.containers.runners.docker_utils import full_docker_image_name
 from medperf.enums import CryptoKeyType
@@ -115,6 +110,15 @@ class ConfidentialModelContainerExecution:
             raise ExecutionError(
                 "User does not have a configuration to operate a confidential execution."
             )
+        if self.dataset.owner != self.operator.id:
+            raise ExecutionError(
+                "An inference_script benchmark scores the predictions on-prem,"
+                " against ground truth labels only the data owner holds."
+                " This execution must be operated by the data owner."
+            )
+        check_operator_is_allowed(
+            self.operator.id, self.benchmark_id, self.dataset, self.model
+        )
 
     def prepare(self):
         self.dataset_cc_config = self.dataset.get_cc_config()
@@ -123,34 +127,7 @@ class ConfidentialModelContainerExecution:
         self.asset = self.model.asset_obj
 
     def setup_workload(self):
-        if self.dataset.owner == self.operator.id:
-            status_dict = current_user_certificate_status(CryptoKeyType.RSA)
-            user_cert = None
-            if status_dict["should_be_submitted"]:
-                user_cert = Certificate.get_local_user_certificate(CryptoKeyType.RSA)
-            elif status_dict["no_action_required"]:
-                user_cert = status_dict["user_cert_object"]
-
-            if not user_cert:
-                raise ExecutionError(
-                    "User must have a certificate to run the confidential model"
-                )
-            cert_obj = user_cert
-        else:
-            datasets_certs, _ = Certificate.get_benchmark_datasets_certificates(
-                self.benchmark_id
-            )
-            for cert in datasets_certs:
-                if cert.owner == self.dataset.owner:
-                    cert_obj = cert
-                    break
-            else:
-                raise ExecutionError(
-                    "Dataset not associated. Can't find data owner certificate."
-                )
-
-        public_key_bytes = cert_obj.public_key()
-        result_collector_public_key = base64.b64encode(public_key_bytes)
+        result_collector_public_key = collector_public_key()
         workload = WorkloadIdentity(
             data_hash=self.dataset.generated_uid,
             model_hash=self.asset.asset_hash,

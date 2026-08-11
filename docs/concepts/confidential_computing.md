@@ -82,7 +82,7 @@ The other two are yours to decide:
 | Choice | Effect |
 | --- | --- |
 | Pin the {model, dataset} | Authorize one exact peer asset rather than any. You will have to sync again whenever a new one is approved for a benchmark. |
-| Pin the result collector | Have the cloud check the key the results are encrypted for, and not just this client. |
+| Release results to | Whose keys results may be encrypted for. Naming any of them has the cloud check the key, and not just this client. |
 
 Leaving both unset is not the same as turning them off: an unset choice takes
 the default for the kind of asset. **A data owner pins everything**, because
@@ -95,13 +95,28 @@ Both choices are also available in the JSON policy file the CLI takes:
 ```json
 {
     "bind_peer_asset": true,
-    "allowed_result_collectors": ["data_owner"]
+    "allowed_result_collectors": ["data_owner", "benchmark_owner"]
 }
 ```
 
 Naming a collector is what pins one: there is no reason to pin a key without
 restricting who may collect, and no way to restrict who may collect without
 saying whose key. An empty list means unrestricted.
+
+### Who may collect results
+
+Results are encrypted for whoever runs the workload, so `allowed_result_collectors`
+is really a list of who may *operate* an execution involving your asset. Both
+asset owners have to accept the operator before a workload starts — the client
+refuses up front, and the cloud refuses again by withholding the key.
+
+The benchmark owner does not get to decide this. They are not the party at
+risk, and MedPerf has no way for them to enforce it; `benchmark_owner` is simply
+one of the roles each asset owner may choose to accept.
+
+An `inference_script` benchmark is the exception: its predictions are scored
+on-prem against ground truth labels only the data owner holds, so only the data
+owner can operate one whatever the policies say.
 
 ## What's next?
 
