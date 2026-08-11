@@ -5,7 +5,6 @@ from time import time
 
 import yaml
 
-from medperf.asset_management.gcp_utils import CCWorkloadID
 from medperf.commands.execution.plan import BenchmarkPlan
 from medperf.entities.model import Model
 from medperf.entities.dataset import Dataset
@@ -15,11 +14,12 @@ import medperf.config as config
 from medperf.exceptions import DecryptionError, ExecutionError, CommunicationError
 
 from medperf.account_management import get_medperf_user_object
-from medperf.asset_management.asset_management import run_workload, download_results
+from medperf.cc.operator import download_results, run_workload
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
 from medperf.containers.runners.docker_utils import full_docker_image_name
 from medperf.enums import CryptoKeyType
+from medperf_cc.gcp import CCWorkloadID
 
 
 class ConfidentialExecution:

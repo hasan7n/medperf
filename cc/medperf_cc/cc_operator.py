@@ -1,5 +1,6 @@
 import json
-from medperf.asset_management.gcp_utils import (
+from medperf_cc.errors import ConfigurationError, OperationError
+from medperf_cc.gcp import (
     GCPOperatorConfig,
     CCWorkloadID,
     download_file_from_gcs,
@@ -8,21 +9,15 @@ from medperf.asset_management.gcp_utils import (
     run_workload,
     wait_for_workload_completion,
 )
-from medperf.asset_management.operator_check import verify_operator_setup
-from medperf.exceptions import MedperfException, ExecutionError
-from medperf.utils import (
-    generate_tmp_path,
-    untar,
-    tmp_path_for_cc_asset_key,
-    secure_write_to_file,
-    remove_path,
-)
-from medperf.encryption import SymmetricEncryption, AsymmetricEncryption
-from colorama import Fore, Style
-import medperf.config as medperf_config
+from medperf_cc.operator_check import verify_operator_setup
 
 
 class OperatorManager:
+    """Starting a confidential workload and collecting what it produced.
+
+    Transport only: the results come back encrypted and stay that way, because
+    only the party holding the result collector's private key can open them."""
+
     def __init__(self, config: dict):
         self.config = GCPOperatorConfig(**config)
 
@@ -33,7 +28,7 @@ class OperatorManager:
         )
 
         if not success:
-            raise MedperfException(f"Operator setup verification failed: {message}")
+            raise ConfigurationError(f"Operator setup verification failed: {message}")
 
     def run_workload(
         self,
@@ -75,15 +70,13 @@ class OperatorManager:
         try:
             run_workload(self.config, metadata)
         except Exception:
-            raise ExecutionError(
+            raise OperationError(
                 "Failed to run workload: User lacks permissions or VM does not exist"
             )
 
     def wait_for_workload_completion(self, workload: CCWorkloadID):
-        for output in wait_for_workload_completion(self.config, workload):
-            medperf_config.ui.print_subprocess_logs(
-                f"{Fore.WHITE}{Style.DIM}{output}{Style.RESET_ALL}"
-            )
+        """Yields the workload's log output until the VM stops."""
+        return wait_for_workload_completion(self.config, workload)
 
     def results_exist(self, workload: CCWorkloadID):
         results_exist = check_gcs_file_exists(self.config, workload.results_path)
@@ -97,34 +90,12 @@ class OperatorManager:
     def download_results(
         self,
         workload: CCWorkloadID,
-        private_key_bytes: bytes,
-        results_path: str,
-    ):
-
-        encrypted_results_path = generate_tmp_path()
-
+        encrypted_results_path: str,
+    ) -> bytes:
+        """Downloads the encrypted results, and returns their encrypted key."""
         download_file_from_gcs(
             self.config, workload.results_path, encrypted_results_path
         )
-        encrypted_key = download_string_from_gcs(
+        return download_string_from_gcs(
             self.config, workload.results_encryption_key_path
         )
-
-        medperf_config.ui.text = "Decrypting predictions"
-
-        decryption_key = AsymmetricEncryption().decrypt(
-            private_key_bytes, encrypted_key
-        )
-
-        results_archive_path = generate_tmp_path()
-        tmp_key_path = tmp_path_for_cc_asset_key()
-        secure_write_to_file(tmp_key_path, decryption_key)
-        SymmetricEncryption().decrypt_file(
-            encrypted_results_path, tmp_key_path, results_archive_path
-        )
-        remove_path(tmp_key_path, sensitive=True)
-        del decryption_key
-
-        # Extract results
-        medperf_config.ui.text = "Uncompressing predictions"
-        untar(results_archive_path, remove=True, extract_to=results_path)

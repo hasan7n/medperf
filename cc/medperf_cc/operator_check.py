@@ -1,4 +1,4 @@
-from medperf.asset_management.gcp_utils import checks, get_user_credentials
+from medperf_cc.gcp import checks, get_user_credentials
 
 
 def verify_operator_setup(sa_email, bucket_name):

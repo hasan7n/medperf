@@ -1,7 +1,6 @@
 import pytest
 
-from medperf.asset_management.gcp_utils import CCWorkloadID
-from medperf.commands.cc.utils import (
+from medperf.cc.workloads import (
     dedup_workloads,
     get_approved_component_ids,
     get_associated_benchmarks,
@@ -10,8 +9,9 @@ from medperf.commands.cc.utils import (
 from medperf.enums import BenchmarkTopology
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.cube import TestCube
+from medperf_cc.gcp import CCWorkloadID
 
-PATCH_CC_UTILS = "medperf.commands.cc.utils.{}"
+PATCH_CC_WORKLOADS = "medperf.cc.workloads.{}"
 
 
 def workload(script_hash="s", model_hash="m", data_hash="d", collector_hash="c"):
@@ -54,7 +54,7 @@ def test_dedup_workloads_for_model_ignores_data_and_collector():
 def test_associated_benchmarks_only_uses_approved_associations(mocker, component_type):
     # Arrange
     spy = mocker.patch(
-        PATCH_CC_UTILS.format("get_component_associations"), return_value=[]
+        PATCH_CC_WORKLOADS.format("get_component_associations"), return_value=[]
     )
 
     # Act
@@ -72,7 +72,7 @@ def test_associated_benchmarks_only_uses_approved_associations(mocker, component
 def test_approved_component_ids_only_uses_approved_associations(mocker):
     # Arrange
     spy = mocker.patch(
-        PATCH_CC_UTILS.format("get_experiment_associations"),
+        PATCH_CC_WORKLOADS.format("get_experiment_associations"),
         return_value=[{"model": 3}, {"model": 5}],
     )
 

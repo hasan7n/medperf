@@ -1,8 +1,6 @@
 from medperf.entities.dataset import Dataset
-from medperf.asset_management.asset_management import (
-    setup_dataset_for_cc,
-    validate_cc_config,
-)
+from medperf.cc.assets import setup_dataset_for_cc
+from medperf.cc.config import validate_cc_config
 import json
 from medperf import config
 from medperf.exceptions import InvalidEntityError

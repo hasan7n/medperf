@@ -1,14 +1,12 @@
 from medperf import config
 from medperf.account_management.account_management import get_medperf_user_object
-from medperf.asset_management.asset_management import update_dataset_cc_policy
-from medperf.asset_management.gcp_utils import CCWorkloadID
-from medperf.commands.cc.utils import (
+from medperf.cc.assets import sync_cc_metadata, update_dataset_cc_policy
+from medperf.cc.workloads import (
     dedup_workloads,
     get_approved_component_ids,
     get_associated_benchmarks,
     get_confidential_plan,
     public_key_hash,
-    sync_cc_metadata,
 )
 from medperf.commands.certificate.utils import current_user_certificate_status
 from medperf.entities.certificate import Certificate
@@ -16,6 +14,7 @@ from medperf.entities.dataset import Dataset
 from medperf.entities.model import Model
 from medperf.enums import CryptoKeyType
 from medperf.exceptions import MedperfException
+from medperf_cc.gcp import CCWorkloadID
 
 
 def get_permitted_workloads(dataset: Dataset):

@@ -1,8 +1,6 @@
 import json
-from medperf.asset_management.asset_management import (
-    setup_operator,
-    validate_cc_operator_config,
-)
+from medperf.cc.config import validate_cc_operator_config
+from medperf.cc.operator import setup_operator
 from medperf.account_management import get_medperf_user_object
 from medperf import config
 

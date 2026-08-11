@@ -1,4 +1,4 @@
-"""Shared building blocks for the confidential computing policies.
+"""Turning benchmark associations into permitted workload identities.
 
 A confidential computing policy answers one question: which workloads may
 decrypt this asset? Both the dataset-side and the model-side policy build that
@@ -9,7 +9,6 @@ associations and for turning them into workload identities live here once.
 import base64
 from typing import Iterable, List
 
-from medperf.asset_management.gcp_utils import CCWorkloadID
 from medperf.commands.association.utils import (
     get_component_associations,
     get_experiment_associations,
@@ -19,6 +18,7 @@ from medperf.entities.benchmark import Benchmark
 from medperf.entities.certificate import Certificate
 from medperf.enums import Status
 from medperf.utils import get_string_hash
+from medperf_cc.gcp import CCWorkloadID
 
 
 def get_associated_benchmarks(component_id: int, component_type: str) -> List[Benchmark]:
@@ -80,13 +80,3 @@ def dedup_workloads(
         seen.add(identity)
         deduped.append(workload)
     return deduped
-
-
-def sync_cc_metadata(entity, update_comms_fn):
-    """Records on the server that the entity's cloud policy is now up to date.
-
-    Called after the cloud policy has been written, so a failure here leaves the
-    server thinking the policy is staler than it is — the safe direction."""
-    entity.set_last_synced()
-    body = {"user_metadata": entity.user_metadata}
-    update_comms_fn(entity.id, body)

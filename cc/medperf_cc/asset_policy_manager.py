@@ -1,5 +1,5 @@
-from medperf.exceptions import MedperfException
-from medperf.asset_management.gcp_utils import (
+from medperf_cc.errors import OperationError
+from medperf_cc.gcp import (
     GCPAssetConfig,
     CCWorkloadID,
     upload_string_to_gcs,
@@ -8,7 +8,6 @@ from medperf.asset_management.gcp_utils import (
     set_gcs_iam_policy,
     update_workload_identity_pool_oidc_provider,
 )
-from medperf import config as medperf_config
 
 
 def get_workload_id_scheme(for_model: bool = False):
@@ -81,7 +80,7 @@ class AssetPolicyManager:
                 self.config, attribute_mapping, attribute_condition
             )
         except Exception as e:
-            raise MedperfException(
+            raise OperationError(
                 f"Failed to update workload identity pool OIDC provider: {e}"
             )
 
@@ -120,15 +119,9 @@ class AssetPolicyManager:
             "roles/storage.objectViewer",
         )
 
-    def setup(self):
-        pass
-
     def setup_policy(self, policy: dict[str, str], encryption_key: bytes):
-        medperf_config.ui.text = "Encrypting Key using GCP KMS"
         encrypted_key = self.__encrypt_key(encryption_key)
-        medperf_config.ui.text = "Uploading Encrypted Key to GCP bucket"
         self.__upload_encrypted_key(encrypted_key)
-        medperf_config.ui.text = "Setting up Workload Identity Pool"
         self.__update_wip_oidc_provider(policy, for_model=self.for_model)
 
     def configure_policy(self, permitted_workloads: list[CCWorkloadID]):

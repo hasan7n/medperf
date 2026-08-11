@@ -1,4 +1,4 @@
-from medperf.asset_management.gcp_utils import checks, get_user_credentials
+from medperf_cc.gcp import checks, get_user_credentials
 
 
 def verify_asset_owner_setup(bucket_name, kms_key_resource, wip_resource):
