@@ -9,7 +9,6 @@ import os
 
 import yaml
 
-from medperf import config
 from medperf.commands.execution.plan import resolve_plan
 from medperf.entities.benchmark import Benchmark
 from medperf.entities.dataset import Dataset
@@ -25,26 +24,17 @@ from medperf_cc.proof import (
 )
 
 
-def default_pki_root_path() -> str:
-    """Where this client keeps its pinned attestation root.
-
-    A client concern rather than a protocol one: `medperf_cc` takes a path and
-    knows nothing about MedPerf's storage layout."""
-    return os.path.join(str(config.config_storage), "attestation_pki_root.pem")
-
-
 class VerifyExecutionProof:
     """Verifies one execution's proof against what MedPerf knows it should be."""
 
     @classmethod
-    def run(cls, execution_uid: int, pki_root: str = None) -> ProofVerdict:
-        verifier = cls(execution_uid, pki_root)
+    def run(cls, execution_uid: int) -> ProofVerdict:
+        verifier = cls(execution_uid)
         verifier.load()
         return verifier.verify()
 
-    def __init__(self, execution_uid: int, pki_root: str = None):
+    def __init__(self, execution_uid: int):
         self.execution_uid = execution_uid
-        self.pki_root = pki_root or default_pki_root_path()
         self.execution = None
         self.proof = None
 
@@ -73,12 +63,17 @@ class VerifyExecutionProof:
         return None
 
     def __trust_anchor(self) -> TrustAnchor:
-        if not os.path.exists(self.pki_root):
-            raise InvalidArgumentError(
-                f"No attestation root certificate at {self.pki_root}."
-                " Run `medperf result trust_attestation_root` once to pin it."
+        """The issuer's root certificate, fetched now.
+
+        Pinning it locally would buy offline verification, which nobody needs:
+        a result is checked once, long after it was produced, by somebody who
+        reached the MedPerf server to read it in the first place."""
+        try:
+            return TrustAnchor(pki_root_pem=fetch_google_pki_root())
+        except Exception as e:
+            raise MedperfException(
+                f"Could not download the attestation root certificate: {e}"
             )
-        return TrustAnchor.from_pki_root_file(self.pki_root)
 
     def __expectations(self) -> ProofExpectations:
         """What MedPerf's own records say these results should be.
@@ -103,23 +98,3 @@ class VerifyExecutionProof:
         the proof still checks, minus the results-match step."""
         outputs = self.execution.local_outputs_path
         return outputs if os.path.isdir(outputs) else None
-
-
-class TrustAttestationRoot:
-    """Pins the attestation PKI root, once, so verification can be offline."""
-
-    @classmethod
-    def run(cls, path: str = None) -> str:
-        path = path or default_pki_root_path()
-        try:
-            root = fetch_google_pki_root()
-        except Exception as e:
-            raise MedperfException(
-                f"Could not download the attestation root: {e}"
-            )
-
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "wb") as f:
-            f.write(root)
-        config.ui.print(f"Attestation root certificate pinned at {path}")
-        return path

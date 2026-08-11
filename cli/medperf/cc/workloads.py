@@ -20,8 +20,8 @@ from medperf.entities.benchmark import Benchmark
 from medperf.entities.dataset import Dataset
 from medperf.entities.model import Model
 from medperf.enums import Status
-from medperf_cc.identity import AssetKind, WorkloadIdentity
-from medperf_cc.policy import AssetPolicy
+from medperf_cc import AssetKind, WorkloadIdentity
+from medperf_cc import AssetPolicy
 
 
 def get_associated_benchmarks(component_id: int, component_type: str) -> List[Benchmark]:

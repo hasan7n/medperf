@@ -9,6 +9,8 @@ from medperf.enums import BenchmarkTopology
 from medperf.exceptions import ExecutionError
 from medperf.tests.mocks.cube import TestCube
 
+PATCH_FLOW = "medperf.commands.execution.confidential_execution.{}"
+
 DATA_OWNER_ID = 20
 
 
@@ -102,3 +104,46 @@ def test_every_party_must_be_configured_for_confidential_computing(
     # Act & Assert
     with pytest.raises(ExecutionError):
         flow.validate()
+
+
+def test_results_are_not_collected_before_the_workload_has_finished(
+    mocker, configured
+):
+    """A runner starts a workload and returns; downloading straight away would
+    fetch whatever happens to be there, which is nothing"""
+    # Arrange
+    flow = flow_for(
+        ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
+    )
+    flow.runner = mocker.MagicMock()
+    flow.workload = mocker.MagicMock()
+    order = []
+    mocker.patch(
+        PATCH_FLOW.format("wait_for_workload"),
+        side_effect=lambda *a: order.append("wait"),
+    )
+    mocker.patch(
+        PATCH_FLOW.format("workload_results_exists"),
+        side_effect=lambda *a: order.append("check") or True,
+    )
+
+    # Act
+    flow.wait_for_workload_completion()
+
+    # Assert
+    assert order == ["wait", "check"]
+
+
+def test_a_workload_that_produced_nothing_is_reported(mocker, configured):
+    # Arrange
+    flow = flow_for(
+        ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
+    )
+    flow.runner = mocker.MagicMock()
+    flow.workload = mocker.MagicMock()
+    mocker.patch(PATCH_FLOW.format("wait_for_workload"))
+    mocker.patch(PATCH_FLOW.format("workload_results_exists"), return_value=False)
+
+    # Act & Assert
+    with pytest.raises(ExecutionError, match="did not complete"):
+        flow.wait_for_workload_completion()

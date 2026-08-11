@@ -35,7 +35,14 @@ from medperf.web_ui.common import (
     initialize_state_task,
     reset_state_task,
 )
+from medperf.web_ui.cc_forms import (
+    backend_settings_from_form,
+    capability_settings,
+    field_label,
+    selected_backend,
+)
 from medperf.web_ui.listing import fetch_listing_page
+from medperf_cc import asset_backends
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +117,16 @@ def dataset_detail_ui(  # noqa
         "report_exists": report_exists,
         "cc_config_defaults": cc_config_defaults,
         "cc_policy": cc_policy,
+        "cc_backends": asset_backends(),
+        "cc_backend": {
+            capability: selected_backend(cc_config_defaults, capability)
+            for capability in ("storage", "vault")
+        },
+        "cc_settings": {
+            capability: capability_settings(cc_config_defaults, capability)
+            for capability in ("storage", "vault")
+        },
+        "cc_field_label": field_label,
         "cc_configured": cc_configured,
         "cc_initialized": cc_initialized,
         "cc_last_synced": cc_last_synced,
@@ -626,31 +643,21 @@ def import_dataset(
 
 
 @router.post("/edit_cc_config", response_class=JSONResponse)
-def edit_cc_config(
+async def edit_cc_config(
     request: Request,
     entity_id: int = Form(...),
     configure_cc: bool = Form(False),
-    project_id: str = Form(""),
-    project_number: str = Form(""),
-    bucket: str = Form(""),
-    keyring_name: str = Form(""),
-    key_name: str = Form(""),
-    key_location: str = Form(""),
-    wip: str = Form(""),
-    wip_provider: str = Form(""),
     bind_peer_asset: bool = Form(False),
     allowed_result_collectors: List[str] = Form([]),
     current_user: bool = Depends(check_user_api),
 ):
+    # Read as posted rather than declared field by field: which settings there
+    # are depends on the backends chosen, and only medperf_cc knows them.
+    form = await request.form()
+    backends = asset_backends()
     args = {
-        "project_id": project_id,
-        "project_number": project_number,
-        "bucket": bucket,
-        "keyring_name": keyring_name,
-        "key_name": key_name,
-        "key_location": key_location,
-        "wip": wip,
-        "wip_provider": wip_provider,
+        "storage": backend_settings_from_form(form, backends["storage"], "storage_"),
+        "vault": backend_settings_from_form(form, backends["vault"], "vault_"),
     }
     # An unchecked box is simply absent from the form, so both choices are read
     # as stated rather than left to the asset kind's default.

@@ -10,13 +10,10 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-import requests
-
 from medperf_cc.attestation import jws
 from medperf_cc.attestation.token import (
     CONFIDENTIAL_SPACE_SWNAME,
     GOOGLE_ISSUER,
-    GOOGLE_PKI_ROOT_URL,
     STABLE_SUPPORT_ATTRIBUTE,
     AttestationToken,
     TokenType,
@@ -189,14 +186,3 @@ def verify_token(
     anchor.verify_signature(token, allow_expired_chain=not requirements.check_expiry)
     requirements.check(token)
     return token
-
-
-def fetch_google_pki_root(timeout: int = 30) -> bytes:
-    """Downloads Google's attestation PKI root, to be pinned locally.
-
-    Done once, deliberately, by a person -- never on the verification path. A
-    verifier that fetches its own trust anchor while verifying is not verifying
-    anything."""
-    response = requests.get(GOOGLE_PKI_ROOT_URL, timeout=timeout)
-    response.raise_for_status()
-    return response.content

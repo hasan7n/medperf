@@ -1,5 +1,5 @@
 {
-    "backend": "kbs",
+    "backend": "medperf_kbs",
     "url": "https://kbs.hospital.example:8200",
     "audience": "https://kbs.hospital.example",
     "admin_token": "replace-with-your-brokers-admin-token"

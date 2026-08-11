@@ -8,7 +8,7 @@ silently stop matching.
 
 import pytest
 
-from medperf_cc.gcp.vault import workload_uid_assertion
+from medperf_cc.vault.gcp import workload_uid_assertion
 from medperf_cc.identity import TERM_CLAIMS, AssetKind, WorkloadIdentity
 from medperf_cc.policy import AssetPolicy
 

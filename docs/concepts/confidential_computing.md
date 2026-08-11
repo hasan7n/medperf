@@ -53,7 +53,7 @@ Note: This step should be done in a terminal.
 1. Navigate to the `settings` page in the web UI
 2. Scroll down to the `Confidential Computing Operator Settings`
 3. Check the box `Configure confidential Computing`
-4. Fill in the required information.
+4. Pick a confidential runner, and fill in what it asks for.
 5. Click `Configure`.
 
 ### Configure Medperf with your Dataset cloud resources settings
@@ -61,7 +61,7 @@ Note: This step should be done in a terminal.
 1. Navigate to your dataset dashboard (Click on the `Datasets` tab, then find your dataset. You can click `mine_only` to view only your datasets.)
 2. Scroll down to the section `Confidential Computing Preferences`.
 3. Check the box `Configure dataset for Confidential Computing`
-4. Fill in the required information.
+4. Pick where the ciphertext lives and who may have the key, and fill in what each asks for.
 5. Choose how narrowly your grant is scoped, under `Grant scope`. See below.
 6. Click `Configure`.
 7. After step 6, a new button will appear. Click on the new button `Sync CC policy`.
@@ -118,34 +118,87 @@ An `inference_script` benchmark is the exception: its predictions are scored
 on-prem against ground truth labels only the data owner holds, so only the data
 owner can operate one whatever the policies say.
 
-## Where the key lives
+## Choosing where everything lives
 
-By default MedPerf wraps your encryption key with Google Cloud KMS and lets IAM
-decide which workloads may unwrap it. Follow the key material in that setup:
-the ciphertext is in GCS, the wrapped key is in GCS, and the wrapping key is in
-KMS — Google holds everything needed to decrypt your asset, and what stops it is
-Google enforcing its own IAM against itself.
+A confidential execution needs three things, and your configuration file picks a
+provider for each:
 
-If that is not a trust you want to make, run your own key broker instead. See
-[`kbs/README.md`](https://github.com/mlcommons/medperf/blob/main/kbs/README.md).
-Point an asset at it by naming the backend in its configuration file:
+| Capability | What it is | Choices |
+| --- | --- | --- |
+| `storage` | where your asset's ciphertext lives | `gcp`, `medperf_kbs`, `mock` |
+| `vault` | who may have the key that opens it | `gcp`, `medperf_kbs`, `mock` |
+| `runner` | what starts the confidential workload | `gcp`, `mock` |
+
+Name one backend at the top level and it serves everything:
 
 ```json
 {
-    "backend": "kbs",
-    "url": "https://kbs.hospital.example:8200",
-    "audience": "https://kbs.hospital.example",
-    "admin_token": "..."
+    "backend": "gcp",
+    "project_id": "...",
+    "project_number": "...",
+    "bucket": "...",
+    "keyring_name": "...",
+    "key_name": "...",
+    "key_location": "...",
+    "wip": "...",
+    "wip_provider": "..."
 }
 ```
 
-The admin token stays on your machine. The configuration the confidential VM
-receives is built field by field and does not include it.
+Or give a capability a section of its own, which inherits the shared settings
+and overrides what it needs:
 
-The backend is chosen per asset, so a broker-backed dataset and a KMS-backed
-model can take part in the same execution — as long as the benchmark script
-supports both. A configuration that names no backend is a Google Cloud one, so
-nothing you already configured has to change.
+```json
+{
+    "backend": "gcp",
+    "project_id": "...",
+    "bucket": "...",
+    "vault": {
+        "backend": "medperf_kbs",
+        "url": "https://kbs.hospital.example:8200",
+        "audience": "https://kbs.hospital.example",
+        "admin_token": "..."
+    }
+}
+```
+
+There is no default. A configuration that names no backend is refused rather
+than guessed.
+
+### Why you might not want the cloud to hold your key
+
+Follow the key material in the `gcp` setup: the ciphertext is in a bucket, the
+wrapped key is in a bucket, and the wrapping key is in KMS. Google holds
+everything needed to decrypt your asset, and what stops it is Google enforcing
+its own IAM against itself.
+
+If that is not a trust you want to make, run your own key broker and select
+`medperf_kbs` for the vault. See
+[`kbs/README.md`](https://github.com/mlcommons/medperf/blob/main/kbs/README.md).
+The admin token stays on your machine: what the confidential VM is told is built
+field by field and does not include it.
+
+Backends are chosen per asset, so a broker-backed dataset and a KMS-backed model
+can take part in the same execution — as long as the benchmark script supports
+both.
+
+### Trying it without a cloud account
+
+`mock` keeps everything in a directory on this machine and runs the workload as
+an ordinary container. Every step a real backend takes is taken — the asset is
+encrypted, the key is stored apart from it, the permitted identities are written
+down — so it is a faithful way to develop against, and it is what the
+confidential computing integration tests run on.
+
+```json
+{
+    "backend": "mock",
+    "root": "/tmp/medperf_cc_mock"
+}
+```
+
+It protects nothing at all. There is no confidential VM, nothing is attested,
+and the key sits beside the ciphertext. Never point a real dataset at it.
 
 ## Checking a result afterwards
 
@@ -157,14 +210,14 @@ these bytes, inside genuine confidential hardware — without anyone having to
 trust whoever reported the number.
 
 ```bash
-medperf result trust_attestation_root    # once, pins the root certificate
 medperf result verify -e <execution-id>
 ```
 
-Verification is offline: the token carries its own certificate chain, checked
-against the root you pinned. Token expiry is deliberately not checked. A proof
-records a run that already happened, and a one-hour token that had to still be
-current would make every proof self-destruct.
+The token carries its own certificate chain, which is checked against the
+issuer's root certificate, fetched at the time you verify. Token expiry is
+deliberately not checked: a proof records a run that already happened, and a
+one-hour token that had to still be current would make every proof
+self-destruct.
 
 ### What a proof does and does not establish
 

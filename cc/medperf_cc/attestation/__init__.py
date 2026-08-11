@@ -6,10 +6,10 @@ from medperf_cc.attestation.token import (
     AttestationToken,
     TokenType,
 )
+from medperf_cc.attestation.issuer import fetch_google_pki_root
 from medperf_cc.attestation.verifier import (
     AttestationRequirements,
     TrustAnchor,
-    fetch_google_pki_root,
     verify_token,
 )
 

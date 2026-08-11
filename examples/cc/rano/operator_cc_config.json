@@ -1,4 +1,5 @@
 {
+    "backend": "gcp",
     "project_id": "medperf-330914",
     "service_account_name": "cc-workload-operator",
     "vm_zone": "us-west1-b",

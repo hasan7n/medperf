@@ -15,6 +15,8 @@ from medperf.exceptions import InvalidArgumentError
 from medperf.utils import make_pretty_dict
 from medperf.init import initialize
 from medperf.enums import CryptoKeyType
+from medperf.web_ui.cc_forms import backend_settings_from_form, field_label, selected_backend
+from medperf_cc import runner_backends
 from medperf.web_ui.common import (
     check_user_api,
     check_user_ui,
@@ -69,6 +71,9 @@ def settings_ui(request: Request, current_user: bool = Depends(check_user_ui)):
             "CryptoKeyType": CryptoKeyType,
             "cc_config_defaults": cc_config_defaults,
             "cc_configured": cc_configured,
+            "cc_backends": runner_backends(),
+            "cc_backend": selected_backend(cc_config_defaults),
+            "cc_field_label": field_label,
             "cc_initialized": cc_initialized,
         },
     )
@@ -233,24 +238,14 @@ def submit_certificate(
 
 
 @router.post("/edit_cc_operator", response_class=JSONResponse)
-def edit_cc_operator(
-    configure_cc: bool = Form(False),
-    project_id: str = Form(""),
-    service_account_name: str = Form(""),
-    bucket: str = Form(""),
-    vm_zone: str = Form(""),
-    vm_name: str = Form(""),
+async def edit_cc_operator(
+    request: Request,
     current_user: bool = Depends(check_user_api),
 ):
-    args = {
-        "project_id": project_id,
-        "service_account_name": service_account_name,
-        "bucket": bucket,
-        "vm_zone": vm_zone,
-        "vm_name": vm_name,
-    }
-    if not configure_cc:
-        args = {}
+    # Read as posted rather than declared field by field: which settings there
+    # are depends on the backend chosen, and only medperf_cc knows them.
+    form = await request.form()
+    args = backend_settings_from_form(form, runner_backends())
 
     try:
         SetupCCOperator.run(args)

@@ -10,7 +10,7 @@ import yaml
 
 from medperf.commands.execution.verify_proof import VerifyExecutionProof
 from medperf.enums import BenchmarkTopology
-from medperf.exceptions import InvalidArgumentError
+from medperf.exceptions import InvalidArgumentError, MedperfException
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.cube import TestCube
 from medperf.tests.mocks.dataset import TestDataset
@@ -23,7 +23,6 @@ SCRIPT_IMAGE = "sha256:scripthash"
 DATA_UID = "the-generated-uid"
 ASSET_HASH = "the-asset-hash"
 
-PKI_ROOT = "/pinned/attestation_root.pem"
 PROOF = {"statement": {"version": 1}, "token": "from-the-server"}
 
 
@@ -31,8 +30,6 @@ PROOF = {"statement": {"version": 1}, "token": "from-the-server"}
 def execution(mocker, fs):
     """A registered execution and the three entities it points at."""
     execution = TestExecution(benchmark=1, dataset=2, model=3)
-    fs.create_file(PKI_ROOT, contents="-----BEGIN CERTIFICATE-----")
-
     mocker.patch(PATCH_VERIFY.format("Execution.get"), return_value=execution)
     mocker.patch(
         PATCH_VERIFY.format("Benchmark.get"),
@@ -69,7 +66,7 @@ def execution(mocker, fs):
 @pytest.fixture()
 def verify(mocker):
     """Captures what the verifier was asked to check, and against what."""
-    mocker.patch(PATCH_VERIFY.format("TrustAnchor.from_pki_root_file"))
+    mocker.patch(PATCH_VERIFY.format("fetch_google_pki_root"), return_value=b"root")
     return mocker.patch(PATCH_VERIFY.format("verify_proof"))
 
 
@@ -79,7 +76,7 @@ def test_expectations_come_from_medperf_not_from_the_proof(execution, verify):
     execution.integrity_proof = PROOF
 
     # Act
-    VerifyExecutionProof.run(execution.id, pki_root=PKI_ROOT)
+    VerifyExecutionProof.run(execution.id)
 
     # Assert
     expectations = verify.call_args.args[2]
@@ -96,7 +93,7 @@ def test_a_container_model_has_no_asset_hash_to_expect(mocker, execution, verify
     mocker.patch(PATCH_VERIFY.format("Model.get"), return_value=TestContainerModel())
 
     # Act
-    VerifyExecutionProof.run(execution.id, pki_root=PKI_ROOT)
+    VerifyExecutionProof.run(execution.id)
 
     # Assert
     assert verify.call_args.args[2].model_hash is None
@@ -108,7 +105,7 @@ def test_results_are_only_checked_where_they_still_are(execution, verify):
     execution.integrity_proof = PROOF
 
     # Act
-    VerifyExecutionProof.run(execution.id, pki_root=PKI_ROOT)
+    VerifyExecutionProof.run(execution.id)
 
     # Assert
     assert verify.call_args.args[2].results_path is None
@@ -125,7 +122,7 @@ def test_the_server_copy_of_the_proof_is_preferred(fs, execution, verify):
     )
 
     # Act
-    VerifyExecutionProof.run(execution.id, pki_root=PKI_ROOT)
+    VerifyExecutionProof.run(execution.id)
 
     # Assert
     assert verify.call_args.args[0].token == "from-the-server"
@@ -140,7 +137,7 @@ def test_a_local_proof_is_used_when_the_server_has_none(fs, execution, verify):
     )
 
     # Act
-    VerifyExecutionProof.run(execution.id, pki_root=PKI_ROOT)
+    VerifyExecutionProof.run(execution.id)
 
     # Assert
     assert verify.call_args.args[0].token == "from-this-machine"
@@ -152,14 +149,33 @@ def test_an_execution_with_no_proof_is_visibly_unverified(execution, verify):
 
     # Act & Assert
     with pytest.raises(InvalidArgumentError, match="no integrity proof"):
-        VerifyExecutionProof.run(execution.id, pki_root=PKI_ROOT)
+        VerifyExecutionProof.run(execution.id)
 
 
-def test_verification_refuses_to_run_without_a_pinned_root(execution, verify):
-    """A verifier that downloads what it verifies against is not verifying"""
+def test_the_root_certificate_is_fetched_from_the_issuer(mocker, execution, verify):
+    """Pinning it locally would buy offline verification, and a result is
+    checked once, by somebody who reached the server to read it"""
     # Arrange
     execution.integrity_proof = PROOF
+    fetch = mocker.patch(
+        PATCH_VERIFY.format("fetch_google_pki_root"), return_value=b"the-root"
+    )
+
+    # Act
+    VerifyExecutionProof.run(execution.id)
+
+    # Assert
+    fetch.assert_called_once()
+    assert verify.call_args.args[1].pki_root_pem == b"the-root"
+
+
+def test_a_root_that_cannot_be_reached_is_reported(mocker, execution, verify):
+    # Arrange
+    execution.integrity_proof = PROOF
+    mocker.patch(
+        PATCH_VERIFY.format("fetch_google_pki_root"), side_effect=OSError("no network")
+    )
 
     # Act & Assert
-    with pytest.raises(InvalidArgumentError, match="trust_attestation_root"):
-        VerifyExecutionProof.run(execution.id, pki_root="/nowhere/absent.pem")
+    with pytest.raises(MedperfException, match="attestation root"):
+        VerifyExecutionProof.run(execution.id)

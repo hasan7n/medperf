@@ -1,20 +1,11 @@
-{% macro gcp_asset(defaults, configured, initialized, last_synced, entity_id, entity_type, task_running=false, policy={}) %}
+{% import "macros/cc_backend_fields.html" as cc_fields %}
+{% macro cc_asset(defaults, configured, initialized, last_synced, entity_id, entity_type, backends, backend, settings, field_label, task_running=false, policy={}) %}
 {% set peer_label = "model" if entity_type == "dataset" else "dataset" %}
 {# An unset choice takes the asset kind's default: a data owner authorizes one
    exact combination, a model owner authorizes an image regardless of what it
    is pointed at. #}
 {% set binds_by_default = entity_type == "dataset" %}
 {% set collectors = policy.get('allowed_result_collectors', ["data_owner"] if binds_by_default else []) %}
-{% set fields = [
-("project_id", "GCP Project ID"),
-("project_number", "GCP Project Number"),
-("bucket", "GCP Bucket Name"),
-("keyring_name", "GCP KMS Keyring Name"),
-("key_name", "GCP KMS Key Name"),
-("key_location", "GCP KMS Key Location"),
-("wip", "GCP Workload Identity Pool Name"),
-("wip_provider", "GCP Workload Identity Pool Provider"),
-] %}
 {% if not initialized and configured %}
 <p class="rounded-xl p-4 bg-danger-muted border border-danger text-danger-fg font-semibold">
     <strong>Misconfigured</strong>
@@ -35,13 +26,8 @@
             </label>
         </div>
         <div id="edit-cc-asset-fields" class="space-y-4">
-            {% for field_name, field_label in fields %}
-            <div>
-                <label for="cc-{{ field_name }}" class="block text-secondary font-semibold mb-1">{{ field_label }}</label>
-                <input type="text" id="cc-{{ field_name }}" name="{{ field_name }}" class="w-full px-4 py-3 rounded-xl border-2 border-border-strong dark:border-border dark:bg-card-muted dark:text-ink focus:outline-none focus:border-brand-accent"
-                       value="{{ defaults.get(field_name, '') }}" {% if task_running %}disabled{% endif %}>
-            </div>
-            {% endfor %}
+            {{ cc_fields.backend_selector(backends.storage, backend.storage, settings.storage, "Where the ciphertext lives", field_label, task_running, "storage_") }}
+            {{ cc_fields.backend_selector(backends.vault, backend.vault, settings.vault, "Who may have the key", field_label, task_running, "vault_") }}
 
             {# How narrowly the grant is scoped. The benchmark script and this
                asset's own hash are always pinned; these two are the choice. #}

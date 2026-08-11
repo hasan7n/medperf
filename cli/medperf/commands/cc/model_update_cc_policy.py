@@ -4,7 +4,7 @@ from medperf.cc.assets import set_permitted_workloads, sync_cc_metadata
 from medperf.cc.workloads import get_model_workloads
 from medperf.entities.model import Model
 from medperf.exceptions import MedperfException
-from medperf_cc.identity import AssetKind
+from medperf_cc import AssetKind
 
 
 class ModelUpdateCCPolicy:

@@ -27,8 +27,8 @@ def submit(
         False, "--operational", help="Submit the model as OPERATIONAL"
     ),
     # Container-backed model options
-    container_config_file: str = typer.Option(
-        ...,
+    container_config_file: Optional[str] = typer.Option(
+        None,
         "--container-config-file",
         "-m",
         help="Container Config file.",

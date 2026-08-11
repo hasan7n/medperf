@@ -15,6 +15,11 @@ class WorkloadRunner(ABC):
     def __init__(self, config: dict):
         self.config = config
 
+    @property
+    @abstractmethod
+    def backend(self) -> str:
+        """The name a configuration uses to select this runner."""
+
     @abstractmethod
     def verify(self) -> None:
         """Fails unless this user can operate workloads here."""
@@ -24,7 +29,7 @@ class WorkloadRunner(ABC):
         """Where the workload is to write its output."""
 
     @abstractmethod
-    def start(self, image: str, env: dict) -> None:
+    def start(self, workload: WorkloadIdentity, image: str, env: dict) -> None:
         """Starts the workload's container image with `env` in its environment."""
 
     @abstractmethod

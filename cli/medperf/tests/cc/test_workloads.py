@@ -10,8 +10,8 @@ from medperf.cc.workloads import (
 from medperf.enums import BenchmarkTopology
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.cube import TestCube
-from medperf_cc.identity import AssetKind
-from medperf_cc.policy import AssetPolicy
+from medperf_cc import AssetKind
+from medperf_cc import AssetPolicy
 
 PATCH_CC_WORKLOADS = "medperf.cc.workloads.{}"
 

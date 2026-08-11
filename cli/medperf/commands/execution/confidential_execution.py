@@ -16,14 +16,16 @@ from medperf.cc.config import runner_for
 from medperf.cc.operator import (
     download_results,
     run_workload,
+    wait_for_workload,
     workload_configs,
+    workload_results_exists,
 )
 from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
 from medperf.containers.runners.docker_utils import full_docker_image_name
 from medperf.enums import CryptoKeyType
-from medperf_cc.identity import WorkloadIdentity
+from medperf_cc import WorkloadIdentity
 from medperf_cc.proof import IntegrityProof
 
 
@@ -56,6 +58,7 @@ class ConfidentialExecution:
         execution_flow.set_pending_status()
         execution_flow.setup_workload()
         execution_flow.run_workload()
+        execution_flow.wait_for_workload_completion()
         execution_flow.download_results()
         execution_summary = execution_flow.todict()
         return execution_summary
@@ -140,6 +143,12 @@ class ConfidentialExecution:
             self.model_cc_config,
             self.result_collector_public_key.decode("utf-8"),
         )
+
+    def wait_for_workload_completion(self):
+        config.ui.text = "Waiting for workload completion"
+        wait_for_workload(self.runner, self.workload)
+        if not workload_results_exists(self.runner, self.workload):
+            raise ExecutionError("Workload did not complete successfully.")
 
     def download_results(self):
         config.ui.text = "Downloading results..."

@@ -10,10 +10,7 @@ from medperf.commands.list import EntityList
 from medperf.commands.execution.create import BenchmarkExecution
 from medperf.commands.execution.submit import ResultSubmission
 from medperf.commands.execution.show_local_results import ShowLocalResults
-from medperf.commands.execution.verify_proof import (
-    TrustAttestationRoot,
-    VerifyExecutionProof,
-)
+from medperf.commands.execution.verify_proof import VerifyExecutionProof
 
 app = typer.Typer()
 
@@ -183,12 +180,6 @@ def verify(
     execution_uid: int = typer.Option(
         ..., "--execution", "-e", help="UID of the execution to verify"
     ),
-    pki_root: str = typer.Option(
-        None,
-        "--pki-root",
-        help="Attestation root certificate to verify against."
-        " Defaults to the pinned one.",
-    ),
 ):
     """Verifies the integrity proof of a confidential execution.
 
@@ -198,7 +189,7 @@ def verify(
     computed the metric correctly: attestation pins which code ran, never that
     the code is right.
     """
-    verdict = VerifyExecutionProof.run(execution_uid, pki_root)
+    verdict = VerifyExecutionProof.run(execution_uid)
 
     for check in verdict.checks:
         config.ui.print(f"  \u2713 {check}")
@@ -208,18 +199,3 @@ def verify(
     if not verdict.verified:
         raise InvalidArgumentError(verdict.summary)
     config.ui.print(f"\u2705 {verdict.summary}")
-
-
-@app.command("trust_attestation_root")
-@clean_except
-def trust_attestation_root(
-    path: str = typer.Option(None, "--path", help="Where to store the certificate"),
-):
-    """Pins the attestation root certificate used to verify integrity proofs.
-
-    Downloaded once, deliberately. Verification itself never fetches a trust
-    anchor: a verifier that downloads what it verifies against is not verifying
-    anything.
-    """
-    TrustAttestationRoot.run(path)
-    config.ui.print("\u2705 Done!")

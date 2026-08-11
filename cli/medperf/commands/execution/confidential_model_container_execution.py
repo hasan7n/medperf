@@ -20,7 +20,7 @@ from medperf.commands.certificate.utils import load_user_private_key
 from medperf.commands.execution.container_execution import ContainerExecution
 from medperf.containers.runners.docker_utils import full_docker_image_name
 from medperf.enums import CryptoKeyType
-from medperf_cc.identity import WorkloadIdentity
+from medperf_cc import WorkloadIdentity
 
 
 class ConfidentialModelContainerExecution:

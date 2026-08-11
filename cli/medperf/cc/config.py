@@ -1,64 +1,58 @@
 """Reading an entity's confidential computing configuration.
 
 The one place that turns what MedPerf stores on a dataset, a model or a user
-into the components that act on it.
+into the components that act on it. Which provider ends up answering is decided
+by the configuration its owner wrote, and resolved inside `medperf_cc`: nothing
+here names one.
 """
 
 from medperf.entities.user import User
-from medperf.exceptions import InvalidArgumentError
-from medperf_cc.errors import CCError
-from medperf_cc.gcp.config import GCPAssetConfig, GCPOperatorConfig
-from medperf_cc.gcp.operator import ConfidentialSpaceRunner
-from medperf_cc.identity import AssetKind
-from medperf_cc.operator import WorkloadRunner
-from medperf_cc.policy import AssetPolicy
-from medperf_cc.vault import AssetVault
-from medperf_cc.vault.kbs import KBSConfig
-from medperf_cc.vault.registry import GCP_KMS_BACKEND, backend_of, get_vault
+from medperf_cc import (
+    AssetKind,
+    AssetPolicy,
+    ConfidentialAsset,
+    WorkloadRunner,
+    get_runner,
+)
+
+# What an asset is called wherever its owner put it. Derived from the entity
+# rather than asked for, so two assets cannot collide in the same bucket or
+# broker, and stable, so republishing overwrites rather than accumulates.
+ASSET_NAMES = {AssetKind.DATA: "dataset", AssetKind.MODEL: "model"}
 
 
-def validate_cc_config(cc_config: dict, asset_name_prefix: str):
-    """Validates an asset's configuration, and fills in what MedPerf decides.
-
-    An asset's name in its backend is derived rather than asked for, so two
-    assets cannot collide in the same bucket or broker."""
-    if cc_config == {}:
-        return
-
-    try:
-        backend = backend_of(cc_config)
-    except CCError as e:
-        raise InvalidArgumentError(str(e))
-
-    if backend == GCP_KMS_BACKEND:
-        cc_config["encrypted_asset_bucket_file"] = asset_name_prefix + ".enc"
-        cc_config["encrypted_key_bucket_file"] = asset_name_prefix + "_key.enc"
-        settings_model = GCPAssetConfig
-    else:
-        cc_config.setdefault("asset_id", asset_name_prefix)
-        settings_model = KBSConfig
-
-    settings = {key: value for key, value in cc_config.items() if key != "backend"}
-    settings_model(**settings)
-
-
-def validate_cc_operator_config(cc_config: dict):
-    if cc_config == {}:
-        return
-    GCPOperatorConfig(**cc_config)
-
-
-def validate_cc_policy(cc_policy: dict):
-    AssetPolicy(**(cc_policy or {}))
+def asset_name(entity, kind: AssetKind) -> str:
+    return f"{ASSET_NAMES[kind]}{entity.id}"
 
 
 def policy_of(entity) -> AssetPolicy:
     return AssetPolicy(**(entity.get_cc_policy() or {}))
 
 
-def vault_for(entity, kind: AssetKind) -> AssetVault:
-    return get_vault(entity.get_cc_config(), kind, policy_of(entity))
+def asset_for(entity, kind: AssetKind) -> ConfidentialAsset:
+    return ConfidentialAsset(
+        entity.get_cc_config(), asset_name(entity, kind), kind, policy_of(entity)
+    )
 
 
 def runner_for(user: User) -> WorkloadRunner:
-    return ConfidentialSpaceRunner(user.get_cc_config())
+    return get_runner(user.get_cc_config())
+
+
+def check_asset_setup(cc_config: dict, cc_policy: dict, entity, kind: AssetKind):
+    """Fails unless this configuration and policy describe a usable asset.
+
+    Building it is the check: every backend the configuration selects parses
+    its own settings, and refuses what it cannot work with."""
+    if cc_config == {}:
+        return
+    ConfidentialAsset(
+        cc_config, asset_name(entity, kind), kind, AssetPolicy(**(cc_policy or {}))
+    )
+
+
+def check_operator_setup(cc_config: dict):
+    """Fails unless this configuration describes a usable operator."""
+    if cc_config == {}:
+        return
+    get_runner(cc_config)

@@ -69,15 +69,22 @@ failed decryption. The broker authenticates the workload, not the reverse.
 
 ```json
 {
-    "backend": "kbs",
+    "backend": "medperf_kbs",
     "url": "https://kbs.hospital.example:8200",
     "audience": "https://kbs.hospital.example",
     "admin_token": "..."
 }
 ```
 
+That selects the broker for both halves: it holds the ciphertext and it holds
+the key. Give `vault` or `storage` a section of its own to split them.
+
 The admin token never leaves the asset owner's machine: the configuration the
 confidential VM receives is built field by field, and does not include it.
+
+The asset's name at the broker is derived from the MedPerf entity, so two assets
+of the same owner cannot collide and republishing overwrites rather than
+accumulates.
 
 Backends are per asset, so a broker-backed dataset and a KMS-backed model can
 take part in the same execution — as long as the benchmark script supports both.

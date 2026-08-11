@@ -1,38 +1,83 @@
-# modes
+# The confidential benchmark base image
 
-## in dev mode
+What runs inside the confidential VM. A benchmark owner builds their script on
+top of it and it takes care of everything around the benchmark itself: fetching
+the encrypted inputs, opening them, checking they are what the operator
+declared, attesting to what was computed, and encrypting the results for
+whoever is collecting them.
 
-container_config + set the MEDPERF_ON_PREM env var
+## Modes
 
-## in production mode
+**Dev.** Set `MEDPERF_ON_PREM` and the container runs the benchmark directly on
+mounted volumes, with none of the above.
 
-DATA_CONFIG
+**Production.** Everything comes from the environment, described below.
+
+## Backends
+
+Each capability names its own backend, so one run can mix them. The image ships
+`gcp`, `medperf_kbs` and `mock`, and a benchmark owner who supports fewer says
+so by leaving them out of the registries in `src/assets/factory.py`.
+
+`mock` reads what `medperf_cc`'s mock backends wrote in a directory on the host.
+It exists for developing and testing without a cloud account, and gives no
+protection at all: there is no confidential VM and nothing is attested.
+
+## The environment a workload receives
+
+`DATA_CONFIG` and `MODEL_CONFIG` say where an asset's ciphertext lives and who
+releases its key. They carry no secrets — they travel here as VM metadata the
+operator can read.
+
+```json
 {
-    "project_id": "gcp_project_id",
-    "project_number": "gcp_project_number",
-    "account": "gcp_account",
-
-    "bucket": "gcp_bucket",
-    "encrypted_asset_bucket_file": "gcp_encrypted_asset_bucket_file",
-    "encrypted_key_bucket_file": "gcp_encrypted_key_bucket_file",
-
-    "keyring_name": "gcp_keyring_name",
-    "key_name": "gcp_key_name",
-    "wip": "gcp_wip"
+    "storage": {"backend": "gcp", "bucket": "...", "object_path": "...",
+                "workload_identity_pool": "..."},
+    "vault": {"backend": "gcp", "bucket": "...", "wrapped_key_path": "...",
+              "key_name": "...", "workload_identity_pool_provider": "..."}
 }
+```
 
-MODEL_CONFIG same as data config
-RESULT_CONFIG
-    bucket_name: name of the bucket
-    output_result_path: path in the bucket
-    results_encryption_key_path: path in the bucket
-RESULT_COLLECTOR (string: b64encoded public key of the reciever)
+```json
+{
+    "storage": {"backend": "medperf_kbs", "url": "...", "asset_id": "...",
+                "audience": "...", "verify_tls": true},
+    "vault": {"backend": "medperf_kbs", "url": "...", "asset_id": "...",
+              "audience": "...", "verify_tls": true}
+}
+```
 
-EXPECTED_DATA_HASH (string: hash of the data folders)
-EXPECTED_MODEL_HASH (string: hash of the model tar file)
-EXPECTED_RESULT_COLLECTOR_HASH (string: hash of b64encoded public key of the reciever)
+`RESULT_CONFIG` says where to put the output, in the operator's own backend.
 
-    --attribute-condition="assertion.swname == 'CONFIDENTIAL_SPACE' \
-        && 'STABLE' in assertion.submods.confidential_space.support_attributes"
+`RESULT_COLLECTOR` is the base64 PEM public key the results are encrypted for.
 
-use no debug image
+`EXPECTED_DATA_HASH`, `EXPECTED_MODEL_HASH` and
+`EXPECTED_RESULT_COLLECTOR_HASH` are what the workload was told it is running
+on. They are also what a key release backend matches the attestation against,
+which is why the image declares them under
+`tee.launch_policy.allow_env_override`: nothing else may be overridden, so
+nothing else can change what a workload's identity is.
+
+The workload checks all three against what it actually read, and refuses to go
+on if they differ.
+
+## Attestation
+
+Requested from the launcher over `/run/container_launcher/teeserver.sock`. It is
+the only attestation primitive a workload has: it cannot obtain raw hardware
+evidence, so everything that needs to prove what this workload is goes through
+there.
+
+Used for two things — asking an on-prem key broker for a key, and signing the
+integrity statement written beside the results. When the launcher is not there,
+as under the mock runner, the results are still produced and the proof is simply
+absent.
+
+## Cloud environment requirements
+
+```text
+--attribute-condition="assertion.swname == 'CONFIDENTIAL_SPACE' \
+    && 'STABLE' in assertion.submods.confidential_space.support_attributes"
+```
+
+Use a non-debug image: a debuggable one is refused.

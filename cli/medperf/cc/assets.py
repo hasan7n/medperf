@@ -1,17 +1,16 @@
 """Preparing a dataset or a model for confidential execution.
 
 Encryption happens here rather than inside `medperf_cc`: the key is the asset
-owner's, so it never has to leave the client. The vault only transports the
-ciphertext and enforces which workloads may have the key.
+owner's, so it never has to leave the client. What the components downstream do
+is transport the ciphertext and enforce which workloads may have the key.
 """
 
 import os
-import secrets
 
 from tqdm import tqdm
 
 from medperf import config as medperf_config
-from medperf.cc.config import vault_for
+from medperf.cc.config import asset_for
 from medperf.cc.errors import as_medperf_error
 from medperf.encryption import SymmetricEncryption
 from medperf.entities.dataset import Dataset
@@ -24,12 +23,7 @@ from medperf.utils import (
     tar,
     tmp_path_for_cc_asset_key,
 )
-from medperf_cc.identity import AssetKind, WorkloadIdentity
-from medperf_cc.vault import AssetVault
-
-
-def generate_encryption_key():
-    return secrets.token_bytes(32)
+from medperf_cc import AssetKind, ConfidentialAsset, WorkloadIdentity, generate_encryption_key
 
 
 @as_medperf_error()
@@ -37,14 +31,14 @@ def setup_dataset_for_cc(dataset: Dataset):
     if not dataset.is_cc_configured():
         return
 
-    vault = vault_for(dataset, AssetKind.DATA)
-    medperf_config.ui.text = "Verifying Cloud Environment"
-    vault.verify()
+    asset = asset_for(dataset, AssetKind.DATA)
+    medperf_config.ui.text = "Verifying the confidential computing environment"
+    asset.verify()
 
     medperf_config.ui.text = "Compressing dataset"
     asset_path = generate_tmp_path()
     tar(asset_path, [dataset.data_path, dataset.labels_path])
-    __publish(vault, asset_path)
+    __publish(asset, asset_path)
     remove_path(asset_path)
 
 
@@ -54,11 +48,11 @@ def setup_model_for_cc(model: Model):
         return
     __require_asset_model(model)
 
-    vault = vault_for(model, AssetKind.MODEL)
-    medperf_config.ui.text = "Verifying Cloud Environment"
-    vault.verify()
+    asset = asset_for(model, AssetKind.MODEL)
+    medperf_config.ui.text = "Verifying the confidential computing environment"
+    asset.verify()
 
-    __publish(vault, model.asset_obj.get_archive_path())
+    __publish(asset, model.asset_obj.get_archive_path())
 
 
 @as_medperf_error()
@@ -68,13 +62,13 @@ def set_permitted_workloads(
     if kind is AssetKind.MODEL:
         __require_asset_model(entity)
 
-    vault_for(entity, kind).set_permitted(permitted_workloads)
+    asset_for(entity, kind).set_permitted(permitted_workloads)
 
 
 def sync_cc_metadata(entity, update_comms_fn):
-    """Records on the server that the entity's cloud policy is now up to date.
+    """Records on the server that the entity's policy is now up to date.
 
-    Called after the cloud policy has been written, so a failure here leaves the
+    Called after the policy has been written, so a failure here leaves the
     server thinking the policy is staler than it is — the safe direction."""
     entity.set_last_synced()
     body = {"user_metadata": entity.user_metadata}
@@ -88,7 +82,7 @@ def __require_asset_model(model: Model):
         )
 
 
-def __publish(vault: AssetVault, asset_path: str):
+def __publish(asset: ConfidentialAsset, asset_path: str):
     medperf_config.ui.text = "Generating encryption key"
     encryption_key = generate_encryption_key()
 
@@ -96,13 +90,13 @@ def __publish(vault: AssetVault, asset_path: str):
     encrypted_asset_path = __encrypt_asset(asset_path, encryption_key)
 
     medperf_config.ui.text = "Publishing the encryption key and the access policy"
-    vault.publish_key(encryption_key)
+    asset.publish_key(encryption_key)
     del encryption_key
 
-    medperf_config.ui.text = "Uploading Encrypted asset to GCP bucket"
+    medperf_config.ui.text = "Uploading the encrypted asset"
     with open(encrypted_asset_path, "rb") as in_file:
         with __upload_progress(in_file) as file_obj:
-            vault.publish_asset(file_obj)
+            asset.publish(file_obj)
     remove_path(encrypted_asset_path)
 
 
@@ -124,7 +118,7 @@ def __upload_progress(in_file):
         "read",
         total=get_file_size(in_file),
         miniters=1,
-        desc="Uploading encrypted asset to the bucket",
+        desc="Uploading the encrypted asset",
         unit="B",
         unit_scale=True,
         unit_divisor=1024,

@@ -1,0 +1,87 @@
+"""How a configuration selects what answers.
+
+A caller never names a backend. What it hands over is what an asset owner or an
+operator wrote down, so everything below is about reading that correctly --
+including refusing to guess.
+"""
+
+import pytest
+
+from medperf_cc.backends import backend_of, section, settings_of
+from medperf_cc.errors import ConfigurationError
+from medperf_cc.runner import RUNNERS, get_runner
+from medperf_cc.storage import STORAGES, get_storage
+from medperf_cc.storage.mock import MockStorage
+from medperf_cc.vault import VAULTS, get_vault
+from medperf_cc.vault.medperf_kbs import KBSVault
+from medperf_cc.identity import AssetKind
+from medperf_cc.policy import AssetPolicy
+
+SHARED = {"backend": "gcp", "project_id": "p", "project_number": "42", "bucket": "b"}
+
+
+def test_one_backend_at_the_top_level_serves_every_capability():
+    """The common case: one provider, configured once"""
+    assert section(SHARED, "storage")["backend"] == "gcp"
+    assert section(SHARED, "vault")["backend"] == "gcp"
+
+
+def test_a_capability_section_overrides_the_shared_level():
+    config = {**SHARED, "vault": {"backend": "medperf_kbs", "url": "https://kbs"}}
+
+    assert section(config, "storage")["backend"] == "gcp"
+    assert section(config, "vault")["backend"] == "medperf_kbs"
+
+
+def test_a_section_still_sees_the_shared_settings():
+    """A provider usually wants the same account for everything it does"""
+    config = {**SHARED, "vault": {"keyring_name": "ring"}}
+
+    assert section(config, "vault")["project_id"] == "p"
+    assert section(config, "vault")["keyring_name"] == "ring"
+
+
+def test_no_capability_section_leaks_into_a_backend():
+    config = {**SHARED, "vault": {"backend": "medperf_kbs"}}
+
+    assert "vault" not in section(config, "storage")
+
+
+@pytest.mark.parametrize(
+    "registry,capability", [(STORAGES, "storage"), (VAULTS, "vault"), (RUNNERS, "runner")]
+)
+def test_an_unnamed_backend_is_refused_rather_than_guessed(registry, capability):
+    """Falling back to a default would send an asset somewhere its owner never
+    chose, and `mock` protects nothing at all"""
+    with pytest.raises(ConfigurationError, match="No .* backend selected"):
+        backend_of({}, registry, capability)
+
+
+@pytest.mark.parametrize(
+    "registry,capability", [(STORAGES, "storage"), (VAULTS, "vault"), (RUNNERS, "runner")]
+)
+def test_an_unknown_backend_is_refused(registry, capability):
+    with pytest.raises(ConfigurationError, match="Unknown"):
+        backend_of({"backend": "typo"}, registry, capability)
+
+
+def test_the_name_that_chose_a_backend_is_not_passed_on_to_it():
+    assert settings_of({"backend": "mock", "root": "/tmp/x"}) == {"root": "/tmp/x"}
+
+
+def test_each_capability_resolves_on_its_own():
+    """A dataset can live in cloud storage while its key is released on-prem"""
+    storage = get_storage({"backend": "mock", "root": "/tmp/x"}, "dataset1")
+    vault = get_vault(
+        {"backend": "medperf_kbs", "url": "https://kbs", "audience": "a"},
+        "dataset1",
+        AssetPolicy().binding(AssetKind.DATA),
+        AssetPolicy(),
+    )
+
+    assert isinstance(storage, MockStorage)
+    assert isinstance(vault, KBSVault)
+
+
+def test_a_runner_resolves_the_same_way():
+    assert get_runner({"backend": "mock", "root": "/tmp/x"}).backend == "mock"

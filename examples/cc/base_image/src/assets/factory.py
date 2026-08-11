@@ -1,43 +1,45 @@
-"""Choosing where an asset's key and bytes come from.
+"""Choosing where an asset's bytes, its key, and the results come from.
 
-Each asset's configuration names its own backend, so one run can mix them: a
-data owner on an on-prem key broker and a model owner on Google KMS. A
-configuration written before backends existed names none, and is a Google
-Cloud one.
+Each capability names its own backend, so one run can mix them: a dataset held
+by an on-prem key broker and a model held in cloud storage, with the results
+going back to wherever the operator asked for them.
+
+    {"storage": {"backend": ...}, "vault": {"backend": ...}}
 """
 
-from .gcp.key import GCPKey
 from .gcp.result import GCPResult
 from .gcp.storage import GCPStorage
-from .kbs.client import KBSKey, KBSStorage
+from .gcp.vault import GCPVault
+from .medperf_kbs.client import KBSStorage, KBSVault
+from .mock.backend import MockResult, MockStorage, MockVault
 
-GCP_KMS_BACKEND = "gcp_kms"
-KBS_BACKEND = "kbs"
+GCP = "gcp"
+MEDPERF_KBS = "medperf_kbs"
+MOCK = "mock"
 
-KEY_MANAGERS = {GCP_KMS_BACKEND: GCPKey, KBS_BACKEND: KBSKey}
-STORAGE_MANAGERS = {GCP_KMS_BACKEND: GCPStorage, KBS_BACKEND: KBSStorage}
-
-
-def __backend_of(asset_config: dict) -> str:
-    backend = asset_config.get("backend", GCP_KMS_BACKEND)
-    if backend not in KEY_MANAGERS:
-        supported = ", ".join(sorted(KEY_MANAGERS))
-        raise ValueError(
-            f"Unsupported key release backend {backend!r}."
-            f" This benchmark script supports: {supported}"
-        )
-    return backend
+STORAGES = {GCP: GCPStorage, MEDPERF_KBS: KBSStorage, MOCK: MockStorage}
+VAULTS = {GCP: GCPVault, MEDPERF_KBS: KBSVault, MOCK: MockVault}
+RESULTS = {GCP: GCPResult, MOCK: MockResult}
 
 
 def storage_manager(asset_config: dict):
-    return STORAGE_MANAGERS[__backend_of(asset_config)](asset_config)
+    return __build(STORAGES, "storage", asset_config.get("storage", {}))
 
 
 def key_manager(asset_config: dict):
-    return KEY_MANAGERS[__backend_of(asset_config)](asset_config)
+    return __build(VAULTS, "vault", asset_config.get("vault", {}))
 
 
-def result_manager(result_config: dict) -> GCPResult:
-    # Results always go to the operator's own bucket, which is Google Cloud
-    # storage whichever backend the inputs came from.
-    return GCPResult(result_config)
+def result_manager(result_config: dict):
+    return __build(RESULTS, "results", result_config)
+
+
+def __build(registry: dict, capability: str, config: dict):
+    backend = config.get("backend")
+    if backend not in registry:
+        supported = ", ".join(sorted(registry))
+        raise ValueError(
+            f"Unsupported {capability} backend {backend!r}."
+            f" This benchmark script supports: {supported}"
+        )
+    return registry[backend](config)

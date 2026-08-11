@@ -144,7 +144,7 @@ def session_for(asset_config_dict: dict) -> KBSSession:
     return SESSIONS[key]
 
 
-class KBSKey:
+class KBSVault:
     """The key half of the manager interface `setup_assets` expects."""
 
     def __init__(self, asset_config_dict: dict):

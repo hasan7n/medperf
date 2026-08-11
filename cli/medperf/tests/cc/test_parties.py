@@ -9,7 +9,7 @@ from medperf.exceptions import ExecutionError
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.dataset import TestDataset
 from medperf.tests.mocks.model import TestAssetModel
-from medperf_cc.policy import AssetPolicy, Party
+from medperf_cc import AssetPolicy, Party
 
 PATCH_CC_PARTIES = "medperf.cc.parties.{}"
 

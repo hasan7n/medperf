@@ -243,7 +243,7 @@
         </div>
         <div class="my-8 bg-card dark:bg-card rounded-2xl p-8 shadow-lg border-2 border-border-brand dark:border-border">
             <h3 class="text-xl font-bold text-ink mb-4">Confidential Computing Preferences</h3>
-            {{ cc_asset_macro.gcp_asset(cc_config_defaults, cc_configured, cc_initialized, cc_last_synced, dataset.id, "dataset", task_running, cc_policy) }}
+            {{ cc_asset_macro.cc_asset(cc_config_defaults, cc_configured, cc_initialized, cc_last_synced, dataset.id, "dataset", cc_backends, cc_backend, cc_settings, cc_field_label, task_running, cc_policy) }}
         </div>
     </div>
 </div>

@@ -2,7 +2,6 @@ import logging
 from google.cloud import compute_v1
 import time
 from medperf_cc.identity import WorkloadIdentity
-from .config import GCPOperatorConfig
 
 
 # taken and adapted from
@@ -52,7 +51,7 @@ def __wait_for_extended_operation(operation, verbose_name, timeout: int = 300):
     return result
 
 
-def run_workload(config: GCPOperatorConfig, metadata: dict[str, str]):
+def run_workload(config, metadata: dict):
     """Run workload on GCP."""
     client = compute_v1.InstancesClient()
     project_id = config.project_id
@@ -91,9 +90,7 @@ def run_workload(config: GCPOperatorConfig, metadata: dict[str, str]):
         raise
 
 
-def wait_for_workload_completion(
-    config: GCPOperatorConfig, workload: WorkloadIdentity
-):
+def wait_for_workload_completion(config, workload: WorkloadIdentity):
 
     client = compute_v1.InstancesClient()
     project_id = config.project_id

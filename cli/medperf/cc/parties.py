@@ -19,8 +19,8 @@ from medperf.entities.model import Model
 from medperf.enums import CryptoKeyType
 from medperf.exceptions import ExecutionError, MedperfException
 from medperf.utils import get_string_hash
-from medperf_cc.identity import AssetKind
-from medperf_cc.policy import Party
+from medperf_cc import AssetKind
+from medperf_cc import Party
 
 
 def public_key_hash(certificate: Certificate) -> str:
