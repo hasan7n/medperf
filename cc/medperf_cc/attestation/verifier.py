@@ -10,10 +10,13 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+import requests
+
 from medperf_cc.attestation import jws
 from medperf_cc.attestation.token import (
     CONFIDENTIAL_SPACE_SWNAME,
     GOOGLE_ISSUER,
+    GOOGLE_PKI_ROOT_URL,
     STABLE_SUPPORT_ATTRIBUTE,
     AttestationToken,
     TokenType,
@@ -44,9 +47,9 @@ class TrustAnchor:
         with open(path) as f:
             return cls(jwks=json.load(f), expected_issuer=expected_issuer)
 
-    def verify_signature(self, token: AttestationToken):
+    def verify_signature(self, token: AttestationToken, allow_expired_chain=False):
         if token.token_type is TokenType.PKI:
-            self.__verify_pki(token)
+            self.__verify_pki(token, allow_expired_chain)
         else:
             self.__verify_oidc(token)
 
@@ -55,13 +58,15 @@ class TrustAnchor:
                 f"Token issuer {token.issuer!r} is not {self.expected_issuer!r}"
             )
 
-    def __verify_pki(self, token: AttestationToken):
+    def __verify_pki(self, token: AttestationToken, allow_expired_chain: bool):
         if not self.pki_root_pem:
             raise AttestationError(
                 "Token is a PKI token but no root certificate is pinned"
             )
         chain = jws.certificate_chain(token.header)
-        jws.verify_chain(chain, jws.load_root(self.pki_root_pem))
+        jws.verify_chain(
+            chain, jws.load_root(self.pki_root_pem), allow_expired=allow_expired_chain
+        )
         jws.verify_signature(
             chain[0].public_key(), token.algorithm, token.signing_input, token.signature
         )
@@ -92,12 +97,18 @@ class AttestationRequirements:
     allow_debug: bool = False
     zone: Optional[str] = None
     hardware_model: Optional[str] = None
+    # Authenticating a live workload cares that its token has not expired.
+    # Checking a proof written months ago does not: `iat` is then the record of
+    # when the run happened, and a one-hour token that had to still be current
+    # would make every proof self-destruct.
+    check_expiry: bool = True
     clock_skew_seconds: int = 60
 
     def check(self, token: AttestationToken):
         self.__check_binding(token)
         self.__check_environment(token)
-        self.__check_expiry(token)
+        if self.check_expiry:
+            self.__check_expiry(token)
 
     def __check_binding(self, token: AttestationToken):
         """What ties this token to this exchange rather than any other."""
@@ -169,8 +180,23 @@ class AttestationRequirements:
 def verify_token(
     raw_token: str, anchor: TrustAnchor, requirements: AttestationRequirements
 ) -> AttestationToken:
-    """Verifies a token and returns it, or raises `AttestationError`."""
+    """Verifies a token and returns it, or raises `AttestationError`.
+
+    The certificate chain is allowed to have expired exactly when the caller has
+    stopped caring about token expiry: both mean "this is a historical record,
+    not a live authentication"."""
     token = AttestationToken.parse(raw_token)
-    anchor.verify_signature(token)
+    anchor.verify_signature(token, allow_expired_chain=not requirements.check_expiry)
     requirements.check(token)
     return token
+
+
+def fetch_google_pki_root(timeout: int = 30) -> bytes:
+    """Downloads Google's attestation PKI root, to be pinned locally.
+
+    Done once, deliberately, by a person -- never on the verification path. A
+    verifier that fetches its own trust anchor while verifying is not verifying
+    anything."""
+    response = requests.get(GOOGLE_PKI_ROOT_URL, timeout=timeout)
+    response.raise_for_status()
+    return response.content

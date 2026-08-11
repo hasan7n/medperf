@@ -17,6 +17,9 @@ from medperf_cc.attestation import jws
 from medperf_cc.errors import AttestationError
 
 GOOGLE_ISSUER = "https://confidentialcomputing.googleapis.com"
+GOOGLE_PKI_ROOT_URL = (
+    "https://confidentialcomputing.googleapis.com/.well-known/attestation-pki-root"
+)
 
 CONFIDENTIAL_SPACE_SWNAME = "CONFIDENTIAL_SPACE"
 STABLE_SUPPORT_ATTRIBUTE = "STABLE"
@@ -91,6 +94,18 @@ class AttestationToken:
         if nonce is None:
             return []
         return list(nonce) if isinstance(nonce, list) else [nonce]
+
+    @property
+    def image_digest(self) -> Optional[str]:
+        return self.claim("submods.container.image_digest")
+
+    @property
+    def image_reference(self) -> Optional[str]:
+        return self.claim("submods.container.image_reference")
+
+    @property
+    def env_override(self) -> dict:
+        return self.claim("submods.container.env_override", {}) or {}
 
     @property
     def software_name(self) -> Optional[str]:

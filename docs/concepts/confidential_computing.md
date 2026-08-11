@@ -147,6 +147,41 @@ model can take part in the same execution — as long as the benchmark script
 supports both. A configuration that names no backend is a Google Cloud one, so
 nothing you already configured has to change.
 
+## Checking a result afterwards
+
+A confidential execution attests to what it computed. Before packing up the
+results, the workload writes a statement naming the hashes of what went in and
+what came out, and an attestation token whose nonce is that statement's hash.
+Together they establish which script ran, on which inputs, producing exactly
+these bytes, inside genuine confidential hardware — without anyone having to
+trust whoever reported the number.
+
+```bash
+medperf result trust_attestation_root    # once, pins the root certificate
+medperf result verify -e <execution-id>
+```
+
+Verification is offline: the token carries its own certificate chain, checked
+against the root you pinned. Token expiry is deliberately not checked. A proof
+records a run that already happened, and a one-hour token that had to still be
+current would make every proof self-destruct.
+
+### What a proof does and does not establish
+
+It establishes which script ran, on which inputs, producing exactly these bytes,
+inside genuine confidential hardware. It does **not** establish that the script
+computed the metric correctly — attestation pins which code ran, never that the
+code is right. What mitigates that is the script being public with a pinned
+image digest.
+
+It is also topology dependent:
+
+| Topology | What the proof covers |
+| --- | --- |
+| `end_to_end_script` | the reported metric, computed inside the VM — end to end |
+| `inference_script` | the predictions only; the metric is scored on-prem afterwards |
+| `byo_inference_script` | nothing; no confidential VM is involved |
+
 ## What's next?
 
 You can now run the model that required confidential computing, by clicking the button `Run` near the model of interest. After execution finishes, submit the results by clicking the `Submit` button that will later appear.

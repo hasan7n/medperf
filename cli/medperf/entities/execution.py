@@ -54,6 +54,7 @@ class Execution(Entity):
         self.user_metadata = self._model.user_metadata
         self.model_report = self._model.model_report
         self.evaluation_report = self._model.evaluation_report
+        self.integrity_proof = self._model.integrity_proof
         self.finalized = self._model.finalized
         self.finalized_at = self._model.finalized_at
 
@@ -61,6 +62,9 @@ class Execution(Entity):
 
     def _set_helper_attributes(self):
         self.results_path = os.path.join(self.path, config.results_filename)
+        self.integrity_proof_path = os.path.join(
+            self.path, config.integrity_proof_filename
+        )
         self.local_outputs_path = os.path.join(self.path, config.local_metrics_outputs)
 
     @property
@@ -80,9 +84,14 @@ class Execution(Entity):
         with open(flag_file, "w"):
             pass
 
-    def save_results(self, results, partial):
+    def save_results(self, results, partial, integrity_proof=None):
         with open(self.results_path, "w") as f:
             yaml.safe_dump(results, f)
+
+        if integrity_proof:
+            self.integrity_proof = integrity_proof
+            with open(self.integrity_proof_path, "w") as f:
+                yaml.safe_dump(integrity_proof, f)
 
         if partial:
             flag_file = os.path.join(self.path, config.partial_flag)

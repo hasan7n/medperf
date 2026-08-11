@@ -12,13 +12,15 @@ identity     what a workload is, and which terms each kind of owner pins
 policy       where a workload must run for the key to be released
 workload     the environment contract a confidential workload reads
 attestation  verifying a Confidential Space token
+proof        the statement a workload makes about what it computed
 vault        where an asset's ciphertext lives, and who may have its key
 operator     starting a confidential workload and fetching its output
 gcp/         KMS, IAM, GCS and Confidential Space, and nothing else
 ```
 
-Each stands alone. A key broker needs `identity` and `attestation`; an asset
-owner needs `vault`. Nothing here knows what a benchmark is.
+Each stands alone. A key broker needs `identity` and `attestation`; a results
+auditor needs `proof`; an asset owner needs `vault`. Nothing here knows what a
+benchmark is.
 
 Two boundaries are drawn deliberately:
 
@@ -45,3 +47,9 @@ included — installs it from source first.
 ```bash
 cd cc && pytest tests/
 ```
+
+`tests/test_producer_contract.py` is the odd one out: it loads the confidential
+base image's proof producer from source and compares it against the verifier
+here. The two implement the same hashing contract and cannot import each other,
+so a silent disagreement would mean every proof fails to verify. Keep it
+passing.

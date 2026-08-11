@@ -24,6 +24,7 @@ from medperf.commands.certificate.utils import load_user_private_key
 from medperf.containers.runners.docker_utils import full_docker_image_name
 from medperf.enums import CryptoKeyType
 from medperf_cc.identity import WorkloadIdentity
+from medperf_cc.proof import IntegrityProof
 
 
 class ConfidentialExecution:
@@ -78,6 +79,7 @@ class ConfidentialExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
+        self.integrity_proof = None
         self.dataset_cc_config = None
         self.model_cc_config = None
 
@@ -153,7 +155,8 @@ class ConfidentialExecution:
             self.runner, self.workload, private_key_bytes, results_path
         )
 
-        results_file = os.path.join(results_path, "results", "results.yaml")
+        results_dir = os.path.join(results_path, "results")
+        results_file = os.path.join(results_dir, "results.yaml")
         if os.path.exists(results_file):
             with open(results_file, "r") as f:
                 results_content = yaml.safe_load(f)
@@ -161,10 +164,20 @@ class ConfidentialExecution:
         else:
             self.results = {}
 
+        self.integrity_proof = IntegrityProof.from_results_dir(results_dir)
+        if self.integrity_proof is None:
+            logging.warning(
+                "The workload produced no integrity proof;"
+                " these results cannot be verified."
+            )
+
     def todict(self):
         return {
             "results": self.results,
             "partial": False,
+            "integrity_proof": (
+                self.integrity_proof.todict() if self.integrity_proof else {}
+            ),
         }
 
     def __send_report(self, status: str):

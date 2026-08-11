@@ -245,7 +245,11 @@ class BenchmarkExecution:
 
             execution.mark_as_executed()
             execution.save_results(
-                execution_summary["results"], execution_summary["partial"]
+                execution_summary["results"],
+                execution_summary["partial"],
+                # Only a confidential execution can produce one. Everything else
+                # leaves it empty, which is what "unverified" looks like.
+                execution_summary.get("integrity_proof", {}),
             )
 
             self.experiments.append(

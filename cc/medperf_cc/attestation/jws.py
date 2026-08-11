@@ -96,8 +96,18 @@ def certificate_chain(header: dict) -> List[x509.Certificate]:
     return chain
 
 
-def verify_chain(chain: List[x509.Certificate], root: x509.Certificate):
-    """Verifies a leaf-first chain up to a pinned root."""
+def verify_chain(
+    chain: List[x509.Certificate],
+    root: x509.Certificate,
+    allow_expired: bool = False,
+):
+    """Verifies a leaf-first chain up to a pinned root.
+
+    `allow_expired` is for checking a proof of a run that already happened. The
+    leaf's validity window says when the token was signed, which the token's own
+    `iat` already records, so treating an expired leaf as fatal would make every
+    proof self-destruct after an hour. Anything authenticating a *live* workload
+    must leave it alone."""
     if not chain:
         raise AttestationError("Empty certificate chain")
 
@@ -122,6 +132,9 @@ def verify_chain(chain: List[x509.Certificate], root: x509.Certificate):
             certificate.verify_directly_issued_by(issuer)
         except Exception as e:
             raise AttestationError(f"Certificate chain does not verify: {e}")
+
+    if allow_expired:
+        return
 
     now = datetime.now(timezone.utc)
     for certificate in full_chain:
