@@ -14,6 +14,7 @@ setup(
     url="https://github.com/mlcommons/medperf",
     author="MLCommons",
     license="Apache 2.0",
+    package_dir={"": "."},
     packages=find_packages(exclude=["tests", "tests.*"]),
     # Also needs medperf-cc, a sibling package in this repo, for the protocol
     # and nothing else. Left out of install_requires only because it is not

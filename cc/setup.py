@@ -14,6 +14,7 @@ setup(
     url="https://github.com/mlcommons/medperf",
     author="MLCommons",
     license="Apache 2.0",
+    package_dir={"": "."},
     packages=find_packages(exclude=["tests", "tests.*"]),
     install_requires=requires,
     python_requires=">=3.9",
