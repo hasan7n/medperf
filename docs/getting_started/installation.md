@@ -62,15 +62,14 @@ If using Docker, make sure [you can run Docker as a non-root user.](https://docs
 3. Install MedPerf from source:
 
     ```bash
-    pip install -e './cc[gcp]'
+    pip install -e ./cc
     pip install -e ./cli
     ```
 
     `./cc` holds MedPerf's confidential computing components. They are a
     separate package so that they can be used on their own — the key broker in
     `./kbs` depends on them and on nothing else from MedPerf — and they are not
-    published to PyPI, which is why they are installed from source first. The
-    `gcp` extra is what the client needs; the broker does without it.
+    published to PyPI, which is why they are installed from source first.
 
 4. Verify the installation:
 

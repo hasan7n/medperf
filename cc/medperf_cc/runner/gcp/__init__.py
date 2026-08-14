@@ -68,7 +68,7 @@ class ConfidentialSpaceRunner(WorkloadRunner):
             "encrypted_key_bucket_file": workload.results_encryption_key_path,
         }
 
-    def start(self, workload: WorkloadIdentity, image: str, env: dict) -> None:
+    def launch(self, workload: WorkloadIdentity, image: str, env: dict) -> None:
         metadata = {
             "tee-image-reference": image,
             "tee-container-log-redirect": "true",

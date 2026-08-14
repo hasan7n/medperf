@@ -19,12 +19,9 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from medperf_cc.attestation.authority import GOOGLE, trust_anchor
 from medperf_cc.attestation.token import AttestationToken, TokenType
-from medperf_cc.attestation.verifier import (
-    AttestationRequirements,
-    TrustAnchor,
-    verify_token,
-)
+from medperf_cc.attestation.verifier import AttestationRequirements, verify_token
 from medperf_cc.errors import AttestationError
 
 STATEMENT_FILE = "integrity_statement.json"
@@ -128,14 +125,22 @@ class ProofVerdict:
 
 
 def verify_proof(
-    proof: IntegrityProof, anchor: TrustAnchor, expectations: ProofExpectations
+    proof: IntegrityProof,
+    expectations: ProofExpectations,
+    authority: str = GOOGLE,
 ) -> ProofVerdict:
     """Verifies a proof and reports every check, passed or failed.
 
+    `authority` names who signed the attestation; what to accept as proof that
+    the signature is genuine follows from it, and is fetched here.
+
     Collects failures rather than raising on the first, because which part is
     wrong is the useful output: a results hash that does not match means
-    something quite different from an image digest that does not match.
+    something quite different from an image digest that does not match. Not
+    being able to reach the authority at all is different again, and raises:
+    that is a proof nobody checked, not a proof that failed.
     """
+    anchor = trust_anchor(authority)
     verdict = ProofVerdict(verified=False)
 
     try:

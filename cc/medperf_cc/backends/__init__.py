@@ -1,12 +1,12 @@
-"""Choosing which backend provides a capability, from configuration alone.
+"""Choosing which backend provides a service, from configuration alone.
 
 A caller never names a backend. It hands over the configuration an asset or an
-operator carries, and the capability it wants; what answers is whatever that
-configuration selected.
+operator carries, and the service it wants -- storage, vault or runner -- and
+what answers is whatever that configuration selected.
 
 Configuration is read in two layers. Keys at the top level are shared by every
-capability, because one provider usually wants the same account and project for
-all of them, and a section named after a capability adds to or overrides them:
+service, because one provider usually wants the same account and project for
+all of them, and a section named after a service adds to or overrides them:
 
     {"backend": "gcp", "project_id": "p", "bucket": "b", ...}
 
@@ -21,35 +21,37 @@ from typing import Dict
 
 from medperf_cc.errors import ConfigurationError
 
-# The capabilities an asset's configuration can carve out a section for.
-CAPABILITIES = ("storage", "vault")
+# The services an asset's own configuration can carve out a section for. The
+# runner is not among them: it is the operator's, configured separately, and
+# has nothing to share a top level with.
+ASSET_SERVICES = ("storage", "vault")
 
 
-def section(config: dict, capability: str) -> dict:
-    """The configuration one capability sees."""
+def service_config(config: dict, service: str) -> dict:
+    """The configuration one service sees: the shared level, then its own."""
     shared = {
         key: value
         for key, value in (config or {}).items()
-        if key not in CAPABILITIES
+        if key not in ASSET_SERVICES
     }
-    return {**shared, **((config or {}).get(capability) or {})}
+    return {**shared, **((config or {}).get(service) or {})}
 
 
-def backend_of(config: dict, registry: Dict[str, type], capability: str) -> str:
-    """The backend a configuration names.
+def backend_of(config: dict, registry: Dict[str, type], service: str) -> str:
+    """The backend a configuration names for a service.
 
-    An unknown one is refused rather than quietly treated as a default: a
-    misspelled backend would otherwise send an asset somewhere its owner never
-    chose."""
+    An unnamed one is refused rather than guessed: guessing would send an asset
+    somewhere its owner never chose, and one of the choices protects nothing at
+    all. An unknown one is refused for the same reason."""
     backend = (config or {}).get("backend")
     if backend is None:
         raise ConfigurationError(
-            f"No {capability} backend selected."
+            f"No {service} backend selected."
             f" Set \"backend\" to one of: {', '.join(sorted(registry))}"
         )
     if backend not in registry:
         raise ConfigurationError(
-            f"Unknown {capability} backend {backend!r}."
+            f"Unknown {service} backend {backend!r}."
             f" Supported: {', '.join(sorted(registry))}"
         )
     return backend

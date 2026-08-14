@@ -1,6 +1,6 @@
 """Choosing where an asset's bytes, its key, and the results come from.
 
-Each capability names its own backend, so one run can mix them: a dataset held
+Each service names its own backend, so one run can mix them: a dataset held
 by an on-prem key broker and a model held in cloud storage, with the results
 going back to wherever the operator asked for them.
 
@@ -34,12 +34,12 @@ def result_manager(result_config: dict):
     return __build(RESULTS, "results", result_config)
 
 
-def __build(registry: dict, capability: str, config: dict):
+def __build(registry: dict, service: str, config: dict):
     backend = config.get("backend")
     if backend not in registry:
         supported = ", ".join(sorted(registry))
         raise ValueError(
-            f"Unsupported {capability} backend {backend!r}."
+            f"Unsupported {service} backend {backend!r}."
             f" This benchmark script supports: {supported}"
         )
     return registry[backend](config)

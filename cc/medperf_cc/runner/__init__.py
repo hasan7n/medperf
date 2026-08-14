@@ -13,7 +13,8 @@ RUNNERS = {
 
 
 def runner_backends() -> dict:
-    """What an operator may choose, and what each choice needs from them."""
+    """What an operator may choose to run workloads with, and what each choice
+    needs from them."""
     return describe(RUNNERS)
 
 

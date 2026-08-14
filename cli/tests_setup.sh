@@ -171,20 +171,13 @@ PRIVATE_MODEL_LOCAL="$MEDPERF_ROOT_REPO/examples/chestxray_tutorial/model_custom
 # configurations' cloud counterparts to exercise a real environment.
 CHESTXRAY_CNN_MODEL="https://storage.googleapis.com/medperf-storage/chestxray_tutorial/cnn_weights.tar.gz"
 CHESTXRAY_MOBILENET_MODEL="https://storage.googleapis.com/medperf-storage/chestxray_tutorial/cnn_weights.tar.gz"
-# The mock backends live inside the workload image too, so the tests run the
-# one built from this tree rather than whatever was last published. MedPerf
-# pulls the images a benchmark names, so it is served from a registry of our own.
-CC_REGISTRY_PORT=5555
-CC_REGISTRY_CONTAINER="medperf-cc-test-registry"
-CC_SCRIPT_IMAGE="localhost:$CC_REGISTRY_PORT/medperf-cc-chestxray:test"
-CHESTXRAY_SCRIPT="$DIRECTORY/cc_chestxray_container_config.yaml"
+CHESTXRAY_SCRIPT="$MEDPERF_ROOT_REPO/examples/cc/chestxray/implementation/container_config.yaml"
 DATASET_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/dataset_cc_config_mock.json"
 MODEL_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/model_cc_config_mock.json"
 OPERATOR_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/operator_cc_config_mock.json"
 MODEL_CC_POLICY="$MEDPERF_ROOT_REPO/examples/cc/chestxray/model_cc_policy.json"
 DATASET_CC_POLICY="$MEDPERF_ROOT_REPO/examples/cc/chestxray/dataset_cc_policy.json"
 CC_MOCK_ROOT="/tmp/medperf_cc_mock"
-CC_BASE_IMAGE="mlcommons/medperf-confidential-benchmark-base:0.0.0"
 
 RANO_SCRIPT="$MEDPERF_ROOT_REPO/examples/cc/rano/implementation/container_config.yaml"
 RANO_PREP="$MEDPERF_ROOT_REPO/examples/cc/rano/prep_container_config.yaml"

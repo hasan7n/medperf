@@ -23,7 +23,12 @@ from medperf.utils import (
     tar,
     tmp_path_for_cc_asset_key,
 )
-from medperf_cc import AssetKind, ConfidentialAsset, WorkloadIdentity, generate_encryption_key
+from medperf_cc import (
+    AssetKind,
+    ConfidentialAsset,
+    WorkloadIdentity,
+    generate_encryption_key,
+)
 
 
 @as_medperf_error()
@@ -89,14 +94,11 @@ def __publish(asset: ConfidentialAsset, asset_path: str):
     medperf_config.ui.text = "Encrypting asset locally"
     encrypted_asset_path = __encrypt_asset(asset_path, encryption_key)
 
-    medperf_config.ui.text = "Publishing the encryption key and the access policy"
-    asset.publish_key(encryption_key)
-    del encryption_key
-
-    medperf_config.ui.text = "Uploading the encrypted asset"
+    medperf_config.ui.text = "Publishing the encrypted asset and its key"
     with open(encrypted_asset_path, "rb") as in_file:
         with __upload_progress(in_file) as file_obj:
-            asset.publish(file_obj)
+            asset.publish(encryption_key, file_obj)
+    del encryption_key
     remove_path(encrypted_asset_path)
 
 

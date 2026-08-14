@@ -59,7 +59,7 @@ class MockRunner(WorkloadRunner):
             "results_name": workload.storage_prefix,
         }
 
-    def start(self, workload: WorkloadIdentity, image: str, env: dict) -> None:
+    def launch(self, workload: WorkloadIdentity, image: str, env: dict) -> None:
         name = self.__container_name(workload)
         os.makedirs(self.mock.root, exist_ok=True)
         self.__remove_container(name)

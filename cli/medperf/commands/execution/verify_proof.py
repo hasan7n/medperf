@@ -9,13 +9,14 @@ import os
 
 import yaml
 
+from medperf.cc.errors import as_medperf_error
 from medperf.commands.execution.plan import resolve_plan
 from medperf.entities.benchmark import Benchmark
 from medperf.entities.dataset import Dataset
 from medperf.entities.execution import Execution
 from medperf.entities.model import Model
-from medperf.exceptions import InvalidArgumentError, MedperfException
-from medperf_cc.attestation import TrustAnchor, fetch_google_pki_root
+from medperf.exceptions import InvalidArgumentError
+from medperf_cc.attestation import GOOGLE
 from medperf_cc.proof import (
     IntegrityProof,
     ProofExpectations,
@@ -23,11 +24,17 @@ from medperf_cc.proof import (
     verify_proof,
 )
 
+# Who MedPerf takes the word of that an attestation is genuine. Confidential
+# Space tokens are signed by Google; naming the authority rather than wiring up
+# what to trust is what keeps adding another one a change inside `medperf_cc`.
+ATTESTATION_AUTHORITY = GOOGLE
+
 
 class VerifyExecutionProof:
     """Verifies one execution's proof against what MedPerf knows it should be."""
 
     @classmethod
+    @as_medperf_error()
     def run(cls, execution_uid: int) -> ProofVerdict:
         verifier = cls(execution_uid)
         verifier.load()
@@ -49,7 +56,9 @@ class VerifyExecutionProof:
             )
 
     def verify(self) -> ProofVerdict:
-        return verify_proof(self.proof, self.__trust_anchor(), self.__expectations())
+        return verify_proof(
+            self.proof, self.__expectations(), authority=ATTESTATION_AUTHORITY
+        )
 
     def __read_proof(self):
         """Prefers the copy the server holds, falling back to the local one."""
@@ -61,19 +70,6 @@ class VerifyExecutionProof:
             with open(local) as f:
                 return IntegrityProof.fromdict(yaml.safe_load(f))
         return None
-
-    def __trust_anchor(self) -> TrustAnchor:
-        """The issuer's root certificate, fetched now.
-
-        Pinning it locally would buy offline verification, which nobody needs:
-        a result is checked once, long after it was produced, by somebody who
-        reached the MedPerf server to read it in the first place."""
-        try:
-            return TrustAnchor(pki_root_pem=fetch_google_pki_root())
-        except Exception as e:
-            raise MedperfException(
-                f"Could not download the attestation root certificate: {e}"
-            )
 
     def __expectations(self) -> ProofExpectations:
         """What MedPerf's own records say these results should be.

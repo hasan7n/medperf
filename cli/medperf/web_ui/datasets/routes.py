@@ -37,7 +37,7 @@ from medperf.web_ui.common import (
 )
 from medperf.web_ui.cc_forms import (
     backend_settings_from_form,
-    capability_settings,
+    service_settings,
     field_label,
     selected_backend,
 )
@@ -119,12 +119,12 @@ def dataset_detail_ui(  # noqa
         "cc_policy": cc_policy,
         "cc_backends": asset_backends(),
         "cc_backend": {
-            capability: selected_backend(cc_config_defaults, capability)
-            for capability in ("storage", "vault")
+            service: selected_backend(cc_config_defaults, service)
+            for service in ("storage", "vault")
         },
         "cc_settings": {
-            capability: capability_settings(cc_config_defaults, capability)
-            for capability in ("storage", "vault")
+            service: service_settings(cc_config_defaults, service)
+            for service in ("storage", "vault")
         },
         "cc_field_label": field_label,
         "cc_configured": cc_configured,

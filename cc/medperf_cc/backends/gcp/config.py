@@ -29,6 +29,6 @@ class WorkloadIdentityPool(BaseModel):
         )
 
     class Config:
-        # A section of a wider configuration: keys other capabilities need are
-        # present and are not this model's business.
+        # A section of a wider configuration: keys the other services need
+        # are present and are not this model's business.
         extra = "ignore"

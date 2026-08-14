@@ -7,7 +7,7 @@ including refusing to guess.
 
 import pytest
 
-from medperf_cc.backends import backend_of, section, settings_of
+from medperf_cc.backends import backend_of, service_config, settings_of
 from medperf_cc.errors import ConfigurationError
 from medperf_cc.runner import RUNNERS, get_runner
 from medperf_cc.storage import STORAGES, get_storage
@@ -20,56 +20,56 @@ from medperf_cc.policy import AssetPolicy
 SHARED = {"backend": "gcp", "project_id": "p", "project_number": "42", "bucket": "b"}
 
 
-def test_one_backend_at_the_top_level_serves_every_capability():
+def test_one_backend_at_the_top_level_serves_every_service():
     """The common case: one provider, configured once"""
-    assert section(SHARED, "storage")["backend"] == "gcp"
-    assert section(SHARED, "vault")["backend"] == "gcp"
+    assert service_config(SHARED, "storage")["backend"] == "gcp"
+    assert service_config(SHARED, "vault")["backend"] == "gcp"
 
 
-def test_a_capability_section_overrides_the_shared_level():
+def test_a_service_section_overrides_the_shared_level():
     config = {**SHARED, "vault": {"backend": "medperf_kbs", "url": "https://kbs"}}
 
-    assert section(config, "storage")["backend"] == "gcp"
-    assert section(config, "vault")["backend"] == "medperf_kbs"
+    assert service_config(config, "storage")["backend"] == "gcp"
+    assert service_config(config, "vault")["backend"] == "medperf_kbs"
 
 
 def test_a_section_still_sees_the_shared_settings():
     """A provider usually wants the same account for everything it does"""
     config = {**SHARED, "vault": {"keyring_name": "ring"}}
 
-    assert section(config, "vault")["project_id"] == "p"
-    assert section(config, "vault")["keyring_name"] == "ring"
+    assert service_config(config, "vault")["project_id"] == "p"
+    assert service_config(config, "vault")["keyring_name"] == "ring"
 
 
-def test_no_capability_section_leaks_into_a_backend():
+def test_no_service_section_leaks_into_a_backend():
     config = {**SHARED, "vault": {"backend": "medperf_kbs"}}
 
-    assert "vault" not in section(config, "storage")
+    assert "vault" not in service_config(config, "storage")
 
 
 @pytest.mark.parametrize(
-    "registry,capability", [(STORAGES, "storage"), (VAULTS, "vault"), (RUNNERS, "runner")]
+    "registry,service", [(STORAGES, "storage"), (VAULTS, "vault"), (RUNNERS, "runner")]
 )
-def test_an_unnamed_backend_is_refused_rather_than_guessed(registry, capability):
+def test_an_unnamed_backend_is_refused_rather_than_guessed(registry, service):
     """Falling back to a default would send an asset somewhere its owner never
     chose, and `mock` protects nothing at all"""
     with pytest.raises(ConfigurationError, match="No .* backend selected"):
-        backend_of({}, registry, capability)
+        backend_of({}, registry, service)
 
 
 @pytest.mark.parametrize(
-    "registry,capability", [(STORAGES, "storage"), (VAULTS, "vault"), (RUNNERS, "runner")]
+    "registry,service", [(STORAGES, "storage"), (VAULTS, "vault"), (RUNNERS, "runner")]
 )
-def test_an_unknown_backend_is_refused(registry, capability):
+def test_an_unknown_backend_is_refused(registry, service):
     with pytest.raises(ConfigurationError, match="Unknown"):
-        backend_of({"backend": "typo"}, registry, capability)
+        backend_of({"backend": "typo"}, registry, service)
 
 
 def test_the_name_that_chose_a_backend_is_not_passed_on_to_it():
     assert settings_of({"backend": "mock", "root": "/tmp/x"}) == {"root": "/tmp/x"}
 
 
-def test_each_capability_resolves_on_its_own():
+def test_each_service_resolves_on_its_own():
     """A dataset can live in cloud storage while its key is released on-prem"""
     storage = get_storage({"backend": "mock", "root": "/tmp/x"}, "dataset1")
     vault = get_vault(

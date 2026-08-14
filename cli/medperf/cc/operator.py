@@ -19,7 +19,7 @@ from medperf.utils import (
     tmp_path_for_cc_asset_key,
     untar,
 )
-from medperf_cc import AssetKind, WorkloadIdentity, WorkloadRunner, workload_env
+from medperf_cc import AssetKind, WorkloadIdentity, WorkloadRunner
 
 
 def workload_configs(dataset, model):
@@ -53,13 +53,9 @@ def run_workload(
     runner.start(
         workload,
         docker_image,
-        workload_env(
-            workload,
-            dataset_cc_config,
-            model_cc_config,
-            runner.result_config(workload),
-            result_collector_public_key,
-        ),
+        dataset_cc_config,
+        model_cc_config,
+        result_collector_public_key,
     )
 
 

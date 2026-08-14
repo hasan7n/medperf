@@ -15,7 +15,7 @@ mounted volumes, with none of the above.
 
 ## Backends
 
-Each capability names its own backend, so one run can mix them. The image ships
+Each service names its own backend, so one run can mix them. The image ships
 `gcp`, `medperf_kbs` and `mock`, and a benchmark owner who supports fewer says
 so by leaving them out of the registries in `src/assets/factory.py`.
 

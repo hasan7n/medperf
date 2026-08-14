@@ -5,11 +5,12 @@ that a workload would receive exactly what a confidential VM gives it, and that
 its output comes back the way the operator expects to find it.
 """
 
+import json
 import os
 
 import pytest
 
-from medperf_cc import WorkloadIdentity, get_runner, workload_env
+from medperf_cc import WorkloadIdentity, get_runner
 from medperf_cc.errors import OperationError
 from medperf_cc.runner.mock import RESULTS_FILE, RESULTS_KEY_FILE
 
@@ -58,11 +59,7 @@ def test_the_operator_tells_the_workload_where_to_write(runner, workload):
 def test_the_workload_receives_the_environment_a_vm_would(runner, workload, started):
     """`EXPECTED_*` is what a real backend matches an attestation against, so
     the workload has to see it exactly as the operator set it"""
-    env = workload_env(
-        workload, {"storage": {}}, {"storage": {}}, {}, "the-collector-key"
-    )
-
-    runner.start(workload, IMAGE, env)
+    runner.start(workload, IMAGE, {}, {}, "the-collector-key")
 
     command = command_of(started)
     assert "EXPECTED_DATA_HASH=datahash" in command
@@ -71,17 +68,31 @@ def test_the_workload_receives_the_environment_a_vm_would(runner, workload, star
     assert command[-1] == IMAGE
 
 
+def test_the_workload_is_told_where_to_write_without_being_asked(
+    runner, workload, started
+):
+    """Where the output goes belongs to the operator, so the caller never
+    states it and cannot state it wrongly"""
+    runner.start(workload, IMAGE, {}, {}, "key")
+
+    result_config = json.loads(
+        [c for c in command_of(started) if c.startswith("RESULT_CONFIG=")][0]
+        .split("=", 1)[1]
+    )
+    assert result_config == runner.result_config(workload)
+
+
 def test_the_workload_sees_the_paths_the_parties_exchanged(runner, workload, started):
     """Mounted at the same path inside, or nothing the owner published would
     mean the same thing to the workload"""
-    runner.start(workload, IMAGE, {})
+    runner.start(workload, IMAGE, {}, {}, "key")
 
     root = runner.mock.root
     assert f"{root}:{root}" in command_of(started)
 
 
 def test_each_workload_gets_a_container_of_its_own(runner, workload, started):
-    runner.start(workload, IMAGE, {})
+    runner.start(workload, IMAGE, {}, {}, "key")
 
     assert workload.storage_prefix in " ".join(command_of(started))
 
@@ -93,7 +104,7 @@ def test_a_runtime_that_refuses_is_reported(runner, workload, mocker):
     )
 
     with pytest.raises(OperationError, match="no such image"):
-        runner.start(workload, IMAGE, {})
+        runner.start(workload, IMAGE, {}, {}, "key")
 
 
 def test_results_are_not_ready_before_a_workload_has_run(runner, workload):

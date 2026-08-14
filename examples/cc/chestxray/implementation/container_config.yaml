@@ -1,5 +1,8 @@
 container_type: DockerImage
-image: mlcommons/medperf-cc-chestxray:0.0.0
+# TODO: point this back at mlcommons/medperf-cc-chestxray:<version> once the
+# image carrying the mock backend is published. Until then it is built from
+# ../Dockerfile and served from a local registry -- see build.sh.
+image: localhost:5555/medperf-cc-chestxray:test
 tasks:
   run_script:
     input_volumes:

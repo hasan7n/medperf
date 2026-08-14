@@ -123,7 +123,7 @@ owner can operate one whatever the policies say.
 A confidential execution needs three things, and your configuration file picks a
 provider for each:
 
-| Capability | What it is | Choices |
+| Service | What it is | Choices |
 | --- | --- | --- |
 | `storage` | where your asset's ciphertext lives | `gcp`, `medperf_kbs`, `mock` |
 | `vault` | who may have the key that opens it | `gcp`, `medperf_kbs`, `mock` |
@@ -145,8 +145,8 @@ Name one backend at the top level and it serves everything:
 }
 ```
 
-Or give a capability a section of its own, which inherits the shared settings
-and overrides what it needs:
+Or give a service a section of its own, which inherits the shared settings and
+overrides what it needs:
 
 ```json
 {

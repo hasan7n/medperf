@@ -9,7 +9,7 @@ ever naming a provider.
 import secrets
 from typing import List
 
-from medperf_cc.backends import describe, section
+from medperf_cc.backends import describe, service_config
 from medperf_cc.identity import AssetKind, WorkloadIdentity
 from medperf_cc.policy import AssetPolicy
 from medperf_cc.storage import STORAGES, get_storage
@@ -19,7 +19,8 @@ ENCRYPTION_KEY_BYTES = 32
 
 
 def asset_backends() -> dict:
-    """What an asset owner may choose, and what each choice needs from them."""
+    """What an asset owner may choose for each service, and what each choice
+    needs from them."""
     return {"storage": describe(STORAGES), "vault": describe(VAULTS)}
 
 
@@ -35,9 +36,9 @@ class ConfidentialAsset:
         self.kind = kind
         self.policy = policy
         self.binding = policy.binding(kind)
-        self.storage = get_storage(section(config, "storage"), asset_name)
+        self.storage = get_storage(service_config(config, "storage"), asset_name)
         self.vault = get_vault(
-            section(config, "vault"), asset_name, self.binding, policy
+            service_config(config, "vault"), asset_name, self.binding, policy
         )
 
     def verify(self) -> None:
@@ -45,10 +46,12 @@ class ConfidentialAsset:
         self.storage.verify()
         self.vault.verify()
 
-    def publish_key(self, encryption_key: bytes) -> None:
-        self.vault.publish_key(encryption_key)
+    def publish(self, encryption_key: bytes, encrypted_asset_file) -> None:
+        """Puts an already-encrypted asset where a workload can reach it.
 
-    def publish(self, encrypted_asset_file) -> None:
+        The key goes first: a backend holding both halves has nothing to attach
+        the ciphertext to until it knows about the asset at all."""
+        self.vault.publish_key(encryption_key)
         self.storage.publish(encrypted_asset_file)
 
     def set_permitted(self, workloads: List[WorkloadIdentity]) -> None:

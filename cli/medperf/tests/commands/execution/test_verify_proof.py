@@ -16,6 +16,8 @@ from medperf.tests.mocks.cube import TestCube
 from medperf.tests.mocks.dataset import TestDataset
 from medperf.tests.mocks.execution import TestExecution
 from medperf.tests.mocks.model import TestAssetModel, TestContainerModel
+from medperf_cc.attestation import GOOGLE
+from medperf_cc.errors import AttestationError
 
 PATCH_VERIFY = "medperf.commands.execution.verify_proof.{}"
 
@@ -66,7 +68,6 @@ def execution(mocker, fs):
 @pytest.fixture()
 def verify(mocker):
     """Captures what the verifier was asked to check, and against what."""
-    mocker.patch(PATCH_VERIFY.format("fetch_google_pki_root"), return_value=b"root")
     return mocker.patch(PATCH_VERIFY.format("verify_proof"))
 
 
@@ -79,7 +80,7 @@ def test_expectations_come_from_medperf_not_from_the_proof(execution, verify):
     VerifyExecutionProof.run(execution.id)
 
     # Assert
-    expectations = verify.call_args.args[2]
+    expectations = verify.call_args.args[1]
     assert expectations.script_image_hash == SCRIPT_IMAGE
     assert expectations.data_hash == DATA_UID
     assert expectations.model_hash == ASSET_HASH
@@ -96,7 +97,7 @@ def test_a_container_model_has_no_asset_hash_to_expect(mocker, execution, verify
     VerifyExecutionProof.run(execution.id)
 
     # Assert
-    assert verify.call_args.args[2].model_hash is None
+    assert verify.call_args.args[1].model_hash is None
 
 
 def test_results_are_only_checked_where_they_still_are(execution, verify):
@@ -108,7 +109,7 @@ def test_results_are_only_checked_where_they_still_are(execution, verify):
     VerifyExecutionProof.run(execution.id)
 
     # Assert
-    assert verify.call_args.args[2].results_path is None
+    assert verify.call_args.args[1].results_path is None
 
 
 def test_the_server_copy_of_the_proof_is_preferred(fs, execution, verify):
@@ -152,30 +153,30 @@ def test_an_execution_with_no_proof_is_visibly_unverified(execution, verify):
         VerifyExecutionProof.run(execution.id)
 
 
-def test_the_root_certificate_is_fetched_from_the_issuer(mocker, execution, verify):
-    """Pinning it locally would buy offline verification, and a result is
-    checked once, by somebody who reached the server to read it"""
+def test_the_client_names_an_authority_rather_than_supplying_a_trust_anchor(
+    execution, verify
+):
+    """What to accept as proof that a token is genuine follows from who signed
+    it, and is medperf_cc's business to work out"""
     # Arrange
     execution.integrity_proof = PROOF
-    fetch = mocker.patch(
-        PATCH_VERIFY.format("fetch_google_pki_root"), return_value=b"the-root"
-    )
 
     # Act
     VerifyExecutionProof.run(execution.id)
 
     # Assert
-    fetch.assert_called_once()
-    assert verify.call_args.args[1].pki_root_pem == b"the-root"
+    assert verify.call_args.kwargs["authority"] == GOOGLE
 
 
-def test_a_root_that_cannot_be_reached_is_reported(mocker, execution, verify):
+def test_an_authority_that_cannot_be_reached_is_reported(mocker, execution):
+    """Not a proof that failed -- a proof nobody was able to check"""
     # Arrange
     execution.integrity_proof = PROOF
     mocker.patch(
-        PATCH_VERIFY.format("fetch_google_pki_root"), side_effect=OSError("no network")
+        PATCH_VERIFY.format("verify_proof"),
+        side_effect=AttestationError("could not fetch the root certificate"),
     )
 
     # Act & Assert
-    with pytest.raises(MedperfException, match="attestation root"):
+    with pytest.raises(MedperfException, match="root certificate"):
         VerifyExecutionProof.run(execution.id)

@@ -34,30 +34,12 @@ echo "\n"
 
 ##########################################################
 echo "====================================="
-echo "Building the confidential workload images"
+echo "Resetting the mock confidential backends"
 echo "====================================="
-# The mock backends live inside the workload too, so the image has to be the
-# one in this tree rather than whatever was last published.
+# Where the mock storage, vault and runner keep their state. Cleared so a stale
+# asset from an earlier run cannot stand in for one this run should publish.
 rm -rf $CC_MOCK_ROOT
 mkdir -p $CC_MOCK_ROOT
-
-print_eval docker build -t $CC_BASE_IMAGE -f $MEDPERF_ROOT_REPO/examples/cc/base_image/Dockerfile $MEDPERF_ROOT_REPO/examples/cc/base_image
-checkFailed "Building the confidential base image failed"
-
-print_eval docker build -t $CC_SCRIPT_IMAGE -f $MEDPERF_ROOT_REPO/examples/cc/chestxray/implementation/Dockerfile $MEDPERF_ROOT_REPO/examples/cc/chestxray/implementation
-checkFailed "Building the chestxray confidential script image failed"
-
-docker rm -f $CC_REGISTRY_CONTAINER >/dev/null 2>&1
-print_eval docker run -d --name $CC_REGISTRY_CONTAINER -p 127.0.0.1:$CC_REGISTRY_PORT:5000 registry:2
-checkFailed "Starting the test container registry failed"
-sleep 3
-
-print_eval docker push $CC_SCRIPT_IMAGE
-checkFailed "Pushing the chestxray confidential script image failed"
-
-mkdir -p $DIRECTORY
-sed "s|^image: .*|image: $CC_SCRIPT_IMAGE|" $MEDPERF_ROOT_REPO/examples/cc/chestxray/implementation/container_config.yaml > $CHESTXRAY_SCRIPT
-checkFailed "Preparing the chestxray confidential container config failed"
 ##########################################################
 
 echo "\n"

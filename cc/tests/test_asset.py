@@ -41,8 +41,7 @@ def workload(data_hash="datahash", collector_hash="collectorhash"):
 def published(config, kind=AssetKind.DATA, policy=None):
     asset = ConfidentialAsset(config, "dataset3", kind, policy or AssetPolicy())
     asset.verify()
-    asset.publish_key(KEY)
-    asset.publish(io.BytesIO(CIPHERTEXT))
+    asset.publish(KEY, io.BytesIO(CIPHERTEXT))
     return asset
 
 

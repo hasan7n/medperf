@@ -9,7 +9,7 @@ an operator carries, and these components resolve the rest.
 
 ## Layout
 
-One folder per capability, one folder per backend inside it:
+One folder per service, one folder per backend inside it:
 
 ```text
 identity     what a workload is, and which terms each kind of owner pins
@@ -19,20 +19,19 @@ attestation  verifying a Confidential Space token
 proof        the statement a workload makes about what it computed
 asset        an asset's ciphertext, its key, and who may have them
 
-storage/     where the ciphertext lives      gcp · medperf_kbs · mock
-vault/       who may have the key            gcp · medperf_kbs · mock
-runner/      running the workload            gcp · mock
+storage/     service: where the ciphertext lives   gcp · medperf_kbs · mock
+vault/       service: who may have the key         gcp · medperf_kbs · mock
+runner/      service: running the workload         gcp · mock
 backends/    choosing one, and the plumbing they share
 ```
 
-Adding a provider is adding a folder under each capability it offers. Nothing
+Adding a provider is adding a folder under each service it offers. Nothing
 outside `backends/` and those folders mentions one.
 
 ## Configuration
 
 A configuration selects its own backends. Keys at the top level are shared by
-every capability, and a section named after a capability adds to or overrides
-them:
+every service, and a section named after a service adds to or overrides them:
 
 ```json
 {"backend": "gcp", "project_id": "p", "bucket": "b", "keyring_name": "..."}
@@ -76,14 +75,12 @@ for by name.
 ## Installing
 
 ```bash
-pip install -e 'cc/[gcp]'
+pip install -e cc/
 ```
 
-Core dependencies are `pydantic`, `cryptography` and `requests`. The cloud
-libraries live behind the `gcp` extra, so a key broker deployment — or a
-developer on the mock backends — carries neither them nor the MedPerf client.
-
 Not published to PyPI, so anything depending on it installs it from source.
+That includes the key broker in `kbs/`, which needs this package and nothing
+else from MedPerf.
 
 ## Tests
 
