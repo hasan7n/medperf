@@ -1,12 +1,15 @@
-"""One contract, written twice.
+"""The producing side of a proof, checked against the verifying side.
 
-The results hash and the statement encoding exist in both `medperf_cc.proof` and
-the confidential base image, because the image is built separately with minimal
-dependencies and cannot import this package. A silent disagreement between them
-would mean every proof fails to verify, with nothing to say why.
+The confidential base image builds separately with minimal dependencies and
+cannot install this package, so it copies in `medperf_cc/statement.py` and
+imports it as `statement`. That is what makes the encoding and the hashing one
+implementation rather than two, and it is what is stubbed in below: the producer
+is loaded from source with `statement` bound to the real module, exactly as the
+image runs it.
 
-So the producer is loaded from source and compared against the verifier
-directly. If this fails, one of the two was changed without the other.
+What is left to check is what the producer decides on its own -- which keys go
+in a statement, where the measurements come from, and what a workload that
+produced no metrics attests to.
 """
 
 import importlib.util
@@ -15,11 +18,11 @@ import os
 import sys
 import types
 
+import pytest
 import yaml
 
-import pytest
-
 from medperf_cc import proof as verifier
+from medperf_cc import statement as contract
 
 PRODUCER_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -34,24 +37,25 @@ PRODUCER_PATH = os.path.join(
 
 
 def load_producer():
-    """Loads the base image's module without its runtime dependencies.
+    """Loads the base image's module, with the contract it is built against.
 
-    It imports the launcher client and the image's own crypto helpers, neither
-    of which exists outside the VM. Both are stubbed with exactly what the
-    hashing code uses, so what is compared below is the real producer."""
-    import hashlib
-
+    The launcher client does not exist outside the VM, so it is stubbed with
+    what the producer uses. `statement` is not stubbed -- it is the real
+    `medperf_cc.statement`, which is what the image gets a copy of."""
     attestation = types.ModuleType("assets.attestation")
-    attestation.AttestationUnavailable = type("AttestationUnavailable", (Exception,), {})
+    attestation.AttestationUnavailable = type(
+        "AttestationUnavailable", (Exception,), {}
+    )
     attestation.request_token = lambda **kwargs: ""
-
-    crypto = types.ModuleType("crypto")
-    crypto.get_string_hash = lambda value: hashlib.sha256(value.encode()).hexdigest()
 
     assets = types.ModuleType("assets")
     assets.attestation = attestation
 
-    stubs = {"assets": assets, "assets.attestation": attestation, "crypto": crypto}
+    stubs = {
+        "assets": assets,
+        "assets.attestation": attestation,
+        "statement": contract,
+    }
     saved = {name: sys.modules.get(name) for name in stubs}
     sys.modules.update(stubs)
     try:
@@ -83,90 +87,97 @@ def results(tmp_path):
     return str(directory)
 
 
-def test_both_sides_name_the_proof_files_the_same(producer):
-    assert producer.STATEMENT_FILE == verifier.STATEMENT_FILE
-    assert producer.TOKEN_FILE == verifier.TOKEN_FILE
-    assert producer.PROOF_FILES == verifier.PROOF_FILES
+def test_the_producer_takes_the_contract_from_this_package(producer):
+    """If it ever stopped, the two sides could disagree again"""
+    assert producer.STATEMENT_FILE is contract.STATEMENT_FILE
+    assert producer.PROOF_AUDIENCE is contract.PROOF_AUDIENCE
+    assert producer.statement_hash is contract.statement_hash
+    assert producer.results_files_hash is contract.results_files_hash
 
 
-def test_both_sides_use_the_same_audience(producer):
-    assert producer.PROOF_AUDIENCE == verifier.PROOF_AUDIENCE
+def test_the_version_it_writes_is_one_the_verifier_supports():
+    assert contract.STATEMENT_VERSION in contract.SUPPORTED_STATEMENT_VERSIONS
 
 
-def test_the_statement_version_is_one_the_verifier_supports(producer):
-    assert producer.STATEMENT_VERSION in verifier.SUPPORTED_STATEMENT_VERSIONS
+def test_the_statement_carries_everything_the_verifier_checks(
+    producer, results, monkeypatch, tmp_path
+):
+    """A key the producer never writes is a check that can never pass"""
+    # Arrange
+    monkeypatch.setenv("TMP_FILES", str(tmp_path))
+
+    # Act
+    statement = producer.build_statement(results)
+
+    # Assert
+    assert set(statement) == {
+        "version",
+        "results_sha256",
+        "results_files_sha256",
+        "data_sha256",
+        "model_sha256",
+    }
 
 
-def test_both_sides_hash_the_result_files_identically(producer, results):
-    assert producer.results_files_hash(results) == verifier.results_files_hash(results)
-
-
-def test_both_sides_exclude_the_proof_files_identically(producer, results):
-    with open(os.path.join(results, verifier.STATEMENT_FILE), "w") as f:
-        f.write("{}")
-    with open(os.path.join(results, verifier.TOKEN_FILE), "w") as f:
-        f.write("a.b.c")
-
-    assert producer.results_files_hash(results) == verifier.results_files_hash(results)
-
-
-def test_both_sides_hash_the_metrics_identically(producer, results):
+def test_the_metrics_it_attests_to_are_the_ones_the_server_will_hold(producer, results):
     """The producer reads a YAML file, the verifier is handed a dict off the
     server. They have to arrive at the same number or nobody can check a
     reported metric"""
+    # Arrange
     metrics = {"auc": 0.91, "accuracy": 0.8, "nested": {"b": 2, "a": [1, 2]}}
-    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
+    with open(os.path.join(results, contract.RESULTS_FILE), "w") as f:
         yaml.safe_dump(metrics, f)
 
-    assert producer.results_hash(results) == verifier.results_hash(metrics)
+    # Act
+    attested = producer.results_hash(results)
 
-
-def test_the_metrics_hash_survives_a_json_round_trip(producer, results):
-    """What the verifier gets has been through the server's JSON column, not
-    read off a YAML file"""
-    metrics = {"auc": 0.91, "labels": ["a", "b"]}
-    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
-        yaml.safe_dump(metrics, f)
-
-    from_server = json.loads(json.dumps(metrics))
-
-    assert producer.results_hash(results) == verifier.results_hash(from_server)
+    # Assert
+    assert attested == verifier.results_hash(json.loads(json.dumps(metrics)))
 
 
 def test_the_metrics_hash_ignores_how_the_yaml_was_written(producer, results):
     """Key order and formatting are not part of what was computed"""
-    path = os.path.join(results, verifier.RESULTS_FILE)
+    # Arrange
+    path = os.path.join(results, contract.RESULTS_FILE)
     with open(path, "w") as f:
         f.write("auc: 0.91\naccuracy: 0.8\n")
     one_way = producer.results_hash(results)
+
+    # Act
     with open(path, "w") as f:
         f.write("accuracy:   0.8\n\nauc: 0.91\n")
 
+    # Assert
     assert producer.results_hash(results) == one_way
+
+
+def test_an_undefined_metric_is_attested_to_as_the_null_it_becomes(producer, results):
+    """`AUC: .nan` is a real output -- an AUC is undefined when the labels hold
+    one class. Python spells it `NaN`, which no other JSON reader accepts, so
+    what a strict store holds after the round trip is null"""
+    # Arrange
+    with open(os.path.join(results, contract.RESULTS_FILE), "w") as f:
+        f.write("AUC: .nan\nAccuracy: 0.93\n")
+
+    # Act
+    attested = producer.results_hash(results)
+
+    # Assert
+    assert attested == verifier.results_hash({"AUC": None, "Accuracy": 0.93})
 
 
 def test_a_workload_producing_no_metrics_attests_to_none(producer, tmp_path):
     """An inference_script workload returns predictions, not a score"""
+    # Arrange
     predictions_only = tmp_path / "predictions"
     predictions_only.mkdir()
     (predictions_only / "preds.csv").write_text("1,2,3\n")
 
-    assert producer.results_hash(str(predictions_only)) is None
+    # Act
+    attested = producer.results_hash(str(predictions_only))
 
-
-def test_both_sides_hash_the_statement_identically(producer):
-    """This is the nonce the workload commits to. If the two disagreed, the
-    verifier would reject every genuine proof"""
-    statement = {
-        "version": 1,
-        "results_sha256": "a" * 64,
-        "data_sha256": "b" * 64,
-        "model_sha256": None,
-    }
-
-    assert producer.canonical_statement_hash(statement) == verifier.statement_hash(
-        statement
-    )
+    # Assert
+    assert attested is None
 
 
 def test_the_statement_the_producer_writes_is_the_one_it_committed_to(
@@ -174,28 +185,32 @@ def test_the_statement_the_producer_writes_is_the_one_it_committed_to(
 ):
     """Serialization must not change the hash: the verifier recomputes it from
     the parsed JSON, not from the bytes on disk"""
+    # Arrange
     monkeypatch.setenv("TMP_FILES", str(tmp_path))
     statement = producer.build_statement(results)
 
-    with open(os.path.join(results, verifier.STATEMENT_FILE), "w") as f:
+    # Act
+    with open(os.path.join(results, contract.STATEMENT_FILE), "w") as f:
         json.dump(statement, f, sort_keys=True, separators=(",", ":"))
-    with open(os.path.join(results, verifier.STATEMENT_FILE)) as f:
+    with open(os.path.join(results, contract.STATEMENT_FILE)) as f:
         parsed = json.load(f)
 
-    assert verifier.statement_hash(parsed) == producer.canonical_statement_hash(
-        statement
-    )
+    # Assert
+    assert verifier.statement_hash(parsed) == contract.statement_hash(statement)
 
 
 def test_the_producer_reports_what_the_workload_measured(
     producer, results, monkeypatch, tmp_path
 ):
+    # Arrange
     monkeypatch.setenv("TMP_FILES", str(tmp_path))
     with open(tmp_path / producer.MEASURED_HASHES_FILE, "w") as f:
         json.dump({"data_sha256": "measured-data", "model_sha256": "measured-model"}, f)
 
+    # Act
     statement = producer.build_statement(results)
 
+    # Assert
     assert statement["data_sha256"] == "measured-data"
     assert statement["model_sha256"] == "measured-model"
 
@@ -205,42 +220,11 @@ def test_the_script_is_deliberately_not_in_the_statement(
 ):
     """It comes from the token's attested image digest. A workload
     self-reporting its own image would be worth nothing"""
+    # Arrange
     monkeypatch.setenv("TMP_FILES", str(tmp_path))
 
+    # Act
     statement = producer.build_statement(results)
 
+    # Assert
     assert "script" not in json.dumps(statement)
-
-
-def test_both_sides_map_an_undefined_metric_the_same_way(producer, results):
-    """`AUC: .nan` is a real output -- an AUC is undefined when the labels hold
-    one class. Python spells it `NaN`, which no other JSON reader accepts, so
-    it cannot be what either side hashes"""
-    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
-        f.write("AUC: .nan\nAccuracy: 0.93\n")
-
-    assert producer.results_hash(results) == verifier.results_hash(
-        {"AUC": float("nan"), "Accuracy": 0.93}
-    )
-
-
-def test_an_undefined_metric_hashes_as_the_null_it_becomes(producer, results):
-    """What a strict JSON store holds after the round trip is null, and that
-    has to be what verifies"""
-    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
-        f.write("AUC: .nan\nAccuracy: 0.93\n")
-
-    assert producer.results_hash(results) == verifier.results_hash(
-        {"AUC": None, "Accuracy": 0.93}
-    )
-
-
-def test_what_is_hashed_is_always_readable_by_any_json_reader(producer, results):
-    """Belt and braces: `allow_nan=False` means a value that slipped through
-    would raise here rather than produce a hash nobody can recompute"""
-    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
-        f.write("AUC: .inf\nWorse: -.inf\n")
-
-    assert producer.results_hash(results) == verifier.results_hash(
-        {"AUC": None, "Worse": None}
-    )

@@ -11,11 +11,13 @@ pins which code ran, never that the code is right.
 Verification is offline for PKI tokens. Expiry is deliberately not checked: a
 proof records a run that already happened, and a one-hour token that had to
 still be current would make every proof self-destruct.
+
+How the hashes are taken is not decided here. It is decided in
+`medperf_cc.statement`, which the confidential base image copies in and runs as
+its own, so that the two sides cannot drift apart.
 """
 
-import hashlib
 import json
-import math
 import os
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -24,43 +26,15 @@ from medperf_cc.attestation.authority import GOOGLE, trust_anchor
 from medperf_cc.attestation.token import AttestationToken, TokenType
 from medperf_cc.attestation.verifier import AttestationRequirements, verify_token
 from medperf_cc.errors import AttestationError
-
-STATEMENT_FILE = "integrity_statement.json"
-TOKEN_FILE = "integrity_token.jwt"
-PROOF_FILES = {STATEMENT_FILE, TOKEN_FILE}
-
-# The one file MedPerf reads a benchmark's metrics out of. Its parsed contents
-# are what gets uploaded to the server, and what most people will ever verify.
-RESULTS_FILE = "results.yaml"
-
-# A proof is meant to be checkable by anyone, so there is no particular relying
-# party to name. A fixed, recognizable audience beats a misleading one.
-PROOF_AUDIENCE = "https://medperf.org/integrity-proof"
-SUPPORTED_STATEMENT_VERSIONS = {2}
-
-
-def results_files_hash(results_path: str) -> str:
-    """Hashes every file the workload produced.
-
-    Must match the confidential base image exactly: sha256 of each file's
-    content as hex, excluding the two proof files, sorted as strings,
-    concatenated utf-8 and hashed again. Content only, never names or paths, so
-    it survives the tar and untar on the way out of the VM.
-
-    Covers everything -- predictions, logs, whatever the script wrote -- but
-    only somebody holding those files can check it.
-    """
-    hashes = []
-    for root, _, files in os.walk(results_path):
-        for name in files:
-            if name in PROOF_FILES:
-                continue
-            hashes.append(file_hash(os.path.join(root, name)))
-
-    digest = hashlib.sha256()
-    for each in sorted(hashes):
-        digest.update(each.encode("utf-8"))
-    return digest.hexdigest()
+from medperf_cc.statement import (
+    PROOF_AUDIENCE,
+    STATEMENT_FILE,
+    SUPPORTED_STATEMENT_VERSIONS,
+    TOKEN_FILE,
+    canonical_hash,
+    results_files_hash,
+    statement_hash,
+)
 
 
 def results_hash(results: dict) -> str:
@@ -73,45 +47,6 @@ def results_hash(results: dict) -> str:
     knowledge of how it was written.
     """
     return canonical_hash(results)
-
-
-def file_hash(path: str) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def json_safe(value):
-    """A value with everything JSON cannot spell taken out.
-
-    Only non-finite floats, which is what a metric like an undefined AUC comes
-    out as. Python writes them as bare `NaN` and `Infinity`, which no other JSON
-    reader accepts -- PostgreSQL rejects them outright -- so a hash taken over
-    them could not be recomputed by anybody else, which is the whole point of
-    taking it. They become null, which is what survives the round trip anyway.
-    """
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    if isinstance(value, dict):
-        return {key: json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [json_safe(item) for item in value]
-    return value
-
-
-def canonical_hash(value) -> str:
-    """A hash of a value that does not depend on how it was serialized."""
-    canonical = json.dumps(
-        json_safe(value), sort_keys=True, separators=(",", ":"), allow_nan=False
-    )
-    return hashlib.sha256(canonical.encode()).hexdigest()
-
-
-def statement_hash(statement: dict) -> str:
-    """The nonce the workload committed to."""
-    return canonical_hash(statement)
 
 
 @dataclass

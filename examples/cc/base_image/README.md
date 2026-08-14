@@ -6,6 +6,25 @@ the encrypted inputs, opening them, checking they are what the operator
 declared, attesting to what was computed, and encrypting the results for
 whoever is collecting them.
 
+## Building
+
+```bash
+bash build.sh          # PUSH=1 to publish it
+```
+
+Not a bare `docker build`. The image does not keep its own copy of the integrity
+proof contract -- how a statement is encoded and how its hashes are taken. That
+is `cc/medperf_cc/statement.py`, the same file whoever verifies a proof runs,
+and `build.sh` stages it into the build context as `src/statement.py`. Sharing
+the file is what stops the producing and the verifying side from drifting apart;
+a disagreement over one byte would make every proof fail to verify with nothing
+to say why.
+
+It is the only thing taken from `medperf_cc`, and it depends on nothing but the
+standard library. Everything else here is deliberately reimplemented: this image
+is the trusted computing base, and the rest of that package exists to set up
+cloud resources, which is not something a confidential VM should be able to do.
+
 ## Modes
 
 **Dev.** Set `MEDPERF_ON_PREM` and the container runs the benchmark directly on
@@ -62,6 +81,10 @@ The workload checks all three against what it actually read, and refuses to go
 on if they differ.
 
 ## Attestation
+
+Statements are versioned, and a verifier only accepts versions it knows. Both
+numbers live together in `statement.py`, so raising one without the other is
+visible in one place.
 
 Requested from the launcher over `/run/container_launcher/teeserver.sock`. It is
 the only attestation primitive a workload has: it cannot obtain raw hardware

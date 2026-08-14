@@ -16,7 +16,8 @@ identity     what a workload is, and which terms each kind of owner pins
 policy       where a workload must run, and how narrow the grant is
 workload     the environment contract a confidential workload reads
 attestation  verifying a Confidential Space token
-proof        the statement a workload makes about what it computed
+statement    what a workload attests to, and how it is hashed
+proof        checking that attestation against what you expected
 asset        an asset's ciphertext, its key, and who may have them
 
 storage/     service: where the ciphertext lives   gcp · medperf_kbs · mock
@@ -48,6 +49,18 @@ cloud storage but releases the key from an on-prem broker.
 No backend is a default. An unnamed one is refused rather than guessed, because
 guessing would send an asset somewhere its owner never chose — and because one
 of the choices protects nothing at all.
+
+## The one file that leaves this package
+
+`statement.py` is the integrity proof contract: how a statement is encoded and
+how the hashes in it are taken. The confidential base image copies it in at
+build time and imports it as `statement`, so the producing and the verifying
+side are one implementation rather than two that have to be kept in agreement.
+
+That is why it imports nothing but the standard library. The image is the
+trusted computing base, and cloud clients, IAM and pydantic have no business
+running inside a confidential VM. Anything needing a dependency belongs in
+`proof.py` or in the image, not there.
 
 ## The mock backend
 
@@ -89,7 +102,7 @@ cd cc && pytest tests/
 ```
 
 `tests/test_producer_contract.py` is the odd one out: it loads the confidential
-base image's proof producer from source and compares it against the verifier
-here. The two implement the same hashing contract and cannot import each other,
-so a silent disagreement would mean every proof fails to verify. Keep it
-passing.
+base image's proof producer from source, with `statement` bound to the module
+above, exactly as the image runs it. What it checks is what the producer decides
+on its own -- which keys go in a statement, where the measurements come from,
+what a workload that produced no metrics attests to. Keep it passing.

@@ -85,6 +85,13 @@ class VerifyExecutionProof:
             script_image_hash=plan.script.image_hash if plan.script else None,
             data_hash=dataset.generated_uid,
             model_hash=model.asset_obj.asset_hash if model.is_asset() else None,
+            # These metrics came back from the server, so they have been through
+            # `medperf.utils.sanitize_json` on the way up. The workload attested
+            # to them as mapped by `medperf_cc.statement.json_safe`. Those two
+            # mappings must agree or every metric check here fails, and it fails
+            # looking like tampering rather than like the bug it is. If this
+            # command starts reporting "reported metrics do not match the
+            # proof", suspect them before suspecting the operator.
             results=self.execution.results,
             results_path=self.__results_path(),
         )

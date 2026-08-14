@@ -4,16 +4,18 @@ import os
 import pytest
 
 from medperf_cc.proof import (
+    IntegrityProof,
+    ProofExpectations,
+    results_hash,
+    verify_proof,
+)
+from medperf_cc.statement import (
     PROOF_AUDIENCE,
     RESULTS_FILE,
     STATEMENT_FILE,
     TOKEN_FILE,
-    IntegrityProof,
-    ProofExpectations,
     results_files_hash,
-    results_hash,
     statement_hash,
-    verify_proof,
 )
 from medperf_cc.attestation import TrustAnchor
 from medperf_cc.testing import FakeAttestationAuthority, confidential_space_claims
@@ -92,8 +94,7 @@ def test_a_proof_of_this_run_verifies(authority, results):
     assert verdict.verified, verdict.failures
     assert "Result files are exactly the bytes the workload produced" in verdict.checks
     assert (
-        "Reported metrics are exactly the ones the workload computed"
-        in verdict.checks
+        "Reported metrics are exactly the ones the workload computed" in verdict.checks
     )
 
 
@@ -141,7 +142,9 @@ def test_a_different_script_is_caught(authority, results):
     cannot claim to have been the benchmark's script"""
     proof = proof_for(authority, statement(results))
 
-    verdict = verify_proof(proof, expectations(results, script_image_hash="sha256:otherscript"))
+    verdict = verify_proof(
+        proof, expectations(results, script_image_hash="sha256:otherscript")
+    )
 
     assert not verdict.verified
     assert any("produced by image" in failure for failure in verdict.failures)
@@ -150,13 +153,17 @@ def test_a_different_script_is_caught(authority, results):
 def test_a_different_dataset_is_caught(authority, results):
     proof = proof_for(authority, statement(results))
 
-    verdict = verify_proof(proof, expectations(results, data_hash="a-different-dataset"))
+    verdict = verify_proof(
+        proof, expectations(results, data_hash="a-different-dataset")
+    )
 
     assert not verdict.verified
     assert any("different data" in failure for failure in verdict.failures)
 
 
-def test_a_workload_that_read_something_else_than_it_declared_is_caught(authority, results):
+def test_a_workload_that_read_something_else_than_it_declared_is_caught(
+    authority, results
+):
     """The declaration is operator-supplied; the measurement was taken inside
     the VM. Only their agreement makes the declaration worth anything"""
     proof = proof_for(
@@ -207,9 +214,7 @@ def test_a_reported_metric_that_was_edited_is_caught(authority, results):
     """The whole point: the number on the server is the number computed"""
     proof = proof_for(authority, statement(results))
 
-    verdict = verify_proof(
-        proof, expectations(results_dir=None, results={"auc": 0.99})
-    )
+    verdict = verify_proof(proof, expectations(results_dir=None, results={"auc": 0.99}))
 
     assert not verdict.verified
     assert any("Reported metrics do not match" in f for f in verdict.failures)

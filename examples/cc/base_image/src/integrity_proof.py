@@ -21,106 +21,35 @@ fact. `setup_assets` measures the decrypted inputs and records what it found;
 the statement reports those measurements, so a verifier can see the declared and
 the measured values agree without having to know that the script checks them.
 
-## The two result hashes
-
-`results_files_sha256` covers every file the operator will report, and
-deliberately *not* the two proof files, which do not exist yet when it is
-computed. A verifier must apply the same exclusion. The algorithm, so it can be
-reimplemented exactly:
-
-    sha256 of each file's content, hex
-    excluding integrity_statement.json and integrity_token.jwt
-    sorted as strings
-    concatenated utf-8 and hashed again
-
-It depends on file contents only, never on names or paths, so it survives the
-tar and untar the results go through on their way out of the VM. Only somebody
-holding those files can check it.
-
-`results_sha256` covers the metrics as a *value*: `results.yaml` parsed, then
-hashed canonically. That is what MedPerf uploads to its server and serves back
-as JSON, so anybody holding nothing but the reported numbers can recompute this
-and see they are the ones this workload computed. Hashing the file's bytes
-would not do -- YAML formatting and key order would have to survive a round
-trip through a database to match.
+Only the producing is here. How a statement is encoded and how the hashes are
+taken live in `statement.py`, which is `medperf_cc/statement.py` verbatim --
+whoever verifies this proof runs that same file. It is copied in at build time
+rather than edited here.
 """
 
 import argparse
-import hashlib
 import json
-import math
 import os
 from typing import Optional
 
 import yaml
 
 from assets.attestation import AttestationUnavailable, request_token
-from crypto import get_string_hash
-
-STATEMENT_FILE = "integrity_statement.json"
-TOKEN_FILE = "integrity_token.jwt"
-PROOF_FILES = {STATEMENT_FILE, TOKEN_FILE}
-
-# The one file MedPerf reads a benchmark's metrics out of. Absent for a topology
-# whose workload produces predictions rather than a score.
-RESULTS_FILE = "results.yaml"
+from statement import (
+    PROOF_AUDIENCE,
+    RESULTS_FILE,
+    STATEMENT_FILE,
+    STATEMENT_VERSION,
+    TOKEN_FILE,
+    canonical_hash,
+    results_files_hash,
+    statement_hash,
+)
 
 MEASURED_HASHES_FILE = "measured_hashes.json"
 
-# A proof is meant to be checkable by anyone, so there is no particular relying
-# party to name. A fixed, recognizable audience beats a misleading one.
-PROOF_AUDIENCE = "https://medperf.org/integrity-proof"
 
-STATEMENT_VERSION = 2
-
-
-def results_files_hash(results_path: str) -> str:
-    """Hashes every result file, excluding the proof artifacts themselves."""
-    hashes = []
-    for root, _, files in os.walk(results_path):
-        for name in files:
-            if name in PROOF_FILES:
-                continue
-            hashes.append(__file_hash(os.path.join(root, name)))
-
-    digest = hashlib.sha256()
-    for each in sorted(hashes):
-        digest.update(each.encode("utf-8"))
-    return digest.hexdigest()
-
-
-def json_safe(value):
-    """A value with everything JSON cannot spell taken out.
-
-    Only non-finite floats, which is what a metric like an undefined AUC comes
-    out as. Python writes them as bare `NaN` and `Infinity`, which no other JSON
-    reader accepts -- PostgreSQL rejects them outright -- so a hash taken over
-    them could not be recomputed by anybody else, which is the whole point of
-    taking it. They become null, which is what survives the round trip anyway.
-    """
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    if isinstance(value, dict):
-        return {key: json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [json_safe(item) for item in value]
-    return value
-
-
-def canonical_hash(value) -> str:
-    """A hash of a value that does not depend on how it was serialized."""
-    return get_string_hash(
-        json.dumps(
-            json_safe(value), sort_keys=True, separators=(",", ":"), allow_nan=False
-        )
-    )
-
-
-def canonical_statement_hash(statement: dict) -> str:
-    return canonical_hash(statement)
-
-
-def results_hash(results_path: str):
+def results_hash(results_path: str) -> Optional[str]:
     """Hashes the metrics as a value, or None if this workload produced none.
 
     Parsed before hashing, so what is attested to is what MedPerf will upload
@@ -146,6 +75,7 @@ def build_statement(results_path: str) -> dict:
     return {
         "version": STATEMENT_VERSION,
         "results_sha256": results_hash(results_path),
+        "results_files_sha256": results_files_hash(results_path),
         "data_sha256": measured.get("data_sha256"),
         "model_sha256": measured.get("model_sha256"),
     }
@@ -162,7 +92,7 @@ def write_proof(
     which is the worse trade.
     """
     statement = build_statement(results_path)
-    statement_hash = canonical_statement_hash(statement)
+    nonce = statement_hash(statement)
 
     try:
         # PKI by default: the token carries its own certificate chain, so the
@@ -170,7 +100,7 @@ def write_proof(
         # network and regardless of signing key rotation.
         token = request_token(
             audience=PROOF_AUDIENCE,
-            nonces=[statement_hash],
+            nonces=[nonce],
             token_type=token_type,
             issuer=issuer,
         )
@@ -182,15 +112,7 @@ def write_proof(
         json.dump(statement, f, sort_keys=True, separators=(",", ":"))
     with open(os.path.join(results_path, TOKEN_FILE), "w") as f:
         f.write(token)
-    return statement_hash
-
-
-def __file_hash(path: str) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return nonce
 
 
 def __measured_hashes() -> dict:

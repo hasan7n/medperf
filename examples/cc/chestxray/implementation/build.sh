@@ -13,7 +13,7 @@ IMAGE="${IMAGE:-localhost:5555/medperf-cc-chestxray:test}"
 REGISTRY_PORT="${REGISTRY_PORT:-5555}"
 REGISTRY_CONTAINER="${REGISTRY_CONTAINER:-medperf-cc-test-registry}"
 
-docker build -t "$BASE_IMAGE" "$HERE/../../base_image"
+IMAGE="$BASE_IMAGE" bash "$HERE/../../base_image/build.sh"
 docker build -t "$IMAGE" "$HERE"
 
 if [[ "$IMAGE" == localhost:* ]]; then
