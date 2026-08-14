@@ -42,7 +42,7 @@ class Model(models.Model):
         return (
             self.type == "ASSET"
             and self.asset is not None
-            and self.asset.asset_url == LOCAL_ASSET_URL
+            and self.asset.is_local
         )
 
     def clean(self):
@@ -57,7 +57,7 @@ class Model(models.Model):
                 )
         elif self.type == "ASSET":
             if not self.asset:
-                raise ValidationError("Asset must be set for FILE type models.")
+                raise ValidationError("Asset must be set for ASSET type models.")
             if self.container:
                 raise ValidationError("Container must not be set for FILE type models.")
 
