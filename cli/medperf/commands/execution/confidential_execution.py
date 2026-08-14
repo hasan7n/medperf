@@ -164,8 +164,9 @@ class ConfidentialExecution:
             self.runner, self.workload, private_key_bytes, results_path
         )
 
-        results_dir = os.path.join(results_path, "results")
-        results_file = os.path.join(results_dir, "results.yaml")
+        # The workload tars the contents of its results directory, so what
+        # lands here is those files, not a directory containing them.
+        results_file = os.path.join(results_path, config.results_filename)
         if os.path.exists(results_file):
             with open(results_file, "r") as f:
                 results_content = yaml.safe_load(f)
@@ -173,7 +174,7 @@ class ConfidentialExecution:
         else:
             self.results = {}
 
-        self.integrity_proof = IntegrityProof.from_results_dir(results_dir)
+        self.integrity_proof = IntegrityProof.from_results_dir(results_path)
         if self.integrity_proof is None:
             logging.warning(
                 "The workload produced no integrity proof;"

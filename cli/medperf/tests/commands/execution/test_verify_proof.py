@@ -5,9 +5,12 @@ of it from the proof itself would establish nothing, so each expectation has to
 come from MedPerf's own record of what should have run.
 """
 
+import os
+
 import pytest
 import yaml
 
+from medperf import config
 from medperf.commands.execution.verify_proof import VerifyExecutionProof
 from medperf.enums import BenchmarkTopology
 from medperf.exceptions import InvalidArgumentError, MedperfException
@@ -100,7 +103,21 @@ def test_a_container_model_has_no_asset_hash_to_expect(mocker, execution, verify
     assert verify.call_args.args[1].model_hash is None
 
 
-def test_results_are_only_checked_where_they_still_are(execution, verify):
+def test_the_reported_metrics_are_what_gets_checked(execution, verify):
+    """What the server holds is what everyone downstream reads, and the only
+    thing somebody who did not run the execution can check"""
+    # Arrange
+    execution.integrity_proof = PROOF
+    execution.results = {"auc": 0.91}
+
+    # Act
+    VerifyExecutionProof.run(execution.id)
+
+    # Assert
+    assert verify.call_args.args[1].results == {"auc": 0.91}
+
+
+def test_result_files_are_only_checked_where_they_still_are(execution, verify):
     """Anyone verifying an execution they did not run has no files to hash"""
     # Arrange
     execution.integrity_proof = PROOF
@@ -110,6 +127,26 @@ def test_results_are_only_checked_where_they_still_are(execution, verify):
 
     # Assert
     assert verify.call_args.args[1].results_path is None
+
+
+def test_a_downloaded_copy_of_the_results_is_found_if_present(
+    fs, execution, verify
+):
+    """A confidential execution downloads into a directory per attempt, and
+    the latest one is this machine's copy"""
+    # Arrange
+    execution.integrity_proof = PROOF
+    runs = os.path.join(config.script_result_folder, str(execution.id))
+    fs.create_file(os.path.join(runs, "1700000000_0", "results.yaml"))
+    fs.create_file(os.path.join(runs, "1700000001_0", "results.yaml"))
+
+    # Act
+    VerifyExecutionProof.run(execution.id)
+
+    # Assert
+    assert verify.call_args.args[1].results_path == os.path.join(
+        runs, "1700000001_0"
+    )
 
 
 def test_the_server_copy_of_the_proof_is_preferred(fs, execution, verify):

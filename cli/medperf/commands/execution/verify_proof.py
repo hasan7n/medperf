@@ -9,6 +9,7 @@ import os
 
 import yaml
 
+from medperf import config
 from medperf.cc.errors import as_medperf_error
 from medperf.commands.execution.plan import resolve_plan
 from medperf.entities.benchmark import Benchmark
@@ -84,13 +85,26 @@ class VerifyExecutionProof:
             script_image_hash=plan.script.image_hash if plan.script else None,
             data_hash=dataset.generated_uid,
             model_hash=model.asset_obj.asset_hash if model.is_asset() else None,
+            results=self.execution.results,
             results_path=self.__results_path(),
         )
 
     def __results_path(self):
-        """Where the result files are, if this machine still has them.
+        """Where this machine's copy of the result files is, if it has one.
 
-        Absent for anyone verifying an execution they did not run: the rest of
-        the proof still checks, minus the results-match step."""
-        outputs = self.execution.local_outputs_path
-        return outputs if os.path.isdir(outputs) else None
+        Absent for anyone verifying an execution they did not run, which is the
+        common case: the metrics themselves are still checked, and they are what
+        the reported number actually is."""
+        runs = os.path.join(config.script_result_folder, str(self.execution.id))
+        if not os.path.isdir(runs):
+            return None
+
+        # A confidential execution downloads into a directory per attempt.
+        attempts = [
+            os.path.join(runs, name)
+            for name in os.listdir(runs)
+            if os.path.isdir(os.path.join(runs, name))
+        ]
+        if not attempts:
+            return None
+        return max(attempts, key=os.path.getmtime)

@@ -5,10 +5,12 @@ import pytest
 
 from medperf_cc.proof import (
     PROOF_AUDIENCE,
+    RESULTS_FILE,
     STATEMENT_FILE,
     TOKEN_FILE,
     IntegrityProof,
     ProofExpectations,
+    results_files_hash,
     results_hash,
     statement_hash,
     verify_proof,
@@ -39,19 +41,23 @@ def anchor(mocker, authority):
     )
 
 
+METRICS = {"auc": 0.91}
+
+
 @pytest.fixture()
 def results(tmp_path):
     directory = tmp_path / "results"
     directory.mkdir()
-    (directory / "results.yaml").write_text("auc: 0.91\n")
+    (directory / RESULTS_FILE).write_text("auc: 0.91\n")
     (directory / "extra.txt").write_text("something else\n")
     return directory
 
 
 def statement(results_dir, **overrides):
     body = {
-        "version": 1,
-        "results_sha256": results_hash(str(results_dir)),
+        "version": 2,
+        "results_sha256": results_hash(METRICS),
+        "results_files_sha256": results_files_hash(str(results_dir)),
         "data_sha256": DATA_HASH,
         "model_sha256": MODEL_HASH,
     }
@@ -71,6 +77,7 @@ def expectations(results_dir=None, **overrides):
         "script_image_hash": SCRIPT_IMAGE,
         "data_hash": DATA_HASH,
         "model_hash": MODEL_HASH,
+        "results": METRICS,
         "results_path": str(results_dir) if results_dir else None,
     }
     fields.update(overrides)
@@ -83,7 +90,11 @@ def test_a_proof_of_this_run_verifies(authority, results):
     verdict = verify_proof(proof, expectations(results))
 
     assert verdict.verified, verdict.failures
-    assert "Results are exactly the bytes the workload attested to" in verdict.checks
+    assert "Result files are exactly the bytes the workload produced" in verdict.checks
+    assert (
+        "Reported metrics are exactly the ones the workload computed"
+        in verdict.checks
+    )
 
 
 def test_editing_the_results_afterwards_is_caught(authority, results):
@@ -93,7 +104,7 @@ def test_editing_the_results_afterwards_is_caught(authority, results):
     verdict = verify_proof(proof, expectations(results))
 
     assert not verdict.verified
-    assert any("Results do not match" in failure for failure in verdict.failures)
+    assert any("Result files do not match" in failure for failure in verdict.failures)
 
 
 def test_adding_a_result_file_afterwards_is_caught(authority, results):
@@ -181,20 +192,57 @@ def test_a_proof_outlives_the_token_that_carries_it(authority, results):
 
 
 def test_a_proof_can_be_checked_without_the_result_files(authority, results):
-    """Anyone verifying an execution they did not run has no results to hash;
-    everything else still checks"""
+    """The common case: somebody reading a number off the server. They cannot
+    hash files they do not have, but the metric itself still checks"""
     proof = proof_for(authority, statement(results))
 
     verdict = verify_proof(proof, expectations(results_dir=None))
 
     assert verdict.verified, verdict.failures
-    assert not any("Results are exactly" in check for check in verdict.checks)
+    assert not any("Result files" in check for check in verdict.checks)
+    assert any("Reported metrics" in check for check in verdict.checks)
+
+
+def test_a_reported_metric_that_was_edited_is_caught(authority, results):
+    """The whole point: the number on the server is the number computed"""
+    proof = proof_for(authority, statement(results))
+
+    verdict = verify_proof(
+        proof, expectations(results_dir=None, results={"auc": 0.99})
+    )
+
+    assert not verdict.verified
+    assert any("Reported metrics do not match" in f for f in verdict.failures)
+
+
+def test_metrics_check_the_same_however_the_dict_was_ordered(authority, results):
+    """It arrives as JSON off a database, not as the file that was written"""
+    metrics = {"b": 2, "a": 1}
+    body = statement(results, results_sha256=results_hash(metrics))
+    proof = proof_for(authority, body)
+
+    verdict = verify_proof(
+        proof, expectations(results_dir=None, results={"a": 1, "b": 2})
+    )
+
+    assert verdict.verified, verdict.failures
+
+
+def test_metrics_reported_for_a_workload_that_attested_to_none(authority, results):
+    """A predictions-only workload cannot vouch for a metric somebody reports"""
+    body = statement(results, results_sha256=None)
+    proof = proof_for(authority, body)
+
+    verdict = verify_proof(proof, expectations(results_dir=None))
+
+    assert not verdict.verified
+    assert any("attested to no metrics" in f for f in verdict.failures)
 
 
 def test_every_failure_is_reported_not_just_the_first(authority, results):
     """Which part is wrong is the useful output"""
     proof = proof_for(authority, statement(results))
-    (results / "results.yaml").write_text("auc: 0.99\n")
+    (results / RESULTS_FILE).write_text("auc: 0.99\n")
 
     verdict = verify_proof(
         proof, expectations(results, script_image_hash="sha256:otherscript")
@@ -205,14 +253,14 @@ def test_every_failure_is_reported_not_just_the_first(authority, results):
 
 def test_the_proof_files_are_not_part_of_the_results_hash(results):
     """They do not exist yet when the producer computes it"""
-    before = results_hash(str(results))
+    before = results_files_hash(str(results))
     (results / STATEMENT_FILE).write_text("{}")
     (results / TOKEN_FILE).write_text("a.b.c")
 
-    assert results_hash(str(results)) == before
+    assert results_files_hash(str(results)) == before
 
 
-def test_the_results_hash_ignores_names_and_paths(tmp_path):
+def test_the_results_files_hash_ignores_names_and_paths(tmp_path):
     """It has to survive the tar and untar on the way out of the VM"""
     first = tmp_path / "a"
     (first / "nested").mkdir(parents=True)
@@ -222,7 +270,7 @@ def test_the_results_hash_ignores_names_and_paths(tmp_path):
     second.mkdir()
     (second / "renamed.txt").write_text("content")
 
-    assert results_hash(str(first)) == results_hash(str(second))
+    assert results_files_hash(str(first)) == results_files_hash(str(second))
 
 
 def test_a_proof_round_trips_through_a_results_directory(authority, results):

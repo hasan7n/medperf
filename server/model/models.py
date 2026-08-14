@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+from asset.models import LOCAL_ASSET_URL
 
 User = get_user_model()
 
@@ -32,6 +33,17 @@ class Model(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def is_local_asset(self):
+        """Weights that are not public: there is no URL to fetch them from.
+
+        This is what makes running the model require confidential computing."""
+        return (
+            self.type == "ASSET"
+            and self.asset is not None
+            and self.asset.asset_url == LOCAL_ASSET_URL
+        )
 
     def clean(self):
         if self.type == "CONTAINER":

@@ -76,6 +76,93 @@ class ResultsTest(MedPerfTest):
         self.url = self.api_prefix + "/results/{0}/"
         self.set_credentials(None)
 
+    def confidential_setup(self, topology="end_to_end_script", asset_url="local"):
+        """A benchmark whose script computes the metrics inside a confidential
+        VM, over a model whose weights are not public.
+
+        Both are what make an execution's result attested, and so submittable by
+        somebody other than the dataset owner. The arguments exist so a test can
+        take one of them away."""
+        self.set_credentials(self.bmk_prep_mlcube_owner)
+        prep = self.create_mlcube(
+            self.mock_mlcube(
+                name="ccprep",
+                container_config={"ccprep": "ccprep"},
+                state="OPERATION",
+            )
+        ).data
+
+        self.set_credentials(self.ref_model_owner)
+        ref_model = self.create_model(
+            self.mock_asset_model(name="cc_ref_model", state="OPERATION")
+        ).data
+
+        self.set_credentials(self.eval_mlcube_owner)
+        # Every topology but end_to_end_script scores the predictions in a
+        # container of its own.
+        evaluator = None
+        if topology != "end_to_end_script":
+            evaluator = self.create_mlcube(
+                self.mock_mlcube(
+                    name="cceval",
+                    container_config={"cceval": "cceval"},
+                    state="OPERATION",
+                )
+            ).data["id"]
+
+        self.set_credentials(self.bmk_owner)
+        script = self.create_mlcube(
+            self.mock_mlcube(
+                name="ccscript",
+                container_config={"ccscript": "ccscript"},
+                state="OPERATION",
+            )
+        ).data
+        benchmark = self.create_benchmark(
+            self.mock_benchmark(
+                prep["id"],
+                ref_model["id"],
+                evaluator,
+                name="ccbenchmark",
+                topology=topology,
+                benchmark_script=script["id"],
+            )
+        ).data
+
+        self.set_credentials(self.data_owner)
+        dataset = self.create_dataset(
+            self.mock_dataset(
+                data_preparation_mlcube=prep["id"],
+                state="OPERATION",
+                name="ccdataset",
+                generated_uid="ccdataset",
+            )
+        ).data
+        self.create_dataset_association(
+            self.mock_dataset_association(
+                benchmark["id"], dataset["id"], approval_status="APPROVED"
+            ),
+            self.data_owner,
+            self.bmk_owner,
+        )
+
+        self.set_credentials(self.model_owner)
+        model = self.create_model(
+            self.mock_asset_model(
+                name="cc_model", state="OPERATION", asset_url=asset_url
+            )
+        ).data
+        self.create_model_association(
+            self.mock_model_association(
+                benchmark["id"], model["id"], approval_status="APPROVED"
+            ),
+            self.model_owner,
+            self.bmk_owner,
+        )
+
+        self.set_credentials(None)
+        return benchmark, dataset, model
+
 
 @parameterized_class(
     [
@@ -223,6 +310,82 @@ class ResultPutTest(ResultsTest):
 
 @parameterized_class(
     [
+        {"actor": "other_user"},
+    ],
+)
+class ConfidentialResultPutTest(ResultsTest):
+    """Test module for PUT /results/<pk> of a confidential execution
+
+    Ownership follows whoever ran it, not whose data it ran on, so reporting
+    what came back is theirs to do.
+    """
+
+    def setUp(self):
+        super(ConfidentialResultPutTest, self).setUp()
+        self.generic_setup()
+        benchmark, dataset, model = self.confidential_setup()
+
+        self.set_credentials(self.actor)
+        result = self.create_result(
+            self.mock_result(benchmark["id"], model["id"], dataset["id"])
+        ).data
+        self.url = self.url.format(result["id"])
+
+    def test_the_operator_may_report_what_they_collected(self):
+        # Arrange
+        new_results = {"auc": 0.9}
+
+        # Act
+        response = self.client.put(self.url, {"results": new_results}, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"], new_results)
+
+
+class ConfidentialResultPutPermissionTest(ResultsTest):
+    """Test module for permissions of PUT /results/{pk} of a confidential
+    execution somebody other than the dataset owner ran
+
+    Non-permitted actions:
+        PUT: for all users except the execution owner and admin -- the dataset
+            owner included, since the execution is not theirs
+    """
+
+    def setUp(self):
+        super(ConfidentialResultPutPermissionTest, self).setUp()
+        self.generic_setup()
+        benchmark, dataset, model = self.confidential_setup()
+
+        self.set_credentials(self.other_user)
+        result = self.create_result(
+            self.mock_result(benchmark["id"], model["id"], dataset["id"])
+        ).data
+        self.url = self.url.format(result["id"])
+        self.set_credentials(None)
+
+    @parameterized.expand(
+        [
+            ("data_owner", status.HTTP_403_FORBIDDEN),
+            ("model_owner", status.HTTP_403_FORBIDDEN),
+            ("bmk_owner", status.HTTP_403_FORBIDDEN),
+            ("committee_user", status.HTTP_403_FORBIDDEN),
+            (None, status.HTTP_401_UNAUTHORIZED),
+        ]
+    )
+    def test_put_permissions(self, user, expected_status):
+        # Arrange
+        self.set_credentials(user)
+
+        # Act
+        response = self.client.put(self.url, {"results": {"r": 2}}, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, expected_status)
+
+
+@parameterized_class(
+    [
         {"actor": "api_admin"},
     ]
 )
@@ -263,11 +426,14 @@ class ResultDeleteTest(ResultsTest):
 class PermissionTest(ResultsTest):
     """Test module for permissions of /results/{pk} endpoint
     Non-permitted actions:
-        GET: for all users except bmk_owner, committee members, data_owner,
-            and admin
+        GET: for all users except bmk_owner, committee members, the execution
+            owner, and admin
         DELETE: for all users except admin (committee members included)
-        PUT: for all users except admin and data_owner (committee members
-            included)
+        PUT: for all users except admin and the execution owner (committee
+            members included)
+
+    The execution here is one the data owner ran on their own dataset, which
+    is every execution but a confidential end to end one.
     """
 
     def setUp(self):

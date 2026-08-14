@@ -15,6 +15,8 @@ import os
 import sys
 import types
 
+import yaml
+
 import pytest
 
 from medperf_cc import proof as verifier
@@ -95,8 +97,8 @@ def test_the_statement_version_is_one_the_verifier_supports(producer):
     assert producer.STATEMENT_VERSION in verifier.SUPPORTED_STATEMENT_VERSIONS
 
 
-def test_both_sides_hash_the_results_identically(producer, results):
-    assert producer.results_hash(results) == verifier.results_hash(results)
+def test_both_sides_hash_the_result_files_identically(producer, results):
+    assert producer.results_files_hash(results) == verifier.results_files_hash(results)
 
 
 def test_both_sides_exclude_the_proof_files_identically(producer, results):
@@ -105,7 +107,51 @@ def test_both_sides_exclude_the_proof_files_identically(producer, results):
     with open(os.path.join(results, verifier.TOKEN_FILE), "w") as f:
         f.write("a.b.c")
 
-    assert producer.results_hash(results) == verifier.results_hash(results)
+    assert producer.results_files_hash(results) == verifier.results_files_hash(results)
+
+
+def test_both_sides_hash_the_metrics_identically(producer, results):
+    """The producer reads a YAML file, the verifier is handed a dict off the
+    server. They have to arrive at the same number or nobody can check a
+    reported metric"""
+    metrics = {"auc": 0.91, "accuracy": 0.8, "nested": {"b": 2, "a": [1, 2]}}
+    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
+        yaml.safe_dump(metrics, f)
+
+    assert producer.results_hash(results) == verifier.results_hash(metrics)
+
+
+def test_the_metrics_hash_survives_a_json_round_trip(producer, results):
+    """What the verifier gets has been through the server's JSON column, not
+    read off a YAML file"""
+    metrics = {"auc": 0.91, "labels": ["a", "b"]}
+    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
+        yaml.safe_dump(metrics, f)
+
+    from_server = json.loads(json.dumps(metrics))
+
+    assert producer.results_hash(results) == verifier.results_hash(from_server)
+
+
+def test_the_metrics_hash_ignores_how_the_yaml_was_written(producer, results):
+    """Key order and formatting are not part of what was computed"""
+    path = os.path.join(results, verifier.RESULTS_FILE)
+    with open(path, "w") as f:
+        f.write("auc: 0.91\naccuracy: 0.8\n")
+    one_way = producer.results_hash(results)
+    with open(path, "w") as f:
+        f.write("accuracy:   0.8\n\nauc: 0.91\n")
+
+    assert producer.results_hash(results) == one_way
+
+
+def test_a_workload_producing_no_metrics_attests_to_none(producer, tmp_path):
+    """An inference_script workload returns predictions, not a score"""
+    predictions_only = tmp_path / "predictions"
+    predictions_only.mkdir()
+    (predictions_only / "preds.csv").write_text("1,2,3\n")
+
+    assert producer.results_hash(str(predictions_only)) is None
 
 
 def test_both_sides_hash_the_statement_identically(producer):
@@ -164,3 +210,37 @@ def test_the_script_is_deliberately_not_in_the_statement(
     statement = producer.build_statement(results)
 
     assert "script" not in json.dumps(statement)
+
+
+def test_both_sides_map_an_undefined_metric_the_same_way(producer, results):
+    """`AUC: .nan` is a real output -- an AUC is undefined when the labels hold
+    one class. Python spells it `NaN`, which no other JSON reader accepts, so
+    it cannot be what either side hashes"""
+    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
+        f.write("AUC: .nan\nAccuracy: 0.93\n")
+
+    assert producer.results_hash(results) == verifier.results_hash(
+        {"AUC": float("nan"), "Accuracy": 0.93}
+    )
+
+
+def test_an_undefined_metric_hashes_as_the_null_it_becomes(producer, results):
+    """What a strict JSON store holds after the round trip is null, and that
+    has to be what verifies"""
+    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
+        f.write("AUC: .nan\nAccuracy: 0.93\n")
+
+    assert producer.results_hash(results) == verifier.results_hash(
+        {"AUC": None, "Accuracy": 0.93}
+    )
+
+
+def test_what_is_hashed_is_always_readable_by_any_json_reader(producer, results):
+    """Belt and braces: `allow_nan=False` means a value that slipped through
+    would raise here rather than produce a hash nobody can recompute"""
+    with open(os.path.join(results, verifier.RESULTS_FILE), "w") as f:
+        f.write("AUC: .inf\nWorse: -.inf\n")
+
+    assert producer.results_hash(results) == verifier.results_hash(
+        {"AUC": None, "Worse": None}
+    )

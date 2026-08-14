@@ -21,11 +21,11 @@ fact. `setup_assets` measures the decrypted inputs and records what it found;
 the statement reports those measurements, so a verifier can see the declared and
 the measured values agree without having to know that the script checks them.
 
-## The results hash
+## The two result hashes
 
-`results_sha256` covers every file the operator will report, and deliberately
-*not* the two proof files, which do not exist yet when it is computed. A
-verifier must apply the same exclusion. The algorithm, so it can be
+`results_files_sha256` covers every file the operator will report, and
+deliberately *not* the two proof files, which do not exist yet when it is
+computed. A verifier must apply the same exclusion. The algorithm, so it can be
 reimplemented exactly:
 
     sha256 of each file's content, hex
@@ -34,14 +34,25 @@ reimplemented exactly:
     concatenated utf-8 and hashed again
 
 It depends on file contents only, never on names or paths, so it survives the
-tar and untar the results go through on their way out of the VM.
+tar and untar the results go through on their way out of the VM. Only somebody
+holding those files can check it.
+
+`results_sha256` covers the metrics as a *value*: `results.yaml` parsed, then
+hashed canonically. That is what MedPerf uploads to its server and serves back
+as JSON, so anybody holding nothing but the reported numbers can recompute this
+and see they are the ones this workload computed. Hashing the file's bytes
+would not do -- YAML formatting and key order would have to survive a round
+trip through a database to match.
 """
 
 import argparse
 import hashlib
 import json
+import math
 import os
 from typing import Optional
+
+import yaml
 
 from assets.attestation import AttestationUnavailable, request_token
 from crypto import get_string_hash
@@ -50,17 +61,21 @@ STATEMENT_FILE = "integrity_statement.json"
 TOKEN_FILE = "integrity_token.jwt"
 PROOF_FILES = {STATEMENT_FILE, TOKEN_FILE}
 
+# The one file MedPerf reads a benchmark's metrics out of. Absent for a topology
+# whose workload produces predictions rather than a score.
+RESULTS_FILE = "results.yaml"
+
 MEASURED_HASHES_FILE = "measured_hashes.json"
 
 # A proof is meant to be checkable by anyone, so there is no particular relying
 # party to name. A fixed, recognizable audience beats a misleading one.
 PROOF_AUDIENCE = "https://medperf.org/integrity-proof"
 
-STATEMENT_VERSION = 1
+STATEMENT_VERSION = 2
 
 
-def results_hash(results_path: str) -> str:
-    """Hashes the result files, excluding the proof artifacts themselves."""
+def results_files_hash(results_path: str) -> str:
+    """Hashes every result file, excluding the proof artifacts themselves."""
     hashes = []
     for root, _, files in os.walk(results_path):
         for name in files:
@@ -74,11 +89,48 @@ def results_hash(results_path: str) -> str:
     return digest.hexdigest()
 
 
-def canonical_statement_hash(statement: dict) -> str:
-    """A hash of the statement that does not depend on how it was serialized."""
+def json_safe(value):
+    """A value with everything JSON cannot spell taken out.
+
+    Only non-finite floats, which is what a metric like an undefined AUC comes
+    out as. Python writes them as bare `NaN` and `Infinity`, which no other JSON
+    reader accepts -- PostgreSQL rejects them outright -- so a hash taken over
+    them could not be recomputed by anybody else, which is the whole point of
+    taking it. They become null, which is what survives the round trip anyway.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(item) for item in value]
+    return value
+
+
+def canonical_hash(value) -> str:
+    """A hash of a value that does not depend on how it was serialized."""
     return get_string_hash(
-        json.dumps(statement, sort_keys=True, separators=(",", ":"))
+        json.dumps(
+            json_safe(value), sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
     )
+
+
+def canonical_statement_hash(statement: dict) -> str:
+    return canonical_hash(statement)
+
+
+def results_hash(results_path: str):
+    """Hashes the metrics as a value, or None if this workload produced none.
+
+    Parsed before hashing, so what is attested to is what MedPerf will upload
+    and anyone can recompute -- not the bytes of a file nobody downstream
+    keeps."""
+    path = os.path.join(results_path, RESULTS_FILE)
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return canonical_hash(yaml.safe_load(f))
 
 
 def build_statement(results_path: str) -> dict:

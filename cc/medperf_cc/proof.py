@@ -15,6 +15,7 @@ still be current would make every proof self-destruct.
 
 import hashlib
 import json
+import math
 import os
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -28,19 +29,26 @@ STATEMENT_FILE = "integrity_statement.json"
 TOKEN_FILE = "integrity_token.jwt"
 PROOF_FILES = {STATEMENT_FILE, TOKEN_FILE}
 
+# The one file MedPerf reads a benchmark's metrics out of. Its parsed contents
+# are what gets uploaded to the server, and what most people will ever verify.
+RESULTS_FILE = "results.yaml"
+
 # A proof is meant to be checkable by anyone, so there is no particular relying
 # party to name. A fixed, recognizable audience beats a misleading one.
 PROOF_AUDIENCE = "https://medperf.org/integrity-proof"
-SUPPORTED_STATEMENT_VERSIONS = {1}
+SUPPORTED_STATEMENT_VERSIONS = {2}
 
 
-def results_hash(results_path: str) -> str:
-    """Hashes result files the way the workload did.
+def results_files_hash(results_path: str) -> str:
+    """Hashes every file the workload produced.
 
     Must match the confidential base image exactly: sha256 of each file's
     content as hex, excluding the two proof files, sorted as strings,
     concatenated utf-8 and hashed again. Content only, never names or paths, so
     it survives the tar and untar on the way out of the VM.
+
+    Covers everything -- predictions, logs, whatever the script wrote -- but
+    only somebody holding those files can check it.
     """
     hashes = []
     for root, _, files in os.walk(results_path):
@@ -55,6 +63,18 @@ def results_hash(results_path: str) -> str:
     return digest.hexdigest()
 
 
+def results_hash(results: dict) -> str:
+    """Hashes the metrics themselves, as a value rather than as a file.
+
+    This is the number everyone downstream actually sees: MedPerf parses
+    `results.yaml`, uploads the result as a dict, and serves it back as JSON.
+    Hashing the parsed value rather than the file's bytes is what lets anybody
+    holding that dict recompute this -- no files, no YAML formatting, no
+    knowledge of how it was written.
+    """
+    return canonical_hash(results)
+
+
 def file_hash(path: str) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as f:
@@ -63,10 +83,35 @@ def file_hash(path: str) -> str:
     return digest.hexdigest()
 
 
+def json_safe(value):
+    """A value with everything JSON cannot spell taken out.
+
+    Only non-finite floats, which is what a metric like an undefined AUC comes
+    out as. Python writes them as bare `NaN` and `Infinity`, which no other JSON
+    reader accepts -- PostgreSQL rejects them outright -- so a hash taken over
+    them could not be recomputed by anybody else, which is the whole point of
+    taking it. They become null, which is what survives the round trip anyway.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(item) for item in value]
+    return value
+
+
+def canonical_hash(value) -> str:
+    """A hash of a value that does not depend on how it was serialized."""
+    canonical = json.dumps(
+        json_safe(value), sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def statement_hash(statement: dict) -> str:
     """The nonce the workload committed to."""
-    canonical = json.dumps(statement, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode()).hexdigest()
+    return canonical_hash(statement)
 
 
 @dataclass
@@ -107,6 +152,10 @@ class ProofExpectations:
     script_image_hash: Optional[str] = None
     data_hash: Optional[str] = None
     model_hash: Optional[str] = None
+    # The metrics as a value -- what the server holds, and what anybody can
+    # check without having run anything.
+    results: Optional[dict] = None
+    # Where the whole output directory is, for whoever still has it.
     results_path: Optional[str] = None
 
 
@@ -181,17 +230,41 @@ def __check_statement_version(statement: dict, verdict: ProofVerdict):
 def __check_results(
     statement: dict, expectations: ProofExpectations, verdict: ProofVerdict
 ):
-    if expectations.results_path is None:
-        return
+    """Two independent claims about the output, checkable by different people.
 
-    actual = results_hash(expectations.results_path)
-    if actual != statement.get("results_sha256"):
-        verdict.failures.append(
-            "Results do not match the proof: the statement attests to"
-            f" {statement.get('results_sha256')}, these results hash to {actual}"
-        )
-    else:
-        verdict.checks.append("Results are exactly the bytes the workload attested to")
+    Whoever holds the files can check all of them. Whoever holds nothing but the
+    reported metrics -- anybody reading them off the server -- can still check
+    that those are the metrics the workload computed."""
+    if expectations.results is not None:
+        attested = statement.get("results_sha256")
+        actual = results_hash(expectations.results)
+        if attested is None:
+            verdict.failures.append(
+                "The workload attested to no metrics, so the reported ones"
+                " cannot be checked against it"
+            )
+        elif actual != attested:
+            verdict.failures.append(
+                "Reported metrics do not match the proof: the statement attests"
+                f" to {attested}, these metrics hash to {actual}"
+            )
+        else:
+            verdict.checks.append(
+                "Reported metrics are exactly the ones the workload computed"
+            )
+
+    if expectations.results_path is not None:
+        attested = statement.get("results_files_sha256")
+        actual = results_files_hash(expectations.results_path)
+        if actual != attested:
+            verdict.failures.append(
+                "Result files do not match the proof: the statement attests to"
+                f" {attested}, these files hash to {actual}"
+            )
+        else:
+            verdict.checks.append(
+                "Result files are exactly the bytes the workload produced"
+            )
 
 
 def __check_script(
