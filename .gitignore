@@ -166,3 +166,4 @@ cli/tmp_test.sh
 # Staged into the confidential base image at build time by its build.sh.
 # The source of truth is cc/medperf_cc/statement.py.
 examples/cc/base_image/src/statement.py
+ruff.toml
