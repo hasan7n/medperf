@@ -10,15 +10,18 @@ import pytest
 
 from medperf_cc.vault.gcp import workload_uid_assertion
 from medperf_cc.identity import TERM_CLAIMS, AssetKind, WorkloadIdentity
-from medperf_cc.policy import AssetPolicy
+from tests.conftest import any_policy
 
 
 @pytest.mark.parametrize("kind", [AssetKind.DATA, AssetKind.MODEL])
 def test_the_assertion_and_the_identity_have_the_same_shape(kind):
-    binding = AssetPolicy().binding(kind)
+    binding = any_policy().binding(kind)
     workload = WorkloadIdentity(
-        script_hash="s", data_hash="d", model_hash="m",
-        result_collector_hash="c", script_id=1,
+        script_hash="s",
+        data_hash="d",
+        model_hash="m",
+        result_collector_hash="c",
+        script_id=1,
     )
 
     assertion = workload_uid_assertion(binding)
@@ -27,7 +30,7 @@ def test_the_assertion_and_the_identity_have_the_same_shape(kind):
 
 
 def test_the_assertion_reads_the_terms_in_binding_order():
-    binding = AssetPolicy().binding(AssetKind.DATA)
+    binding = any_policy().binding(AssetKind.DATA)
 
     assertion = workload_uid_assertion(binding)
 

@@ -76,8 +76,9 @@ def test_the_workload_is_told_where_to_write_without_being_asked(
     runner.start(workload, IMAGE, {}, {}, "key")
 
     result_config = json.loads(
-        [c for c in command_of(started) if c.startswith("RESULT_CONFIG=")][0]
-        .split("=", 1)[1]
+        [c for c in command_of(started) if c.startswith("RESULT_CONFIG=")][0].split(
+            "=", 1
+        )[1]
     )
     assert result_config == runner.result_config(workload)
 

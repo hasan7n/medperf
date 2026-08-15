@@ -1,11 +1,9 @@
 {% import "macros/cc_backend_fields.html" as cc_fields %}
 {% macro cc_asset(defaults, configured, initialized, last_synced, entity_id, entity_type, backends, backend, settings, field_label, task_running=false, policy={}) %}
 {% set peer_label = "model" if entity_type == "dataset" else "dataset" %}
-{# An unset choice takes the asset kind's default: a data owner authorizes one
-   exact combination, a model owner authorizes an image regardless of what it
-   is pointed at. #}
-{% set binds_by_default = entity_type == "dataset" %}
-{% set collectors = policy.get('allowed_result_collectors', ["data_owner"] if binds_by_default else []) %}
+{# A policy means the same thing for either kind of asset. An owner who has not
+   configured one yet pins the peer, and names no collectors. #}
+{% set collectors = policy.get('allowed_result_collectors') or [] %}
 {% if not initialized and configured %}
 <p class="rounded-xl p-4 bg-danger-muted border border-danger text-danger-fg font-semibold">
     <strong>Misconfigured</strong>
@@ -35,7 +33,7 @@
                 <p class="text-secondary font-semibold">Grant scope</p>
                 <label class="flex items-start gap-3 cursor-pointer text-ink">
                     <input type="checkbox" name="bind_peer_asset" value="true" class="mt-1 rounded border-border-strong text-brand focus:ring-brand-accent accent-brand"
-                           {% if policy.get('bind_peer_asset', binds_by_default) %}checked{% endif %} {% if task_running %}disabled{% endif %}>
+                           {% if policy.get('bind_peer_asset', true) %}checked{% endif %} {% if task_running %}disabled{% endif %}>
                     <span>
                         <span class="block font-semibold">Pin the {{ peer_label }}</span>
                         <span class="block text-sm text-muted-fg">Authorize one exact {{ peer_label }} rather than any. You will need to sync again whenever a {{ peer_label }} joins a benchmark.</span>
@@ -48,7 +46,7 @@
                contain them before a workload can start. #}
             <div class="pt-2 border-t-2 border-border space-y-3">
                 <p class="text-secondary font-semibold">Release results to</p>
-                <p class="text-sm text-muted-fg">Results are encrypted for whoever runs the workload. Select none to allow anyone the other asset owner also allows.</p>
+                <p class="text-sm text-muted-fg">Results are encrypted for whoever runs the workload, so this is who may operate one involving this asset. Select at least one &mdash; naming nobody would leave an execution nobody could run.</p>
                 <div class="flex flex-wrap gap-4">
                     {% for party, party_label in [("data_owner", "Data owner"), ("model_owner", "Model owner"), ("benchmark_owner", "Benchmark owner")] %}
                     <label class="inline-flex items-center gap-2 cursor-pointer text-ink">

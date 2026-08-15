@@ -11,9 +11,16 @@ from medperf.enums import BenchmarkTopology
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.cube import TestCube
 from medperf_cc import AssetKind
-from medperf_cc import AssetPolicy
+from medperf_cc import AssetPolicy, Party
 
 PATCH_CC_WORKLOADS = "medperf.cc.workloads.{}"
+
+
+def a_policy(**overrides) -> AssetPolicy:
+    """A valid policy whose collectors these tests do not care about."""
+    fields = {"allowed_result_collectors": [Party.DATA_OWNER]}
+    fields.update(overrides)
+    return AssetPolicy(**fields)
 
 
 @pytest.mark.parametrize("component_type", ["model", "dataset"])
@@ -82,14 +89,12 @@ def test_confidential_plan_is_resolved_for_script_benchmarks(mocker):
     assert plan.evaluator is None
 
 
-@pytest.mark.parametrize(
-    "kind,binds_peer", [(AssetKind.DATA, True), (AssetKind.MODEL, False)]
-)
-def test_a_grant_that_pins_no_peer_enumerates_none(mocker, kind, binds_peer):
+@pytest.mark.parametrize("kind", [AssetKind.DATA, AssetKind.MODEL])
+def test_a_grant_that_pins_no_peer_enumerates_none(mocker, kind):
     """The same grant covers every peer, so there is nothing to name"""
     # Arrange
     spy = mocker.patch(PATCH_CC_WORKLOADS.format("get_approved_component_ids"))
-    policy = AssetPolicy(bind_peer_asset=False)
+    policy = a_policy(bind_peer_asset=False)
     peers = __peer_models if kind is AssetKind.DATA else __peer_datasets
 
     # Act
@@ -113,7 +118,7 @@ def test_a_data_owner_pinning_the_model_skips_models_that_are_not_confidential(m
     )
 
     # Act
-    models = __peer_models(TestBenchmark(), AssetPolicy(bind_peer_asset=True))
+    models = __peer_models(TestBenchmark(), a_policy(bind_peer_asset=True))
 
     # Assert
     assert models == [confidential]

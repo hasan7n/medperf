@@ -11,11 +11,13 @@ import os
 
 import pytest
 
-from medperf_cc import AssetKind, AssetPolicy, ConfidentialAsset, Party
+from medperf_cc import AssetKind, ConfidentialAsset, Party
 from medperf_cc.backends.mock import MOCK, PERMITTED_FILE
 from medperf_cc.identity import WorkloadIdentity
 from medperf_cc.storage.mock import ASSET_FILE
 from medperf_cc.vault.mock import KEY_FILE
+
+from tests.conftest import any_policy
 
 CIPHERTEXT = b"not really encrypted, but the vault never looks"
 KEY = b"0123456789abcdef0123456789abcdef"
@@ -39,7 +41,7 @@ def workload(data_hash="datahash", collector_hash="collectorhash"):
 
 
 def published(config, kind=AssetKind.DATA, policy=None):
-    asset = ConfidentialAsset(config, "dataset3", kind, policy or AssetPolicy())
+    asset = ConfidentialAsset(config, "dataset3", kind, policy or any_policy())
     asset.verify()
     asset.publish(KEY, io.BytesIO(CIPHERTEXT))
     return asset
@@ -71,17 +73,20 @@ def test_repeated_identities_collapse(config):
     assert len(asset.vault.store.permitted()) == 1
 
 
-def test_a_model_owner_collapses_what_they_do_not_pin(config):
-    """Two workloads differing only in data are one grant to a model owner"""
-    asset = ConfidentialAsset(config, "model4", AssetKind.MODEL, AssetPolicy())
+def test_not_pinning_the_peer_collapses_what_it_no_longer_distinguishes(config):
+    """Two workloads differing only in data are one grant to an owner who chose
+    not to pin the data"""
+    policy = any_policy(bind_peer_asset=False)
+    asset = ConfidentialAsset(config, "model4", AssetKind.MODEL, policy)
 
     asset.set_permitted([workload(), workload(data_hash="other")])
 
-    assert asset.vault.store.permitted() == ["scripthash::modelhash"]
+    assert asset.vault.store.permitted() == ["scripthash::modelhash::collectorhash"]
 
 
-def test_a_data_owner_keeps_them_apart(config):
-    asset = ConfidentialAsset(config, "dataset3", AssetKind.DATA, AssetPolicy())
+def test_pinning_the_peer_keeps_them_apart(config):
+    """Which is what an unconfigured policy does, for either kind of asset"""
+    asset = ConfidentialAsset(config, "dataset3", AssetKind.DATA, any_policy())
 
     asset.set_permitted([workload(), workload(data_hash="other")])
 
@@ -123,7 +128,7 @@ def test_a_mixed_configuration_tells_the_workload_about_both(tmp_path):
     }
 
     told = ConfidentialAsset(
-        config, "dataset3", AssetKind.DATA, AssetPolicy()
+        config, "dataset3", AssetKind.DATA, any_policy()
     ).workload_config()
 
     assert told["storage"]["backend"] == MOCK
@@ -140,7 +145,7 @@ def test_no_secret_reaches_the_workload(tmp_path):
         "admin_token": "the-admin-token",
     }
 
-    told = ConfidentialAsset(config, "dataset3", AssetKind.DATA, AssetPolicy())
+    told = ConfidentialAsset(config, "dataset3", AssetKind.DATA, any_policy())
 
     assert "the-admin-token" not in json.dumps(told.workload_config())
 
@@ -150,9 +155,7 @@ def test_the_policy_decides_what_the_grant_pins(config):
         config,
         "model4",
         AssetKind.MODEL,
-        AssetPolicy(
-            bind_peer_asset=True, allowed_result_collectors=[Party.DATA_OWNER]
-        ),
+        any_policy(bind_peer_asset=True, allowed_result_collectors=[Party.DATA_OWNER]),
     )
 
     narrow.set_permitted([workload()])

@@ -1,7 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
-from asset.models import LOCAL_ASSET_URL
 
 User = get_user_model()
 

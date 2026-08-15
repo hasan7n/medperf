@@ -99,12 +99,18 @@ def set_policies(mocker, dataset_policy, model_policy):
     )
 
 
-def test_an_unrestricted_pair_of_owners_accepts_any_operator(mocker, entities):
+def test_an_operator_both_owners_named_is_accepted(mocker, entities):
     # Arrange
-    set_policies(mocker, AssetPolicy(allowed_result_collectors=[]), AssetPolicy())
+    set_policies(
+        mocker,
+        AssetPolicy(allowed_result_collectors=[Party.BENCHMARK_OWNER]),
+        AssetPolicy(allowed_result_collectors=[Party.BENCHMARK_OWNER]),
+    )
 
     # Act & Assert
-    check_operator_is_allowed(99, 1, entities["dataset"], entities["model"])
+    check_operator_is_allowed(
+        BENCHMARK_OWNER_ID, 1, entities["dataset"], entities["model"]
+    )
 
 
 def test_the_operator_must_be_accepted_by_both_owners(mocker, entities):
@@ -120,9 +126,7 @@ def test_the_operator_must_be_accepted_by_both_owners(mocker, entities):
     )
 
     # Act & Assert
-    check_operator_is_allowed(
-        DATA_OWNER_ID, 1, entities["dataset"], entities["model"]
-    )
+    check_operator_is_allowed(DATA_OWNER_ID, 1, entities["dataset"], entities["model"])
     with pytest.raises(ExecutionError, match="model owner"):
         check_operator_is_allowed(
             BENCHMARK_OWNER_ID, 1, entities["dataset"], entities["model"]
@@ -134,7 +138,7 @@ def test_an_operator_holding_no_role_is_refused(mocker, entities):
     set_policies(
         mocker,
         AssetPolicy(allowed_result_collectors=[Party.DATA_OWNER]),
-        AssetPolicy(allowed_result_collectors=[]),
+        AssetPolicy(allowed_result_collectors=[Party.MODEL_OWNER]),
     )
 
     # Act & Assert

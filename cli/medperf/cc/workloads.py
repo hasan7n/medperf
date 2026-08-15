@@ -20,11 +20,13 @@ from medperf.entities.benchmark import Benchmark
 from medperf.entities.dataset import Dataset
 from medperf.entities.model import Model
 from medperf.enums import Status
-from medperf_cc import AssetKind, WorkloadIdentity
+from medperf_cc import WorkloadIdentity
 from medperf_cc import AssetPolicy
 
 
-def get_associated_benchmarks(component_id: int, component_type: str) -> List[Benchmark]:
+def get_associated_benchmarks(
+    component_id: int, component_type: str
+) -> List[Benchmark]:
     """The benchmarks a dataset or a model is *approved* to take part in.
 
     Only approved, current associations are considered. A pending request has
@@ -63,7 +65,7 @@ def get_confidential_plan(benchmark: Benchmark) -> BenchmarkPlan:
 def get_dataset_workloads(dataset: Dataset) -> List[WorkloadIdentity]:
     """The workloads a data owner authorizes to read their data."""
     policy = policy_of(dataset)
-    collectors = policy.result_collectors(AssetKind.DATA)
+    collectors = policy.allowed_result_collectors
 
     workloads = []
     for benchmark in get_associated_benchmarks(dataset.id, "dataset"):
@@ -90,7 +92,7 @@ def get_dataset_workloads(dataset: Dataset) -> List[WorkloadIdentity]:
 def get_model_workloads(model: Model) -> List[WorkloadIdentity]:
     """The workloads a model owner authorizes to load their weights."""
     policy = policy_of(model)
-    collectors = policy.result_collectors(AssetKind.MODEL)
+    collectors = policy.allowed_result_collectors
     asset_hash = model.asset_obj.asset_hash
 
     workloads = []
@@ -120,7 +122,7 @@ def __peer_models(benchmark: Benchmark, policy: AssetPolicy) -> List[Optional[Mo
 
     A grant that does not pin the model is the same grant whichever model runs,
     so there is nothing to enumerate: None stands for "any"."""
-    if not policy.binds_peer_asset(AssetKind.DATA):
+    if not policy.bind_peer_asset:
         return [None]
 
     models = [
@@ -134,7 +136,7 @@ def __peer_datasets(
     benchmark: Benchmark, policy: AssetPolicy
 ) -> List[Optional[Dataset]]:
     """The datasets a model owner's grant has to name, one at a time."""
-    if not policy.binds_peer_asset(AssetKind.MODEL):
+    if not policy.bind_peer_asset:
         return [None]
 
     return [

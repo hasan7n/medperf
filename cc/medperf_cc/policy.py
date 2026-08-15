@@ -26,25 +26,18 @@ class Party(Enum):
     DATA_OWNER = "data_owner"
 
 
-# What an owner who states no preference gets. Data cannot be un-leaked, so
-# silence must not widen who may read it; a model owner's grant is meant to be
-# data-agnostic, so pinning a dataset would mean re-authorizing every time one
-# joins a benchmark. Both reproduce what each side did before it was a choice.
-DEFAULT_BIND_PEER_ASSET = {AssetKind.DATA: True, AssetKind.MODEL: False}
-DEFAULT_RESULT_COLLECTORS = {
-    AssetKind.DATA: [Party.DATA_OWNER],
-    AssetKind.MODEL: [],
-}
-
-
 class AssetPolicy(BaseModel):
     """Where a workload must run, and how narrowly the grant is scoped.
 
     An owner always pins the benchmark script and their own asset: anything
     less would let an arbitrary image, or an image aimed at somebody else's
     asset, decrypt theirs. The remaining two terms of a workload's identity are
-    theirs to choose, and `None` means "no preference" -- the asset kind's
-    default, not "off".
+    theirs to choose.
+
+    A policy means the same thing whichever kind of asset it is attached to.
+    What differs between a dataset and a model is only which term is their own
+    and which is the peer's, and that follows from the asset, not from the
+    policy.
     """
 
     # The cloud region or zone the confidential VM must be running in.
@@ -52,11 +45,14 @@ class AssetPolicy(BaseModel):
     # The confidential hardware platform, as the attestation reports it.
     hardware: Optional[str] = None
     # Whether to pin the other asset in the execution, rather than allow any.
-    bind_peer_asset: Optional[bool] = None
-    # Whose keys this owner will let results be encrypted for. Naming any pins
-    # the collector: an owner cannot restrict who reads the results without
-    # saying which key, and has no reason to pin a key without restricting.
-    # Empty means unrestricted, which is the same as not pinning at all.
+    # Pinning is the default: an owner who has not said otherwise authorizes
+    # one exact combination, never any peer that comes along.
+    bind_peer_asset: bool = True
+    # Whose keys this owner will let results be encrypted for. Results are
+    # encrypted for whoever operates the execution, so this is really the list
+    # of who may operate one involving this asset. It has to name somebody:
+    # authorizing nobody is a policy no execution could ever satisfy, and it is
+    # far more likely to be an owner who forgot than one who meant it.
     allowed_result_collectors: Optional[List[Party]] = None
 
     class Config:
@@ -64,26 +60,26 @@ class AssetPolicy(BaseModel):
         # a policy they did not get, so it is refused rather than ignored.
         extra = "forbid"
 
-    @validator("allowed_result_collectors")
-    def unique_collectors(cls, parties):
-        if parties is None:
-            return None
+    @validator("allowed_result_collectors", always=True)
+    def at_least_one_collector(cls, parties):
+        """Refused rather than defaulted: who may read an asset's results is
+        not something to guess on an owner's behalf."""
+        if not parties:
+            raise ValueError(
+                "name at least one party allowed to collect results."
+                f" One or more of: {', '.join(party.value for party in Party)}"
+            )
         return list(dict.fromkeys(parties))
 
-    def binds_peer_asset(self, kind: AssetKind) -> bool:
-        if self.bind_peer_asset is None:
-            return DEFAULT_BIND_PEER_ASSET[kind]
-        return self.bind_peer_asset
-
-    def result_collectors(self, kind: AssetKind) -> List[Party]:
-        if self.allowed_result_collectors is None:
-            return DEFAULT_RESULT_COLLECTORS[kind]
-        return self.allowed_result_collectors
-
     def binding(self, kind: AssetKind) -> WorkloadBinding:
-        terms = {SCRIPT_TERM, kind.own_term}
-        if self.binds_peer_asset(kind):
+        """Which terms of a workload's identity this owner pins.
+
+        `kind` says which asset the policy is protecting -- that is what makes
+        one of the two asset terms "own" and the other "peer". It is not a
+        second source of policy.
+
+        The collector is always pinned, because a policy always names one."""
+        terms = {SCRIPT_TERM, kind.own_term, COLLECTOR_TERM}
+        if self.bind_peer_asset:
             terms.add(kind.peer_term)
-        if self.result_collectors(kind):
-            terms.add(COLLECTOR_TERM)
         return WorkloadBinding(terms=[term for term in TERM_ORDER if term in terms])

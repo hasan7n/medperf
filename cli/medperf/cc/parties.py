@@ -19,7 +19,6 @@ from medperf.entities.model import Model
 from medperf.enums import CryptoKeyType
 from medperf.exceptions import ExecutionError, MedperfException
 from medperf.utils import get_string_hash
-from medperf_cc import AssetKind
 from medperf_cc import Party
 
 
@@ -122,13 +121,8 @@ def check_operator_is_allowed(
     benchmark = Benchmark.get(benchmark_id)
     held = parties_of(operator_id, party_owners(benchmark, dataset, model))
 
-    for label, entity, kind in (
-        ("Dataset", dataset, AssetKind.DATA),
-        ("Model", model, AssetKind.MODEL),
-    ):
-        collectors = policy_of(entity).result_collectors(kind)
-        if not collectors:
-            continue
+    for label, entity in (("Dataset", dataset), ("Model", model)):
+        collectors = policy_of(entity).allowed_result_collectors
         if not held.intersection(collectors):
             allowed = ", ".join(party.value for party in collectors)
             raise ExecutionError(

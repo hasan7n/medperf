@@ -84,11 +84,16 @@ The other two are yours to decide:
 | Pin the {model, dataset} | Authorize one exact peer asset rather than any. You will have to sync again whenever a new one is approved for a benchmark. |
 | Release results to | Whose keys results may be encrypted for. Naming any of them has the cloud check the key, and not just this client. |
 
-Leaving both unset is not the same as turning them off: an unset choice takes
-the default for the kind of asset. **A data owner pins everything**, because
-data cannot be un-leaked and silence should not widen who may read it. **A
-model owner pins neither**, because a grant meant to apply to any dataset would
-otherwise have to be re-authorized every time one joins a benchmark.
+A policy means the same thing whichever kind of asset it is attached to. There
+is no separate default for a dataset and for a model: what the asset kind
+decides is only which of the two asset hashes is your own and which is the
+peer's.
+
+Unconfigured, **the peer is pinned** — the narrower of the two, so that silence
+never authorizes a peer you have not seen. **Collectors have no default at
+all**: a policy that names nobody is refused rather than guessed, because
+authorizing nobody is a policy no execution could satisfy and is far more likely
+to be an owner who forgot than one who meant it.
 
 Both choices are also available in the JSON policy file the CLI takes:
 
@@ -99,9 +104,10 @@ Both choices are also available in the JSON policy file the CLI takes:
 }
 ```
 
-Naming a collector is what pins one: there is no reason to pin a key without
-restricting who may collect, and no way to restrict who may collect without
-saying whose key. An empty list means unrestricted.
+`allowed_result_collectors` has to name at least one party. An empty list, or
+leaving the key out, is rejected. Because it always names somebody, the
+collector's key is always pinned in the cloud as well, not just checked by this
+client.
 
 ### Who may collect results
 

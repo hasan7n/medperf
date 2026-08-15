@@ -15,7 +15,7 @@ from medperf_cc.storage.mock import MockStorage
 from medperf_cc.vault import VAULTS, get_vault
 from medperf_cc.vault.medperf_kbs import KBSVault
 from medperf_cc.identity import AssetKind
-from medperf_cc.policy import AssetPolicy
+from tests.conftest import any_policy
 
 SHARED = {"backend": "gcp", "project_id": "p", "project_number": "42", "bucket": "b"}
 
@@ -75,8 +75,8 @@ def test_each_service_resolves_on_its_own():
     vault = get_vault(
         {"backend": "medperf_kbs", "url": "https://kbs", "audience": "a"},
         "dataset1",
-        AssetPolicy().binding(AssetKind.DATA),
-        AssetPolicy(),
+        any_policy().binding(AssetKind.DATA),
+        any_policy(),
     )
 
     assert isinstance(storage, MockStorage)

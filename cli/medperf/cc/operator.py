@@ -68,9 +68,7 @@ def wait_for_workload(runner: WorkloadRunner, workload: WorkloadIdentity):
 
 
 @as_medperf_error(ExecutionError)
-def workload_results_exists(
-    runner: WorkloadRunner, workload: WorkloadIdentity
-) -> bool:
+def workload_results_exists(runner: WorkloadRunner, workload: WorkloadIdentity) -> bool:
     return runner.results_ready(workload)
 
 

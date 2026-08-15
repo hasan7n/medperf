@@ -74,7 +74,8 @@ def test_an_oidc_token_needs_a_jwks(authority):
 
     with pytest.raises(AttestationError, match="no JWKS"):
         verify_token(
-            raw, TrustAnchor(pki_root_pem=authority.root_pem),
+            raw,
+            TrustAnchor(pki_root_pem=authority.root_pem),
             AttestationRequirements(),
         )
 
