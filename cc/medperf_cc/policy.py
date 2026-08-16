@@ -14,7 +14,7 @@ from medperf_cc.identity import (
     SCRIPT_TERM,
     TERM_ORDER,
     AssetKind,
-    WorkloadBinding,
+    WorkloadScope,
 )
 
 
@@ -71,7 +71,7 @@ class AssetPolicy(BaseModel):
             )
         return list(dict.fromkeys(parties))
 
-    def binding(self, kind: AssetKind) -> WorkloadBinding:
+    def scope(self, kind: AssetKind) -> WorkloadScope:
         """Which terms of a workload's identity this owner pins.
 
         `kind` says which asset the policy is protecting -- that is what makes
@@ -82,4 +82,4 @@ class AssetPolicy(BaseModel):
         terms = {SCRIPT_TERM, kind.own_term, COLLECTOR_TERM}
         if self.bind_peer_asset:
             terms.add(kind.peer_term)
-        return WorkloadBinding(terms=[term for term in TERM_ORDER if term in terms])
+        return WorkloadScope(terms=[term for term in TERM_ORDER if term in terms])

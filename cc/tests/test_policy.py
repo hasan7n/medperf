@@ -20,17 +20,17 @@ def test_an_owner_always_pins_the_script_their_own_asset_and_the_collector(kind)
     policy always names somebody allowed to collect"""
     policy = any_policy(bind_peer_asset=False)
 
-    binding = policy.binding(kind)
+    scope = policy.scope(kind)
 
-    assert binding.terms == [SCRIPT_TERM, kind.own_term, COLLECTOR_TERM]
+    assert scope.terms == [SCRIPT_TERM, kind.own_term, COLLECTOR_TERM]
 
 
 @pytest.mark.parametrize("kind", [AssetKind.DATA, AssetKind.MODEL])
 def test_the_peer_asset_is_pinned_unless_it_is_turned_off(kind):
     """Pinning is the default for either kind of owner: an owner who has not
     said otherwise authorizes one exact combination"""
-    assert any_policy().binding(kind).binds(kind.peer_term)
-    assert not any_policy(bind_peer_asset=False).binding(kind).binds(kind.peer_term)
+    assert any_policy().scope(kind).pins(kind.peer_term)
+    assert not any_policy(bind_peer_asset=False).scope(kind).pins(kind.peer_term)
 
 
 def test_the_same_policy_means_the_same_thing_for_either_kind_of_asset():
@@ -38,14 +38,14 @@ def test_the_same_policy_means_the_same_thing_for_either_kind_of_asset():
     peer -- never how much is pinned"""
     policy = any_policy(bind_peer_asset=True)
 
-    assert policy.binding(AssetKind.DATA).terms == policy.binding(AssetKind.MODEL).terms
+    assert policy.scope(AssetKind.DATA).terms == policy.scope(AssetKind.MODEL).terms
 
 
 def test_terms_come_out_in_canonical_order():
     """The order is what makes two identity strings comparable at all"""
     policy = any_policy(bind_peer_asset=True)
 
-    assert policy.binding(AssetKind.MODEL).terms == [
+    assert policy.scope(AssetKind.MODEL).terms == [
         SCRIPT_TERM,
         DATA_TERM,
         MODEL_TERM,

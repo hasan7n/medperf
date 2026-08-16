@@ -75,7 +75,7 @@ def test_each_service_resolves_on_its_own():
     vault = get_vault(
         {"backend": "medperf_kbs", "url": "https://kbs", "audience": "a"},
         "dataset1",
-        any_policy().binding(AssetKind.DATA),
+        any_policy().scope(AssetKind.DATA),
         any_policy(),
     )
 

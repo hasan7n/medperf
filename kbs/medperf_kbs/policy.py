@@ -4,7 +4,7 @@ Deliberately the same policy MedPerf writes to Google Cloud. There, an asset
 owner installs an attribute mapping on a workload identity pool and binds IAM
 principals matching it; here the broker evaluates the same terms against the
 same claims itself. The identity strings are byte for byte the ones
-`WorkloadBinding` produces, so an asset can move between backends without its
+`WorkloadScope` produces, so an asset can move between backends without its
 owner restating what they meant.
 """
 
@@ -19,7 +19,7 @@ from medperf_cc.attestation import (
     TrustAnchor,
 )
 from medperf_cc.errors import AttestationError
-from medperf_cc.identity import TERM_ORDER, WorkloadBinding
+from medperf_cc.identity import TERM_ORDER, WorkloadScope
 
 
 class AttestationPolicy(BaseModel):
@@ -64,8 +64,8 @@ class AssetPolicy(BaseModel):
         return terms
 
     @property
-    def binding(self) -> WorkloadBinding:
-        return WorkloadBinding(terms=self.terms)
+    def scope(self) -> WorkloadScope:
+        return WorkloadScope(terms=self.terms)
 
     def authorize(
         self, token: AttestationToken, anchor: TrustAnchor, nonce: str
@@ -77,7 +77,7 @@ class AssetPolicy(BaseModel):
         anchor.verify_signature(token)
         self.attestation.requirements(nonce).check(token)
 
-        identity = self.binding.identity_from_claims(token.claims)
+        identity = self.scope.uid_from_claims(token.claims)
         if identity not in self.permitted_identities:
             raise AttestationError(
                 f"Workload identity {identity!r} is not permitted for this asset"

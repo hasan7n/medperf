@@ -68,9 +68,13 @@ class MockStore:
         return os.path.exists(self.path(filename))
 
     def set_permitted(self, identities: List[str]) -> None:
-        """Recorded, and checked when the workload asks. A real backend would
-        enforce this against an attestation; here the workload is trusted to
-        present the identity it was started with."""
+        """Recorded and never enforced.
+
+        Nothing reads this back: the mock workload opens the key file because
+        it is there. A real backend releases the key only against an
+        attestation matching one of these identities, so this is written to
+        show what would have been checked -- and it means the mock exercises
+        none of the authorization logic."""
         self.write(PERMITTED_FILE, json.dumps(sorted(identities)).encode())
 
     def permitted(self) -> List[str]:

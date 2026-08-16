@@ -26,7 +26,7 @@ from medperf.utils import (
 from medperf_cc import (
     AssetKind,
     ConfidentialAsset,
-    WorkloadIdentity,
+    WorkloadGrant,
     generate_encryption_key,
 )
 
@@ -61,13 +61,23 @@ def setup_model_for_cc(model: Model):
 
 
 @as_medperf_error()
-def set_permitted_workloads(
-    entity, kind: AssetKind, permitted_workloads: list[WorkloadIdentity]
-):
+def set_permitted_grants(entity, kind: AssetKind, grants: list[WorkloadGrant]):
     if kind is AssetKind.MODEL:
         __require_asset_model(entity)
 
-    asset_for(entity, kind).set_permitted(permitted_workloads)
+    if not grants:
+        # Correct when every association really has gone away, and a silent
+        # disaster when it is only that a peer has not uploaded a certificate
+        # yet. The two are indistinguishable from here, so say what happened
+        # rather than report a successful sync either way.
+        medperf_config.ui.print_warning(
+            "No workload is authorized to open this asset, so this sync"
+            " withdraws every grant it had. This is expected if its"
+            " associations were rejected; otherwise check that the other"
+            " parties hold certificates."
+        )
+
+    asset_for(entity, kind).set_permitted(grants)
 
 
 def sync_cc_metadata(entity, update_comms_fn):

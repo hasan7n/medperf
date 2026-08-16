@@ -10,7 +10,7 @@ import secrets
 from typing import List
 
 from medperf_cc.backends import describe, service_config
-from medperf_cc.identity import AssetKind, WorkloadIdentity
+from medperf_cc.identity import AssetKind, WorkloadGrant
 from medperf_cc.policy import AssetPolicy
 from medperf_cc.storage import STORAGES, get_storage
 from medperf_cc.vault import VAULTS, get_vault
@@ -35,10 +35,10 @@ class ConfidentialAsset:
         self.asset_name = asset_name
         self.kind = kind
         self.policy = policy
-        self.binding = policy.binding(kind)
+        self.scope = policy.scope(kind)
         self.storage = get_storage(service_config(config, "storage"), asset_name)
         self.vault = get_vault(
-            service_config(config, "vault"), asset_name, self.binding, policy
+            service_config(config, "vault"), asset_name, self.scope, policy
         )
 
     def verify(self) -> None:
@@ -54,23 +54,20 @@ class ConfidentialAsset:
         self.vault.publish_key(encryption_key)
         self.storage.publish(encrypted_asset_file)
 
-    def set_permitted(self, workloads: List[WorkloadIdentity]) -> None:
+    def set_permitted(self, grants: List[WorkloadGrant]) -> None:
         """Replaces the set of workloads allowed to open this asset.
 
-        Whatever this owner does not bind collapses here: the same identity is
-        reachable through more than one association -- two benchmarks sharing a
-        benchmark script, for instance -- and each duplicate would otherwise
-        become a redundant entry in a backend's policy.
+        Whatever this owner does not pin collapses here: two grants differing
+        only in a term outside their scope are written the same way, and would
+        otherwise become redundant entries in a backend's policy. The same
+        happens to a grant reachable through more than one association -- two
+        benchmarks sharing a benchmark script, for instance.
 
         Both halves are told, because reading the ciphertext and holding the key
-        are two grants, even where one provider happens to give both."""
-        identities = list(
-            dict.fromkeys(
-                self.binding.identity_of(workload) for workload in workloads
-            )
-        )
-        self.storage.permit(identities)
-        self.vault.permit(identities)
+        are two permissions, even where one provider happens to give both."""
+        uids = list(dict.fromkeys(self.scope.uid_of(grant) for grant in grants))
+        self.storage.permit(uids)
+        self.vault.permit(uids)
 
     def workload_config(self) -> dict:
         """What the workload is told, so it can fetch and open this asset.

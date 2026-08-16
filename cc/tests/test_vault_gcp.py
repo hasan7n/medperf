@@ -9,31 +9,30 @@ silently stop matching.
 import pytest
 
 from medperf_cc.vault.gcp import workload_uid_assertion
-from medperf_cc.identity import TERM_CLAIMS, AssetKind, WorkloadIdentity
+from medperf_cc.identity import TERM_CLAIMS, AssetKind, WorkloadGrant
 from tests.conftest import any_policy
 
 
 @pytest.mark.parametrize("kind", [AssetKind.DATA, AssetKind.MODEL])
 def test_the_assertion_and_the_identity_have_the_same_shape(kind):
-    binding = any_policy().binding(kind)
-    workload = WorkloadIdentity(
+    scope = any_policy().scope(kind)
+    grant = WorkloadGrant(
         script_hash="s",
         data_hash="d",
         model_hash="m",
         result_collector_hash="c",
-        script_id=1,
     )
 
-    assertion = workload_uid_assertion(binding)
+    assertion = workload_uid_assertion(scope)
 
-    assert assertion.count('+"::"+') == binding.identity_of(workload).count("::")
+    assert assertion.count('+"::"+') == scope.uid_of(grant).count("::")
 
 
 def test_the_assertion_reads_the_terms_in_binding_order():
-    binding = any_policy().binding(AssetKind.DATA)
+    scope = any_policy().scope(AssetKind.DATA)
 
-    assertion = workload_uid_assertion(binding)
+    assertion = workload_uid_assertion(scope)
 
     assert assertion.split('+"::"+') == [
-        f"assertion.{TERM_CLAIMS[term]}" for term in binding.terms
+        f"assertion.{TERM_CLAIMS[term]}" for term in scope.terms
     ]

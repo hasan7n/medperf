@@ -18,7 +18,6 @@ from medperf.cc.operator import (
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
 from medperf.commands.execution.container_execution import ContainerExecution
-from medperf.containers.runners.docker_utils import full_docker_image_name
 from medperf.enums import CryptoKeyType
 from medperf_cc import WorkloadIdentity
 
@@ -36,7 +35,7 @@ class ConfidentialModelContainerExecution:
         plan: BenchmarkPlan,
         dataset: Dataset,
         model: Model,
-        execution: Execution = None,
+        execution: Execution,
         ignore_model_errors=False,
     ):
         """Benchmark execution flow.
@@ -66,7 +65,7 @@ class ConfidentialModelContainerExecution:
         plan: BenchmarkPlan,
         dataset: Dataset,
         model: Model,
-        execution: Execution = None,
+        execution: Execution,
         ignore_model_errors=False,
     ):
         self.comms = config.comms
@@ -149,8 +148,7 @@ class ConfidentialModelContainerExecution:
 
     def run_workload(self):
         config.ui.text = "Starting Confidential VM"
-        docker_image = self.script.parser.get_setup_args()
-        docker_image = full_docker_image_name(docker_image)
+        docker_image = self.script.full_docker_image_name
         run_workload(
             self.runner,
             docker_image,
@@ -173,9 +171,7 @@ class ConfidentialModelContainerExecution:
         if private_key_bytes is None:
             raise DecryptionError("Missing Private Key")
 
-        download_results(
-            self.runner, self.workload, private_key_bytes, results_path
-        )
+        download_results(self.runner, self.workload, private_key_bytes, results_path)
 
     def run_evaluation(self):
         return self.local_execution_flow.run_evaluation()

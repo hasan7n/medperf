@@ -129,9 +129,7 @@ def test_result_files_are_only_checked_where_they_still_are(execution, verify):
     assert verify.call_args.args[1].results_path is None
 
 
-def test_a_downloaded_copy_of_the_results_is_found_if_present(
-    fs, execution, verify
-):
+def test_a_downloaded_copy_of_the_results_is_found_if_present(fs, execution, verify):
     """A confidential execution downloads into a directory per attempt, and
     the latest one is this machine's copy"""
     # Arrange
@@ -144,9 +142,7 @@ def test_a_downloaded_copy_of_the_results_is_found_if_present(
     VerifyExecutionProof.run(execution.id)
 
     # Assert
-    assert verify.call_args.args[1].results_path == os.path.join(
-        runs, "1700000001_0"
-    )
+    assert verify.call_args.args[1].results_path == os.path.join(runs, "1700000001_0")
 
 
 def test_the_server_copy_of_the_proof_is_preferred(fs, execution, verify):

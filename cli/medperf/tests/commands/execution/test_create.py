@@ -10,7 +10,6 @@ import pytest
 from medperf.commands.execution.create import BenchmarkExecution
 import medperf.commands.execution.create as create_module
 
-
 PATCH_EXECUTION = "medperf.commands.execution.create.{}"
 
 

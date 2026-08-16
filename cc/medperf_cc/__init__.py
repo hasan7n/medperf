@@ -17,7 +17,11 @@ from medperf_cc.asset import (
     asset_backends,
     generate_encryption_key,
 )
-from medperf_cc.identity import AssetKind, WorkloadIdentity
+from medperf_cc.identity import (
+    AssetKind,
+    WorkloadGrant,
+    WorkloadIdentity,
+)
 from medperf_cc.policy import AssetPolicy, Party
 from medperf_cc.runner import WorkloadRunner, get_runner, runner_backends
 
@@ -26,6 +30,7 @@ __all__ = [
     "AssetPolicy",
     "ConfidentialAsset",
     "Party",
+    "WorkloadGrant",
     "WorkloadIdentity",
     "WorkloadRunner",
     "asset_backends",

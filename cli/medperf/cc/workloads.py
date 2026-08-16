@@ -1,9 +1,9 @@
-"""Turning benchmark associations into permitted workload identities.
+"""Turning benchmark associations into the grants an asset owner publishes.
 
 A confidential computing policy answers one question: which workloads may
 decrypt this asset? Both sides build that answer out of benchmark associations,
 and what each of them has to enumerate follows from the terms its owner pins:
-an owner who does not pin the peer asset grants the same identity for every
+an owner who does not pin the peer asset writes the same grant for every
 peer, so there is nothing to enumerate.
 """
 
@@ -20,7 +20,7 @@ from medperf.entities.benchmark import Benchmark
 from medperf.entities.dataset import Dataset
 from medperf.entities.model import Model
 from medperf.enums import Status
-from medperf_cc import WorkloadIdentity
+from medperf_cc import WorkloadGrant
 from medperf_cc import AssetPolicy
 
 
@@ -62,12 +62,15 @@ def get_confidential_plan(benchmark: Benchmark) -> BenchmarkPlan:
     return resolve_plan(benchmark)
 
 
-def get_dataset_workloads(dataset: Dataset) -> List[WorkloadIdentity]:
-    """The workloads a data owner authorizes to read their data."""
+def get_dataset_grants(dataset: Dataset) -> List[WorkloadGrant]:
+    """What a data owner authorizes to read their data.
+
+    One grant per combination they pin. A peer they did not pin is left out,
+    and that grant then covers every peer."""
     policy = policy_of(dataset)
     collectors = policy.allowed_result_collectors
 
-    workloads = []
+    grants = []
     for benchmark in get_associated_benchmarks(dataset.id, "dataset"):
         plan = get_confidential_plan(benchmark)
         if plan is None:
@@ -75,27 +78,24 @@ def get_dataset_workloads(dataset: Dataset) -> List[WorkloadIdentity]:
         for model in __peer_models(benchmark, policy):
             owners = party_owners(benchmark, dataset=dataset, model=model)
             for collector_hash in collector_key_hashes(collectors, owners):
-                workloads.append(
-                    WorkloadIdentity(
+                grants.append(
+                    WorkloadGrant(
                         data_hash=dataset.generated_uid,
-                        model_hash=model.asset_obj.asset_hash if model else "",
+                        model_hash=model.asset_obj.asset_hash if model else None,
                         script_hash=plan.script_hash,
                         result_collector_hash=collector_hash,
-                        data_id=dataset.id,
-                        model_id=model.id if model else None,
-                        script_id=plan.script_id,
                     )
                 )
-    return workloads
+    return grants
 
 
-def get_model_workloads(model: Model) -> List[WorkloadIdentity]:
-    """The workloads a model owner authorizes to load their weights."""
+def get_model_grants(model: Model) -> List[WorkloadGrant]:
+    """What a model owner authorizes to load their weights."""
     policy = policy_of(model)
     collectors = policy.allowed_result_collectors
     asset_hash = model.asset_obj.asset_hash
 
-    workloads = []
+    grants = []
     for benchmark in get_associated_benchmarks(model.id, "model"):
         plan = get_confidential_plan(benchmark)
         if plan is None:
@@ -103,18 +103,15 @@ def get_model_workloads(model: Model) -> List[WorkloadIdentity]:
         for dataset in __peer_datasets(benchmark, policy):
             owners = party_owners(benchmark, dataset=dataset, model=model)
             for collector_hash in collector_key_hashes(collectors, owners):
-                workloads.append(
-                    WorkloadIdentity(
-                        data_hash=dataset.generated_uid if dataset else "",
+                grants.append(
+                    WorkloadGrant(
+                        data_hash=dataset.generated_uid if dataset else None,
                         model_hash=asset_hash,
                         script_hash=plan.script_hash,
                         result_collector_hash=collector_hash,
-                        data_id=dataset.id if dataset else None,
-                        model_id=model.id,
-                        script_id=plan.script_id,
                     )
                 )
-    return workloads
+    return grants
 
 
 def __peer_models(benchmark: Benchmark, policy: AssetPolicy) -> List[Optional[Model]]:

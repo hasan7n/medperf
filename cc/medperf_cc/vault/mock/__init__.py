@@ -8,7 +8,7 @@ which is the whole difference.
 from typing import List
 
 from medperf_cc.backends.mock import MOCK, MockConfig, MockStore
-from medperf_cc.identity import WorkloadBinding
+from medperf_cc.identity import WorkloadScope
 from medperf_cc.policy import AssetPolicy
 from medperf_cc.vault.base import AssetVault
 
@@ -22,10 +22,10 @@ class MockVault(AssetVault):
         self,
         config: dict,
         asset_name: str,
-        binding: WorkloadBinding,
+        scope: WorkloadScope,
         policy: AssetPolicy,
     ):
-        super().__init__(config, asset_name, binding, policy)
+        super().__init__(config, asset_name, scope, policy)
         self.store = MockStore(config, f"{asset_name}_vault")
 
     @property

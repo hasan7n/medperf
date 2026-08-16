@@ -23,7 +23,6 @@ from medperf.cc.operator import (
 from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
-from medperf.containers.runners.docker_utils import full_docker_image_name
 from medperf.enums import CryptoKeyType
 from medperf_cc import WorkloadIdentity
 from medperf_cc.proof import IntegrityProof
@@ -41,7 +40,7 @@ class ConfidentialExecution:
         plan: BenchmarkPlan,
         dataset: Dataset,
         model: Model,
-        execution: Execution = None,
+        execution: Execution,
         ignore_model_errors=False,
     ):
         """Benchmark execution flow.
@@ -68,7 +67,7 @@ class ConfidentialExecution:
         plan: BenchmarkPlan,
         dataset: Dataset,
         model: Model,
-        execution: Execution = None,
+        execution: Execution,
         ignore_model_errors=False,
     ):
         self.comms = config.comms
@@ -126,6 +125,7 @@ class ConfidentialExecution:
             data_id=self.dataset.id,
             model_id=self.model.id,
             script_id=self.plan.script_id,
+            execution_id=self.execution.id,
         )
 
         self.workload = workload
@@ -133,8 +133,7 @@ class ConfidentialExecution:
 
     def run_workload(self):
         config.ui.text = "Running CC workload..."
-        docker_image = self.script.parser.get_setup_args()
-        docker_image = full_docker_image_name(docker_image)
+        docker_image = self.script.full_docker_image_name
         run_workload(
             self.runner,
             docker_image,
@@ -160,9 +159,7 @@ class ConfidentialExecution:
         if private_key_bytes is None:
             raise DecryptionError("Missing Private Key")
 
-        download_results(
-            self.runner, self.workload, private_key_bytes, results_path
-        )
+        download_results(self.runner, self.workload, private_key_bytes, results_path)
 
         # The workload tars the contents of its results directory, so what
         # lands here is those files, not a directory containing them.
@@ -191,9 +188,6 @@ class ConfidentialExecution:
         }
 
     def __send_report(self, status: str):
-        if self.execution is None or self.execution.id is None:
-            return
-
         execution_id = self.execution.id
         body = {"script_report": {"execution_status": status}}
         try:

@@ -11,9 +11,8 @@ import os
 
 import pytest
 
-from medperf_cc import AssetKind, ConfidentialAsset, Party
+from medperf_cc import AssetKind, ConfidentialAsset, Party, WorkloadGrant
 from medperf_cc.backends.mock import MOCK, PERMITTED_FILE
-from medperf_cc.identity import WorkloadIdentity
 from medperf_cc.storage.mock import ASSET_FILE
 from medperf_cc.vault.mock import KEY_FILE
 
@@ -29,14 +28,11 @@ def config(tmp_path):
 
 
 def workload(data_hash="datahash", collector_hash="collectorhash"):
-    return WorkloadIdentity(
+    return WorkloadGrant(
         script_hash="scripthash",
         model_hash="modelhash",
         data_hash=data_hash,
         result_collector_hash=collector_hash,
-        script_id=1,
-        model_id=2,
-        data_id=3,
     )
 
 
@@ -62,7 +58,7 @@ def test_both_halves_are_told_who_may_open_the_asset(config):
     asset.set_permitted([workload()])
 
     assert asset.storage.store.permitted() == asset.vault.store.permitted()
-    assert asset.storage.store.permitted() == [asset.binding.identity_of(workload())]
+    assert asset.storage.store.permitted() == [asset.scope.uid_of(workload())]
 
 
 def test_repeated_identities_collapse(config):

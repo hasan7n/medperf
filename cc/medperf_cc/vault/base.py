@@ -8,7 +8,7 @@ key is the asset owner's.
 from abc import ABC, abstractmethod
 from typing import List
 
-from medperf_cc.identity import WorkloadBinding
+from medperf_cc.identity import WorkloadScope
 from medperf_cc.policy import AssetPolicy
 
 
@@ -17,14 +17,14 @@ class AssetVault(ABC):
         self,
         config: dict,
         asset_name: str,
-        binding: WorkloadBinding,
+        scope: WorkloadScope,
         policy: AssetPolicy,
     ):
         self.config = config
         self.asset_name = asset_name
         # Which terms of a workload's identity this owner pins, and where a
         # workload must run. Both have to reach whatever enforces them.
-        self.binding = binding
+        self.scope = scope
         self.policy = policy
 
     @property

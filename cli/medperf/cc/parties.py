@@ -85,11 +85,9 @@ def parties_of(user_id: int, owners: dict) -> Set[Party]:
 def collector_key_hashes(collectors: List[Party], owners: dict) -> List[str]:
     """The key hashes an owner's grant must cover, one identity each.
 
-    An owner who named no collector is not pinning the term at all, so the
-    single identity they grant carries an empty one."""
-    if not collectors:
-        return [""]
-
+    A policy always names at least one collector, so the term is always pinned
+    and there is always a key to name. A party with no certificate is skipped:
+    their key cannot be pinned because it does not exist yet."""
     hashes = []
     for party in collectors:
         owner_id = owners.get(party)
@@ -113,11 +111,8 @@ def check_operator_is_allowed(
     has already started, which the operator sees as a workload that produces
     nothing.
 
-    Skipped without a benchmark: a compatibility test runs the user's own
-    components, so there are no association-derived roles to check."""
-    if benchmark_id is None:
-        return
-
+    Every confidential execution belongs to a benchmark, which is where the
+    roles being checked come from."""
     benchmark = Benchmark.get(benchmark_id)
     held = parties_of(operator_id, party_owners(benchmark, dataset, model))
 

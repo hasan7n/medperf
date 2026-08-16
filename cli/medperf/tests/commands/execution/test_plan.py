@@ -110,7 +110,9 @@ def test_resolve_execution_medium(mocker, requires_cc, is_owner, expected):
         ),
     ],
 )
-def test_supported_combinations_reach_their_executor(mocker, topology, medium, executor):
+def test_supported_combinations_reach_their_executor(
+    mocker, topology, medium, executor
+):
     """The dispatch table is what decides; the executors themselves are stubbed"""
     # Arrange
     names = {
@@ -136,14 +138,57 @@ def test_supported_combinations_reach_their_executor(mocker, topology, medium, e
     plan = BenchmarkPlan(topology=topology, script=TestCube(id=7))
     dataset = TestDataset()
 
+    execution = mocker.MagicMock(id=42)
+
     # Act
-    ExecutionFlow.run(plan, dataset, model)
+    ExecutionFlow.run(plan, dataset, model, execution)
 
     # Assert
-    spies[executor].assert_called_once_with(plan, dataset, model, None, False)
+    spies[executor].assert_called_once_with(plan, dataset, model, execution, False)
     for name, spy in spies.items():
         if name != executor:
             spy.assert_not_called()
+
+
+def test_a_confidential_run_needs_a_registered_execution(mocker):
+    """A compatibility test registers nothing, so there is no execution to key
+    the workload identity, its storage, or its status reports by"""
+    # Arrange
+    mocker.patch(
+        PATCH_FLOW.format("resolve_execution_medium"),
+        return_value=ExecutionMedium.CONFIDENTIAL,
+    )
+    plan = BenchmarkPlan(
+        topology=BenchmarkTopology.END_TO_END_SCRIPT, script=TestCube(id=7)
+    )
+
+    # Act & Assert
+    with pytest.raises(ExecutionError, match="compatibility test"):
+        ExecutionFlow.run(plan, TestDataset(), TestAssetModel(), execution=None)
+
+
+def test_a_local_run_needs_no_execution(mocker):
+    """Only the confidential medium is keyed by one"""
+    # Arrange
+    mocker.patch(
+        PATCH_FLOW.format("resolve_execution_medium"),
+        return_value=ExecutionMedium.LOCAL,
+    )
+    spy = mocker.MagicMock()
+    mocker.patch.dict(
+        PATCH_FLOW.format("EXECUTORS"),
+        {(BenchmarkTopology.END_TO_END_SCRIPT, ExecutionMedium.LOCAL): spy},
+        clear=True,
+    )
+    plan = BenchmarkPlan(
+        topology=BenchmarkTopology.END_TO_END_SCRIPT, script=TestCube(id=7)
+    )
+
+    # Act
+    ExecutionFlow.run(plan, TestDataset(), TestAssetModel(), execution=None)
+
+    # Assert
+    spy.assert_called_once()
 
 
 @pytest.mark.parametrize(

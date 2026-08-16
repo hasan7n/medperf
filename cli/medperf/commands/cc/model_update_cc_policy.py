@@ -1,7 +1,7 @@
 from medperf import config
 from medperf.account_management.account_management import get_medperf_user_object
-from medperf.cc.assets import set_permitted_workloads, sync_cc_metadata
-from medperf.cc.workloads import get_model_workloads
+from medperf.cc.assets import set_permitted_grants, sync_cc_metadata
+from medperf.cc.workloads import get_model_grants
 from medperf.entities.model import Model
 from medperf.exceptions import MedperfException
 from medperf_cc import AssetKind
@@ -24,6 +24,6 @@ class ModelUpdateCCPolicy:
             )
         with config.ui.interactive():
             config.ui.text = "Updating model confidential computing policy"
-            permitted_workloads = get_model_workloads(model)
-            set_permitted_workloads(model, AssetKind.MODEL, permitted_workloads)
+            grants = get_model_grants(model)
+            set_permitted_grants(model, AssetKind.MODEL, grants)
             sync_cc_metadata(model, config.comms.update_model)

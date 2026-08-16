@@ -122,3 +122,20 @@ def test_a_data_owner_pinning_the_model_skips_models_that_are_not_confidential(m
 
     # Assert
     assert models == [confidential]
+
+
+def test_a_sync_that_authorizes_nothing_warns_before_revoking(mocker):
+    """Correct when the associations really went away, a silent disaster when a
+    peer merely has no certificate yet. The two look identical from here"""
+    # Arrange
+    from medperf.cc.assets import set_permitted_grants
+
+    ui = mocker.patch("medperf.cc.assets.medperf_config").ui
+    asset = mocker.patch("medperf.cc.assets.asset_for")
+
+    # Act
+    set_permitted_grants(mocker.MagicMock(), AssetKind.DATA, [])
+
+    # Assert
+    ui.print_warning.assert_called_once()
+    asset.return_value.set_permitted.assert_called_once_with([])

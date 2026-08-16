@@ -45,13 +45,6 @@ def test_an_absent_peer_holds_no_role():
     assert owners == {Party.BENCHMARK_OWNER: BENCHMARK_OWNER_ID}
 
 
-def test_naming_no_collector_leaves_the_term_empty(owners):
-    """An owner who does not pin the collector grants one identity, and it
-    carries an empty collector hash"""
-    # Act & Assert
-    assert collector_key_hashes([], owners) == [""]
-
-
 def test_each_named_collector_becomes_its_own_key_hash(mocker, owners):
     # Arrange
     mocker.patch(
@@ -144,16 +137,3 @@ def test_an_operator_holding_no_role_is_refused(mocker, entities):
     # Act & Assert
     with pytest.raises(ExecutionError, match="dataset owner"):
         check_operator_is_allowed(99, 1, entities["dataset"], entities["model"])
-
-
-def test_a_compatibility_test_has_no_roles_to_check(mocker, entities):
-    """It runs the user's own components, so there are no associations to read
-    a role out of"""
-    # Arrange
-    spy = mocker.patch(PATCH_CC_PARTIES.format("policy_of"))
-
-    # Act
-    check_operator_is_allowed(99, None, entities["dataset"], entities["model"])
-
-    # Assert
-    spy.assert_not_called()

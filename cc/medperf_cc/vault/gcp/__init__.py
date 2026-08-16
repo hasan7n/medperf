@@ -2,7 +2,7 @@
 
 The workload identity pool is told how to build a workload's identity out of
 attestation assertions, and the key is bound to the identities the owner
-permits. Both are rendered from the same `WorkloadBinding`, so they cannot end
+permits. Both are rendered from the same `WorkloadScope`, so they cannot end
 up describing different sets of terms.
 """
 
@@ -14,7 +14,7 @@ from medperf_cc.backends.gcp import checks
 from medperf_cc.backends.gcp.config import WorkloadIdentityPool
 from medperf_cc.backends.gcp.credentials import get_user_credentials
 from medperf_cc.errors import ConfigurationError, OperationError
-from medperf_cc.identity import TERM_CLAIMS, WorkloadBinding
+from medperf_cc.identity import TERM_CLAIMS, WorkloadScope
 from medperf_cc.policy import AssetPolicy
 from medperf_cc.storage.gcp import client as gcs
 from medperf_cc.vault.base import AssetVault
@@ -37,13 +37,13 @@ GOOGLE_SUBJECT_ASSERTION = (
 )
 
 
-def workload_uid_assertion(binding: WorkloadBinding) -> str:
+def workload_uid_assertion(scope: WorkloadScope) -> str:
     """The CEL that rebuilds a workload's identity from its attestation.
 
     `assertion.` is how a workload identity pool addresses a token claim, so
-    this is the same claim paths the binding is defined over, in the same
+    this is the same claim paths the scope is defined over, in the same
     order, spelled the way Google evaluates them."""
-    return '+"::"+'.join(f"assertion.{TERM_CLAIMS[term]}" for term in binding.terms)
+    return '+"::"+'.join(f"assertion.{TERM_CLAIMS[term]}" for term in scope.terms)
 
 
 class GCPVaultConfig(BaseModel):
@@ -74,10 +74,10 @@ class GCPVault(AssetVault):
         self,
         config: dict,
         asset_name: str,
-        binding: WorkloadBinding,
+        scope: WorkloadScope,
         policy: AssetPolicy,
     ):
-        super().__init__(config, asset_name, binding, policy)
+        super().__init__(config, asset_name, scope, policy)
         self.gcp = GCPVaultConfig(**config)
         self.pool = WorkloadIdentityPool(**config)
 
@@ -131,7 +131,7 @@ class GCPVault(AssetVault):
     def __install_attribute_mapping(self) -> None:
         attribute_mapping = {
             "google.subject": GOOGLE_SUBJECT_ASSERTION,
-            "attribute.workload_uid": workload_uid_assertion(self.binding),
+            "attribute.workload_uid": workload_uid_assertion(self.scope),
         }
 
         condition = 'assertion.swname == "CONFIDENTIAL_SPACE"'

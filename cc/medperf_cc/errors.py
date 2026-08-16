@@ -12,3 +12,10 @@ class ConfigurationError(CCError):
 
 class OperationError(CCError):
     """An operation against the cloud environment failed."""
+
+
+class InternalError(CCError):
+    """These components were used in a way that should not be reachable.
+
+    Not a user's mistake and not the environment's: a caller built something
+    incomplete and got far enough to use it."""

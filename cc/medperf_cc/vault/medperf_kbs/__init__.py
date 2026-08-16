@@ -12,7 +12,7 @@ import base64
 from typing import List
 
 from medperf_cc.backends.medperf_kbs import MEDPERF_KBS, KBSClient, KBSConfig
-from medperf_cc.identity import WorkloadBinding
+from medperf_cc.identity import WorkloadScope
 from medperf_cc.policy import AssetPolicy
 from medperf_cc.vault.base import AssetVault
 
@@ -24,10 +24,10 @@ class KBSVault(AssetVault):
         self,
         config: dict,
         asset_name: str,
-        binding: WorkloadBinding,
+        scope: WorkloadScope,
         policy: AssetPolicy,
     ):
-        super().__init__(config, asset_name, binding, policy)
+        super().__init__(config, asset_name, scope, policy)
         self.broker = KBSClient(config, asset_name)
 
     @property
@@ -53,7 +53,7 @@ class KBSVault(AssetVault):
 
     def __policy_document(self, identities: List[str]) -> dict:
         return {
-            "terms": self.binding.terms,
+            "terms": self.scope.terms,
             "permitted_identities": identities,
             "attestation": {
                 "audience": self.broker.config.audience,

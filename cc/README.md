@@ -12,7 +12,7 @@ an operator carries, and these components resolve the rest.
 One folder per service, one folder per backend inside it:
 
 ```text
-identity     what a workload is, and which terms each kind of owner pins
+identity     what a workload is, what an owner grants, how much they pin
 policy       where a workload must run, and how narrow the grant is
 workload     the environment contract a confidential workload reads
 attestation  verifying a Confidential Space token
