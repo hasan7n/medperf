@@ -23,7 +23,7 @@ asset        an asset's ciphertext, its key, and who may have them
 storage/     service: where the ciphertext lives   gcp · medperf_kbs · mock
 vault/       service: who may have the key         gcp · medperf_kbs · mock
 runner/      service: running the workload         gcp · mock
-backends/    choosing one, and the plumbing they share
+backends/    choosing one, and the plumbing they share, a folder each
 ```
 
 Adding a provider is adding a folder under each service it offers. Nothing

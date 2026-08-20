@@ -1,6 +1,8 @@
 import pytest
 
 from medperf.cc.parties import (
+    owner_key_hash,
+    peer_key_hashes,
     check_operator_is_allowed,
     collector_key_hashes,
     party_owners,
@@ -9,7 +11,7 @@ from medperf.exceptions import ExecutionError
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.dataset import TestDataset
 from medperf.tests.mocks.model import TestAssetModel
-from medperf_cc import AssetPolicy, Party
+from medperf_cc import AssetKind, AssetPolicy, Party
 
 PATCH_CC_PARTIES = "medperf.cc.parties.{}"
 
@@ -49,11 +51,11 @@ def test_each_named_collector_becomes_its_own_key_hash(mocker, owners):
     # Arrange
     mocker.patch(
         PATCH_CC_PARTIES.format("owner_key_hash"),
-        side_effect=lambda owner_id: f"hash-of-{owner_id}",
+        side_effect=lambda owner_id, peer_hashes: f"hash-of-{owner_id}",
     )
 
     # Act
-    hashes = collector_key_hashes([Party.DATA_OWNER, Party.BENCHMARK_OWNER], owners)
+    hashes = collector_key_hashes([Party.DATA_OWNER, Party.BENCHMARK_OWNER], owners, {})
 
     # Assert
     assert hashes == [f"hash-of-{DATA_OWNER_ID}", f"hash-of-{BENCHMARK_OWNER_ID}"]
@@ -66,7 +68,7 @@ def test_a_collector_without_a_certificate_is_skipped(mocker, owners):
     mocker.patch(PATCH_CC_PARTIES.format("owner_key_hash"), return_value=None)
 
     # Act & Assert
-    assert collector_key_hashes([Party.DATA_OWNER], owners) == []
+    assert collector_key_hashes([Party.DATA_OWNER], owners, {}) == []
 
 
 @pytest.fixture()
@@ -137,3 +139,38 @@ def test_an_operator_holding_no_role_is_refused(mocker, entities):
     # Act & Assert
     with pytest.raises(ExecutionError, match="dataset owner"):
         check_operator_is_allowed(99, 1, entities["dataset"], entities["model"])
+
+
+def test_a_peers_key_hash_comes_from_the_benchmark_listing(mocker):
+    """Nobody may read another user's certificate in general; what they may
+    read is the certificates of the parties they share a benchmark with"""
+    # Arrange
+    mocker.patch(PATCH_CC_PARTIES.format("is_user_logged_in"), return_value=False)
+
+    # Act
+    found = owner_key_hash(MODEL_OWNER_ID, {MODEL_OWNER_ID: "hash-of-the-model-owner"})
+    absent = owner_key_hash(99, {MODEL_OWNER_ID: "hash-of-the-model-owner"})
+
+    # Assert
+    assert found == "hash-of-the-model-owner"
+    assert absent is None
+
+
+@pytest.mark.parametrize(
+    "peer,expected_call",
+    [
+        (AssetKind.MODEL, "Certificate.get_benchmark_models_certificates"),
+        (AssetKind.DATA, "Certificate.get_benchmark_datasets_certificates"),
+    ],
+)
+def test_each_side_reads_the_listing_it_is_allowed(mocker, peer, expected_call):
+    """A data owner may read the model owners' certificates and vice versa.
+    Asking for the wrong one is a 403"""
+    # Arrange
+    spy = mocker.patch(PATCH_CC_PARTIES.format(expected_call), return_value=([], {}))
+
+    # Act
+    peer_key_hashes(7, peer)
+
+    # Assert
+    spy.assert_called_once_with(7)

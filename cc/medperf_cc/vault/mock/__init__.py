@@ -1,8 +1,9 @@
 """An asset's key in a directory on this machine.
 
-Kept in a file of its own beside the ciphertext, and released to anything that
-asks. A real vault releases it only against an attestation; there is none here,
-which is the whole difference.
+Kept in a file of its own beside the ciphertext. The workload is asked to name
+the identity it is running as, and refused if that is not one of the permitted
+ones -- but it is asked, not measured. A real vault reads the same identity out
+of an attestation the workload cannot forge, which is the whole difference.
 """
 
 from typing import List
@@ -47,4 +48,8 @@ class MockVault(AssetVault):
             "backend": self.backend,
             "root": self.store.config.root,
             "asset_name": self.store.name,
+            # Which terms the permitted identities are written over, so the
+            # workload can project its own the same way. A real broker is told
+            # this too -- see the `medperf_kbs` vault's policy document.
+            "terms": self.scope.terms,
         }

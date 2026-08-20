@@ -10,8 +10,7 @@ from medperf.cc.workloads import (
 from medperf.enums import BenchmarkTopology
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.cube import TestCube
-from medperf_cc import AssetKind
-from medperf_cc import AssetPolicy, Party
+from medperf_cc import AssetKind, AssetPolicy, Party
 
 PATCH_CC_WORKLOADS = "medperf.cc.workloads.{}"
 
@@ -89,22 +88,6 @@ def test_confidential_plan_is_resolved_for_script_benchmarks(mocker):
     assert plan.evaluator is None
 
 
-@pytest.mark.parametrize("kind", [AssetKind.DATA, AssetKind.MODEL])
-def test_a_grant_that_pins_no_peer_enumerates_none(mocker, kind):
-    """The same grant covers every peer, so there is nothing to name"""
-    # Arrange
-    spy = mocker.patch(PATCH_CC_WORKLOADS.format("get_approved_component_ids"))
-    policy = a_policy(bind_peer_asset=False)
-    peers = __peer_models if kind is AssetKind.DATA else __peer_datasets
-
-    # Act
-    result = peers(TestBenchmark(), policy)
-
-    # Assert
-    assert result == [None]
-    spy.assert_not_called()
-
-
 def test_a_data_owner_pinning_the_model_skips_models_that_are_not_confidential(mocker):
     # Arrange
     mocker.patch(
@@ -139,3 +122,49 @@ def test_a_sync_that_authorizes_nothing_warns_before_revoking(mocker):
     # Assert
     ui.print_warning.assert_called_once()
     asset.return_value.set_permitted.assert_called_once_with([])
+
+
+@pytest.mark.parametrize(
+    "kind,peers", [(AssetKind.DATA, __peer_models), (AssetKind.MODEL, __peer_datasets)]
+)
+def test_peers_are_walked_when_the_collector_is_the_peers_owner(mocker, kind, peers):
+    """Not pinning the peer does not mean the peer is irrelevant: releasing
+    results to the peer's owner pins *their key*, and there is one per peer"""
+    # Arrange
+    mocker.patch(
+        PATCH_CC_WORKLOADS.format("get_approved_component_ids"), return_value=[1]
+    )
+    mocker.patch(
+        PATCH_CC_WORKLOADS.format("Model.get"),
+        return_value=mocker.MagicMock(**{"requires_cc.return_value": True}),
+    )
+    mocker.patch(
+        PATCH_CC_WORKLOADS.format("Dataset.get"), return_value=mocker.MagicMock()
+    )
+    peer_party = Party.MODEL_OWNER if kind is AssetKind.DATA else Party.DATA_OWNER
+    policy = AssetPolicy(bind_peer_asset=False, allowed_result_collectors=[peer_party])
+
+    # Act
+    result = peers(TestBenchmark(), policy)
+
+    # Assert
+    assert result != [None]
+    assert len(result) == 1
+
+
+@pytest.mark.parametrize("kind", [AssetKind.DATA, AssetKind.MODEL])
+def test_a_grant_needing_neither_the_peer_nor_its_owner_covers_every_peer(mocker, kind):
+    """Nothing about the grant changes with the peer, so there is nothing to
+    enumerate"""
+    # Arrange
+    spy = mocker.patch(PATCH_CC_WORKLOADS.format("get_approved_component_ids"))
+    own_party = Party.DATA_OWNER if kind is AssetKind.DATA else Party.MODEL_OWNER
+    policy = AssetPolicy(bind_peer_asset=False, allowed_result_collectors=[own_party])
+    peers = __peer_models if kind is AssetKind.DATA else __peer_datasets
+
+    # Act
+    result = peers(TestBenchmark(), policy)
+
+    # Assert
+    assert result == [None]
+    spy.assert_not_called()

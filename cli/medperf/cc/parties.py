@@ -7,7 +7,7 @@ a key, which is the only form the attestation ever sees it in.
 
 import base64
 import logging
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from medperf.account_management import get_medperf_user_data, is_user_logged_in
 from medperf.cc.config import policy_of
@@ -19,7 +19,7 @@ from medperf.entities.model import Model
 from medperf.enums import CryptoKeyType
 from medperf.exceptions import ExecutionError, MedperfException
 from medperf.utils import get_string_hash
-from medperf_cc import Party
+from medperf_cc import AssetKind, Party
 
 
 def public_key_hash(certificate: Certificate) -> str:
@@ -48,13 +48,35 @@ def current_user_certificate() -> Certificate:
     return user_cert
 
 
-def owner_key_hash(owner_id: int) -> Optional[str]:
-    """The key hash of one party, or None if they hold no certificate."""
+def peer_key_hashes(benchmark_id: int, peer: AssetKind) -> Dict[int, str]:
+    """The key hash of every owner on the other side of one benchmark.
+
+    Nobody may read another user's certificate in general, and rightly so. What
+    they may read is the certificates of the parties they are already in a
+    benchmark with, through a listing scoped to it -- a data owner sees the
+    model owners, a model owner sees the data owners. So which listing to ask
+    for follows from which side the caller is on.
+    """
+    if peer is AssetKind.MODEL:
+        certificates, _ = Certificate.get_benchmark_models_certificates(benchmark_id)
+    else:
+        certificates, _ = Certificate.get_benchmark_datasets_certificates(benchmark_id)
+    return {
+        certificate.owner: public_key_hash(certificate)
+        for certificate in certificates
+        if certificate.is_valid
+    }
+
+
+def owner_key_hash(owner_id: int, peer_hashes: Dict[int, str]) -> Optional[str]:
+    """The key hash of one party, or None if they hold no certificate.
+
+    The current user's own certificate is read locally: it may have been issued
+    but not yet uploaded, and it is theirs to read either way."""
     if is_user_logged_in() and owner_id == get_medperf_user_data()["id"]:
         return public_key_hash(current_user_certificate())
 
-    certificate = Certificate.get_owner_certificate(owner_id, CryptoKeyType.RSA)
-    return public_key_hash(certificate) if certificate else None
+    return peer_hashes.get(owner_id)
 
 
 def collector_public_key() -> bytes:
@@ -82,18 +104,21 @@ def parties_of(user_id: int, owners: dict) -> Set[Party]:
     return {party for party, owner_id in owners.items() if owner_id == user_id}
 
 
-def collector_key_hashes(collectors: List[Party], owners: dict) -> List[str]:
+def collector_key_hashes(
+    collectors: List[Party], owners: dict, peer_hashes: Dict[int, str]
+) -> List[str]:
     """The key hashes an owner's grant must cover, one identity each.
 
     A policy always names at least one collector, so the term is always pinned
-    and there is always a key to name. A party with no certificate is skipped:
-    their key cannot be pinned because it does not exist yet."""
+    and there is always a key to name. A party whose key this user cannot see
+    is skipped: it may not exist yet, or may belong to somebody outside the
+    benchmark, and either way there is nothing to pin."""
     hashes = []
     for party in collectors:
         owner_id = owners.get(party)
         if owner_id is None:
             continue
-        key_hash = owner_key_hash(owner_id)
+        key_hash = owner_key_hash(owner_id, peer_hashes)
         if key_hash is None:
             logging.warning(f"No certificate for the {party.value} of this execution")
             continue

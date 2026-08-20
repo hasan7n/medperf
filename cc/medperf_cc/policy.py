@@ -26,6 +26,11 @@ class Party(Enum):
     DATA_OWNER = "data_owner"
 
 
+# Whose key is pinned when an owner releases results to "the other side". The
+# peer of a dataset is a model, and the party behind it is its owner.
+PEER_PARTY = {AssetKind.DATA: Party.MODEL_OWNER, AssetKind.MODEL: Party.DATA_OWNER}
+
+
 class AssetPolicy(BaseModel):
     """Where a workload must run, and how narrowly the grant is scoped.
 
@@ -70,6 +75,19 @@ class AssetPolicy(BaseModel):
                 f" One or more of: {', '.join(party.value for party in Party)}"
             )
         return list(dict.fromkeys(parties))
+
+    def needs_peer(self, kind: AssetKind) -> bool:
+        """Whether a grant for this asset has to be written out per peer.
+
+        Pinning the peer plainly does: each peer is a different workload. So
+        does releasing results to the peer's owner, for a less obvious reason
+        -- what gets pinned is that owner's key, and which owner that is
+        depends on which peer takes part. An owner doing neither writes one
+        grant that covers every peer.
+        """
+        return self.bind_peer_asset or PEER_PARTY[kind] in (
+            self.allowed_result_collectors or []
+        )
 
     def scope(self, kind: AssetKind) -> WorkloadScope:
         """Which terms of a workload's identity this owner pins.

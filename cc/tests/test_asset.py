@@ -109,6 +109,18 @@ def test_the_workload_is_told_where_both_halves_are(config):
     assert told["storage"]["asset_name"] == "dataset3"
 
 
+def test_the_workload_is_told_which_terms_its_grant_is_written_over(config):
+    """It has to project its own identity the same way the owner did, or the
+    key it presents an identity for could never match one that was granted"""
+    asset = published(
+        config, kind=AssetKind.MODEL, policy=any_policy(bind_peer_asset=False)
+    )
+
+    told = asset.workload_config()
+
+    assert told["vault"]["terms"] == ["script", "model", "collector"]
+
+
 def test_a_mixed_configuration_tells_the_workload_about_both(tmp_path):
     """A dataset can live in one provider and have its key released by another,
     and the workload has to be able to reach each of them"""

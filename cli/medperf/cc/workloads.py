@@ -10,7 +10,11 @@ peer, so there is nothing to enumerate.
 from typing import List, Optional
 
 from medperf.cc.config import policy_of
-from medperf.cc.parties import collector_key_hashes, party_owners
+from medperf.cc.parties import (
+    collector_key_hashes,
+    party_owners,
+    peer_key_hashes,
+)
 from medperf.commands.association.utils import (
     get_component_associations,
     get_experiment_associations,
@@ -20,7 +24,7 @@ from medperf.entities.benchmark import Benchmark
 from medperf.entities.dataset import Dataset
 from medperf.entities.model import Model
 from medperf.enums import Status
-from medperf_cc import WorkloadGrant
+from medperf_cc import AssetKind, WorkloadGrant
 from medperf_cc import AssetPolicy
 
 
@@ -65,8 +69,10 @@ def get_confidential_plan(benchmark: Benchmark) -> BenchmarkPlan:
 def get_dataset_grants(dataset: Dataset) -> List[WorkloadGrant]:
     """What a data owner authorizes to read their data.
 
-    One grant per combination they pin. A peer they did not pin is left out,
-    and that grant then covers every peer."""
+    One grant per combination they pin. A peer they did not pin is left out of
+    the grant, which then covers every peer -- but the peers are still walked
+    when the collector is the peer's owner, because each of those has a key of
+    their own."""
     policy = policy_of(dataset)
     collectors = policy.allowed_result_collectors
 
@@ -75,13 +81,18 @@ def get_dataset_grants(dataset: Dataset) -> List[WorkloadGrant]:
         plan = get_confidential_plan(benchmark)
         if plan is None:
             continue
+        peer_hashes = peer_key_hashes(benchmark.id, AssetKind.MODEL)
         for model in __peer_models(benchmark, policy):
             owners = party_owners(benchmark, dataset=dataset, model=model)
-            for collector_hash in collector_key_hashes(collectors, owners):
+            for collector_hash in collector_key_hashes(collectors, owners, peer_hashes):
                 grants.append(
                     WorkloadGrant(
                         data_hash=dataset.generated_uid,
-                        model_hash=model.asset_obj.asset_hash if model else None,
+                        model_hash=(
+                            model.asset_obj.asset_hash
+                            if policy.bind_peer_asset
+                            else None
+                        ),
                         script_hash=plan.script_hash,
                         result_collector_hash=collector_hash,
                     )
@@ -100,12 +111,15 @@ def get_model_grants(model: Model) -> List[WorkloadGrant]:
         plan = get_confidential_plan(benchmark)
         if plan is None:
             continue
+        peer_hashes = peer_key_hashes(benchmark.id, AssetKind.DATA)
         for dataset in __peer_datasets(benchmark, policy):
             owners = party_owners(benchmark, dataset=dataset, model=model)
-            for collector_hash in collector_key_hashes(collectors, owners):
+            for collector_hash in collector_key_hashes(collectors, owners, peer_hashes):
                 grants.append(
                     WorkloadGrant(
-                        data_hash=dataset.generated_uid if dataset else None,
+                        data_hash=(
+                            dataset.generated_uid if policy.bind_peer_asset else None
+                        ),
                         model_hash=asset_hash,
                         script_hash=plan.script_hash,
                         result_collector_hash=collector_hash,
@@ -115,11 +129,11 @@ def get_model_grants(model: Model) -> List[WorkloadGrant]:
 
 
 def __peer_models(benchmark: Benchmark, policy: AssetPolicy) -> List[Optional[Model]]:
-    """The models a data owner's grant has to name, one at a time.
+    """The models a data owner's grant has to be written out for, one each.
 
-    A grant that does not pin the model is the same grant whichever model runs,
-    so there is nothing to enumerate: None stands for "any"."""
-    if not policy.bind_peer_asset:
+    Only confidential models: the rest never enter a VM, so no grant of theirs
+    could be used."""
+    if not policy.needs_peer(AssetKind.DATA):
         return [None]
 
     models = [
@@ -132,8 +146,8 @@ def __peer_models(benchmark: Benchmark, policy: AssetPolicy) -> List[Optional[Mo
 def __peer_datasets(
     benchmark: Benchmark, policy: AssetPolicy
 ) -> List[Optional[Dataset]]:
-    """The datasets a model owner's grant has to name, one at a time."""
-    if not policy.bind_peer_asset:
+    """The datasets a model owner's grant has to be written out for, one each."""
+    if not policy.needs_peer(AssetKind.MODEL):
         return [None]
 
     return [

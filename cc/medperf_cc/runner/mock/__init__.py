@@ -19,6 +19,13 @@ from medperf_cc.runner.base import WorkloadRunner
 RESULTS_FILE = "results.enc"
 RESULTS_KEY_FILE = "results_key.enc"
 
+# What a Confidential Space launcher would attest to, handed over instead. The
+# workload cannot measure its own image, so without this it could not name the
+# identity it is running as, and the mock vault would have nothing to check.
+# Supplying it is exactly the protection the mock does not provide: a real
+# workload proves this, it does not assert it.
+ATTESTED_SCRIPT_ENV = "MEDPERF_MOCK_ATTESTED_SCRIPT"
+
 
 class MockRunnerConfig(MockConfig):
     container_runtime: str = "docker"
@@ -60,6 +67,7 @@ class MockRunner(WorkloadRunner):
         }
 
     def launch(self, workload: WorkloadIdentity, image: str, env: dict) -> None:
+        env = {**env, ATTESTED_SCRIPT_ENV: workload.script_hash}
         name = self.__container_name(workload)
         os.makedirs(self.mock.root, exist_ok=True)
         self.__remove_container(name)
