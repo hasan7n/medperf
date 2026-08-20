@@ -80,7 +80,7 @@ class ExecutionFlow:
             model (Model): the model to execute
         """
         cls.validate_model(plan, model)
-        medium = resolve_execution_medium(model)
+        medium = resolve_execution_medium(model, dataset)
         cls.validate_execution(medium, execution)
         executor = EXECUTORS.get((plan.topology, medium))
         if executor is None:
