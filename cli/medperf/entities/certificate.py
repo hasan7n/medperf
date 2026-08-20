@@ -75,6 +75,16 @@ class Certificate(Entity):
         return cls._process_cert_data_list(cert_data_list, CryptoKeyType.RSA)
 
     @classmethod
+    def get_benchmark_models_certificates(
+        cls, benchmark_id: int
+    ) -> Tuple[List[Certificate], dict[int, dict]]:
+        # this api returns owners as dicts.
+        cert_data_list = config.comms.get_benchmark_models_certificates(
+            benchmark_id=benchmark_id
+        )
+        return cls._process_cert_data_list(cert_data_list, CryptoKeyType.RSA)
+
+    @classmethod
     def get_training_datasets_certificates(
         cls, training_exp_id: int
     ) -> Tuple[List[Certificate], dict[int, dict]]:

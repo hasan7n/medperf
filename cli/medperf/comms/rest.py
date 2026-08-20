@@ -1131,6 +1131,16 @@ class REST(Comms):
         error_msg = f"Could not retrieve certificates from Benchmark {benchmark_id}"
         return self.__get_list(url=url, filters=filters, error_msg=error_msg)
 
+    def get_benchmark_models_certificates(
+        self, benchmark_id: int, filters=dict()
+    ) -> List[dict]:
+        """Retrieves certificates of Model Owners associated with a given benchmark"""
+        url = f"{self.server_url}/benchmarks/{benchmark_id}/models_certificates/"
+        error_msg = (
+            f"Could not retrieve model certificates from Benchmark {benchmark_id}"
+        )
+        return self.__get_list(url=url, filters=filters, error_msg=error_msg)
+
     def get_certificate_encrypted_keys(
         self, certificate_id: int, filters=dict()
     ) -> List[dict]:
