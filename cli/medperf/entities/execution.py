@@ -98,6 +98,19 @@ class Execution(Entity):
             with open(flag_file, "w"):
                 pass
 
+    def read_integrity_proof(self):
+        """What the workload attested about these results, if it produced one.
+
+        Written beside the results when they were collected. Read back here so
+        that reporting the results reports the proof with them -- otherwise
+        only whoever collected them could ever check it."""
+        if self.integrity_proof:
+            return self.integrity_proof
+        if not os.path.exists(self.integrity_proof_path):
+            return {}
+        with open(self.integrity_proof_path) as f:
+            return yaml.safe_load(f) or {}
+
     def read_results(self):
         if self.finalized:
             return self.results

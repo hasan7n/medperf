@@ -87,6 +87,7 @@ class ResultSubmission:
     def prepare(self):
         self.results = self.execution.read_results()
         self.partial = self.execution.is_partial()
+        self.integrity_proof = self.execution.read_integrity_proof()
 
     def request_approval(self):
         dict_pretty_print(self.results)
@@ -109,6 +110,10 @@ class ResultSubmission:
             "results": self.results,
             "metadata": {**self.execution.metadata, "partial": self.partial},
         }
+        if self.integrity_proof:
+            # Goes up with the results it is about. Without it the server holds
+            # a number nobody but its collector could ever check.
+            body["integrity_proof"] = self.integrity_proof
         config.comms.update_execution(uid, body)
 
     def write(self):
