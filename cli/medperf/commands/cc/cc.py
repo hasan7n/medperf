@@ -8,6 +8,7 @@ from medperf.commands.cc.dataset_update_cc_policy import DatasetUpdateCCPolicy
 from medperf.commands.cc.model_update_cc_policy import ModelUpdateCCPolicy
 from medperf.commands.cc.setup_cc_operator import SetupCCOperator
 from medperf.commands.cc.setup_cc_collector import SetupCCCollector
+from medperf.commands.cc.download_cc_results import DownloadCCResults
 
 app = typer.Typer()
 
@@ -91,4 +92,17 @@ def setup_cc_collector(
     """Setup where you receive the results of confidential executions"""
     ui = config.ui
     SetupCCCollector.run_from_files(cc_config_file)
+    ui.print("✅ Done!")
+
+
+@app.command("download_cc_results")
+@clean_except
+def download_cc_results(
+    execution_uid: int = typer.Option(
+        ..., "--execution_uid", "-e", help="Execution UID"
+    ),
+):
+    """Collect the results of a confidential execution written for you"""
+    ui = config.ui
+    DownloadCCResults.run(execution_uid)
     ui.print("✅ Done!")

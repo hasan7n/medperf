@@ -1,30 +1,24 @@
 import logging
-import os
-from time import time
-
-import yaml
 
 from medperf.commands.execution.plan import BenchmarkPlan
+from medperf.entities.benchmark import Benchmark
 from medperf.entities.model import Model
 from medperf.entities.dataset import Dataset
 from medperf.entities.execution import Execution
 import medperf.config as config
-from medperf.exceptions import DecryptionError, ExecutionError, CommunicationError
+from medperf.exceptions import ExecutionError, CommunicationError
 
 from medperf.account_management import get_medperf_user_object
+from medperf.cc.collector import resolve_collector
 from medperf.cc.config import result_store_for, runner_for
 from medperf.cc.operator import (
     run_workload,
     wait_for_workload,
     workload_configs,
 )
-from medperf.cc.results import fetch_results, results_exist
-from medperf.cc.parties import check_operator_is_allowed, collector_public_key
+from medperf.cc.results import download_results, results_exist
 from medperf.utils import get_string_hash
-from medperf.commands.certificate.utils import load_user_private_key
-from medperf.enums import CryptoKeyType
 from medperf_cc import WorkloadIdentity
-from medperf_cc.proof import IntegrityProof
 
 
 class ConfidentialExecution:
@@ -53,11 +47,12 @@ class ConfidentialExecution:
         execution_flow.get_operator()
         execution_flow.validate()
         execution_flow.prepare()
+        execution_flow.record_collector()
         execution_flow.set_pending_status()
         execution_flow.setup_workload()
         execution_flow.run_workload()
         execution_flow.wait_for_workload_completion()
-        execution_flow.download_results()
+        execution_flow.collect_results()
         execution_summary = execution_flow.todict()
         return execution_summary
 
@@ -80,7 +75,10 @@ class ConfidentialExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
+        self.collector = None
         self.result_store = None
+        # Stays empty when the results are somebody else's to collect.
+        self.results = {}
         self.integrity_proof = None
         self.dataset_cc_config = None
         self.model_cc_config = None
@@ -101,24 +99,50 @@ class ConfidentialExecution:
             raise ExecutionError(
                 "User does not have a configuration to operate a confidential execution."
             )
-        check_operator_is_allowed(
-            self.operator.id, self.benchmark_id, self.dataset, self.model
-        )
 
     def prepare(self):
         self.dataset_cc_config, self.model_cc_config = workload_configs(
             self.dataset, self.model
         )
+        # Who the results are for. Not a check on the operator: anybody may
+        # run the machine, and this refuses only when the asset owners have
+        # not agreed on a single party to release the results to.
+        self.collector = resolve_collector(
+            Benchmark.get(self.benchmark_id), self.dataset, self.model
+        )
         self.runner = runner_for(self.operator)
-        # The operator's own, for now: they are the party the results are for.
-        self.result_store = result_store_for(self.operator.cc_collector.config)
+        self.result_store = result_store_for(self.collector.settings)
         self.asset = self.model.asset_obj
+
+    def record_collector(self):
+        """Tells the server who these results will be for.
+
+        The operator can do this and the collector cannot: the execution is
+        the operator's until it exists. Recording it is what later lets the
+        collector read and report an execution they did not create, and it is
+        write-once, so it cannot be pointed at somebody else afterwards."""
+        if self.collecting_for_operator:
+            return
+        try:
+            config.comms.update_execution(
+                self.execution.id, {"result_collector": self.collector.user_id}
+            )
+        except CommunicationError as e:
+            raise ExecutionError(
+                "Could not record who the results of this execution are for,"
+                f" so the {self.collector.party.value} would not be able to"
+                f" collect them: {e}"
+            )
+
+    @property
+    def collecting_for_operator(self) -> bool:
+        return self.collector.user_id == self.operator.id
 
     def set_pending_status(self):
         self.__send_report("pending")
 
     def setup_workload(self):
-        result_collector_public_key = collector_public_key()
+        result_collector_public_key = self.collector.public_key
         workload = WorkloadIdentity(
             data_hash=self.dataset.generated_uid,
             model_hash=self.asset.asset_hash,
@@ -149,39 +173,28 @@ class ConfidentialExecution:
     def wait_for_workload_completion(self):
         config.ui.text = "Waiting for workload completion"
         wait_for_workload(self.runner, self.workload)
+
+    def collect_results(self):
+        """Picks the results up, when they are this user's to pick up.
+
+        They land in the collector's own storage, encrypted for the collector's
+        key. An operator who is somebody else can neither reach them nor open
+        them, and says so rather than reporting an execution that produced
+        nothing -- the collector fetches them with `download_cc_results`."""
+        if not self.collecting_for_operator:
+            config.ui.print_warning(
+                f"Results were written for the {self.collector.party.value},"
+                " who is not you. They are encrypted for their key, so only"
+                " they can fetch them: `medperf confidential"
+                f" download_cc_results -e {self.execution.id}`."
+            )
+            return
+
         if not results_exist(self.result_store, self.workload):
             raise ExecutionError("Workload did not complete successfully.")
-
-    def download_results(self):
-        config.ui.text = "Downloading results..."
-        timestamp = str(time()).replace(".", "_")
-        results_path = os.path.join(
-            config.script_result_folder, str(self.execution.id), timestamp
+        self.results, self.integrity_proof = download_results(
+            self.result_store, self.workload, self.execution.id
         )
-        private_key_bytes = load_user_private_key(CryptoKeyType.RSA)
-        if private_key_bytes is None:
-            raise DecryptionError("Missing Private Key")
-
-        fetch_results(
-            self.result_store, self.workload, private_key_bytes, results_path
-        )
-
-        # The workload tars the contents of its results directory, so what
-        # lands here is those files, not a directory containing them.
-        results_file = os.path.join(results_path, config.results_filename)
-        if os.path.exists(results_file):
-            with open(results_file, "r") as f:
-                results_content = yaml.safe_load(f)
-            self.results = results_content
-        else:
-            self.results = {}
-
-        self.integrity_proof = IntegrityProof.from_results_dir(results_path)
-        if self.integrity_proof is None:
-            logging.warning(
-                "The workload produced no integrity proof;"
-                " these results cannot be verified."
-            )
 
     def todict(self):
         return {

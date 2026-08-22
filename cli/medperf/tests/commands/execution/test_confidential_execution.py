@@ -8,6 +8,7 @@ from medperf.commands.execution.plan import BenchmarkPlan
 from medperf.enums import BenchmarkTopology
 from medperf.exceptions import ExecutionError
 from medperf.tests.mocks.cube import TestCube
+from medperf_cc import Party
 
 PATCH_FLOW = "medperf.commands.execution.confidential_execution.{}"
 PATCH_CONTAINER_FLOW = (
@@ -20,12 +21,23 @@ EXECUTION_ID = 42
 
 
 @pytest.fixture(autouse=True)
-def collectors_accept_everyone(mocker):
-    """Whether the asset owners release results to this operator is decided by
-    their policies, and covered in `tests/cc/test_parties.py`. These tests are
-    about the checks around it."""
-    mocker.patch(PATCH_FLOW.format("check_operator_is_allowed"))
-    mocker.patch(PATCH_CONTAINER_FLOW.format("check_operator_is_allowed"))
+def the_operator_collects(mocker):
+    """Who the results go to is decided by the asset owners' policies, and is
+    covered in `tests/cc/test_collector.py`. These tests are about the flow
+    around it, so the operator collects their own."""
+    collector = mocker.MagicMock(
+        user_id=DATA_OWNER_ID,
+        party=Party.DATA_OWNER,
+        public_key=b"collector-key",
+        settings={"backend": "mock", "root": "/tmp/collect"},
+    )
+    for module in (PATCH_FLOW, PATCH_CONTAINER_FLOW):
+        mocker.patch(module.format("resolve_collector"), return_value=collector)
+        mocker.patch(module.format("Benchmark"))
+        mocker.patch(module.format("result_store_for"))
+        mocker.patch(module.format("runner_for"))
+        mocker.patch(module.format("workload_configs"), return_value=({}, {}))
+    return collector
 
 
 class FakeAsset:
@@ -79,26 +91,32 @@ def plan_for(topology):
     )
 
 
-def flow_for(cls, topology, configured):
-    flow = cls(
-        plan_for(topology),
-        configured["dataset"],
-        configured["model"],
-        configured["execution"],
-    )
-    flow.operator = configured["operator"]
-    return flow
+@pytest.fixture()
+def flow_for(configured, the_operator_collects):
+    """A flow with what `get_operator()` and `prepare()` would have resolved
+    already in place, so each test can start at the step it is about."""
+
+    def _flow(cls, topology):
+        flow = cls(
+            plan_for(topology),
+            configured["dataset"],
+            configured["model"],
+            configured["execution"],
+        )
+        flow.operator = configured["operator"]
+        flow.collector = the_operator_collects
+        return flow
+
+    return _flow
 
 
-def test_predictions_scored_on_prem_need_the_data_owner(mocker, configured):
+def test_predictions_scored_on_prem_need_the_data_owner(configured, flow_for):
     """An inference_script benchmark scores its predictions against ground
     truth labels nobody but the data owner holds"""
     # Arrange
     configured["operator"] = FakeUser(id=99)
     flow = flow_for(
-        ConfidentialModelContainerExecution,
-        BenchmarkTopology.INFERENCE_SCRIPT,
-        configured,
+        ConfidentialModelContainerExecution, BenchmarkTopology.INFERENCE_SCRIPT
     )
 
     # Act & Assert
@@ -106,26 +124,22 @@ def test_predictions_scored_on_prem_need_the_data_owner(mocker, configured):
         flow.validate()
 
 
-def test_the_data_owner_may_operate_their_own_inference_run(configured):
+def test_the_data_owner_may_operate_their_own_inference_run(configured, flow_for):
     # Arrange
     flow = flow_for(
-        ConfidentialModelContainerExecution,
-        BenchmarkTopology.INFERENCE_SCRIPT,
-        configured,
+        ConfidentialModelContainerExecution, BenchmarkTopology.INFERENCE_SCRIPT
     )
 
     # Act & Assert
     flow.validate()
 
 
-def test_an_end_to_end_run_may_be_operated_by_anyone(mocker, configured):
+def test_an_end_to_end_run_may_be_operated_by_anyone(configured, flow_for):
     """The metric is computed inside the VM, so no on-prem labels are involved
     and there is nothing tying the run to the data owner"""
     # Arrange
     configured["operator"] = FakeUser(id=99)
-    flow = flow_for(
-        ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
-    )
+    flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
 
     # Act & Assert
     flow.validate()
@@ -133,7 +147,7 @@ def test_an_end_to_end_run_may_be_operated_by_anyone(mocker, configured):
 
 @pytest.mark.parametrize("unconfigured", ["dataset", "model", "operator"])
 def test_every_party_must_be_configured_for_confidential_computing(
-    mocker, configured, unconfigured
+    configured, unconfigured, flow_for
 ):
     # Arrange
     party = configured[unconfigured]
@@ -141,56 +155,70 @@ def test_every_party_must_be_configured_for_confidential_computing(
         party.cc_operator = FakeRole(configured=False)
     else:
         party.cc_configured = False
-    flow = flow_for(
-        ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
-    )
+    flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
 
     # Act & Assert
     with pytest.raises(ExecutionError):
         flow.validate()
 
 
-def test_results_are_not_collected_before_the_workload_has_finished(mocker, configured):
-    """A runner starts a workload and returns; downloading straight away would
-    fetch whatever happens to be there, which is nothing"""
+def test_results_are_not_downloaded_before_they_are_there(mocker, flow_for):
+    """A runner starts a workload and returns; fetching straight away would
+    pick up whatever happens to be there, which is nothing"""
     # Arrange
-    flow = flow_for(
-        ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
-    )
-    flow.runner = mocker.MagicMock()
+    flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
     flow.result_store = mocker.MagicMock()
     flow.workload = mocker.MagicMock()
     order = []
     mocker.patch(
-        PATCH_FLOW.format("wait_for_workload"),
-        side_effect=lambda *a: order.append("wait"),
-    )
-    mocker.patch(
         PATCH_FLOW.format("results_exist"),
         side_effect=lambda *a: order.append("check") or True,
     )
+    mocker.patch(
+        PATCH_FLOW.format("download_results"),
+        side_effect=lambda *a: order.append("download") or ({}, None),
+    )
 
     # Act
-    flow.wait_for_workload_completion()
+    flow.collect_results()
 
     # Assert
-    assert order == ["wait", "check"]
+    assert order == ["check", "download"]
 
 
-def test_a_workload_that_produced_nothing_is_reported(mocker, configured):
+def test_a_workload_that_produced_nothing_is_reported(mocker, flow_for):
     # Arrange
-    flow = flow_for(
-        ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
-    )
-    flow.runner = mocker.MagicMock()
+    flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
     flow.result_store = mocker.MagicMock()
     flow.workload = mocker.MagicMock()
-    mocker.patch(PATCH_FLOW.format("wait_for_workload"))
     mocker.patch(PATCH_FLOW.format("results_exist"), return_value=False)
 
     # Act & Assert
     with pytest.raises(ExecutionError, match="did not complete"):
-        flow.wait_for_workload_completion()
+        flow.collect_results()
+
+
+def test_an_operator_who_is_not_the_collector_downloads_nothing(
+    mocker, the_operator_collects, flow_for
+):
+    """The results are encrypted for somebody else's key and written to
+    somebody else's storage. Trying would fail; pretending would report an
+    execution that produced nothing"""
+    # Arrange
+    the_operator_collects.user_id = 12345
+    flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
+    flow.result_store = mocker.MagicMock()
+    flow.workload = mocker.MagicMock()
+    download = mocker.patch(PATCH_FLOW.format("download_results"))
+    ready = mocker.patch(PATCH_FLOW.format("results_exist"))
+
+    # Act
+    flow.collect_results()
+
+    # Assert
+    download.assert_not_called()
+    ready.assert_not_called()
+    assert flow.results == {}
 
 
 @pytest.mark.parametrize(
@@ -201,20 +229,16 @@ def test_a_workload_that_produced_nothing_is_reported(mocker, configured):
     ],
 )
 def test_a_launched_workload_says_which_execution_it_is(
-    mocker, configured, cls, topology
+    mocker, cls, topology, flow_for
 ):
     """Its storage prefix is built from this. Without it, two runs of the same
     dataset, model and script write to the same place and the second overwrites
     the first"""
     # Arrange
-    flow = flow_for(cls, topology, configured)
+    flow = flow_for(cls, topology)
     flow.asset = mocker.MagicMock(asset_hash="assethash")
     flow.plan = mocker.MagicMock(script_hash="scripthash", script_id=7)
     flow.dataset.generated_uid = "datahash"
-    mocker.patch(PATCH_FLOW.format("collector_public_key"), return_value=b"key")
-    mocker.patch(
-        PATCH_CONTAINER_FLOW.format("collector_public_key"), return_value=b"key"
-    )
 
     # Act
     flow.setup_workload()

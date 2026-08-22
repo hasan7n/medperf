@@ -1012,7 +1012,9 @@ class REST(Comms):
         """
         url = f"{self.server_url}/users/{user_id}/metadata/"
         error_msg = "Could not retrieve user metadata"
-        return self.__get(url, error_msg)
+        # The endpoint answers with the field wrapped in an object; what a
+        # caller asked for is the metadata itself.
+        return self.__get(url, error_msg).get("metadata", {})
 
     def get_benchmark_executions(self, benchmark_id: int, filters=dict()) -> dict:
         """Retrieves all executions for a given benchmark

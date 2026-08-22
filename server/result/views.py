@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema
 from .models import ModelResult
 from .serializers import ModelResultSerializer, ModelResultDetailSerializer
 from .permissions import (
+    IsExecutionCollector,
     IsAdmin,
     IsBenchmarkOwner,
     IsCommitteeMember,
@@ -66,12 +67,18 @@ class ModelResultDetail(GenericAPIView):
 
     def get_permissions(self):
         if self.request.method == "PUT":
-            self.permission_classes = [IsAdmin | IsExecutionOwner]
+            self.permission_classes = [
+                IsAdmin | IsExecutionOwner | IsExecutionCollector
+            ]
         elif self.request.method == "DELETE":
             self.permission_classes = [IsAdmin]
         elif self.request.method == "GET":
             self.permission_classes = [
-                IsAdmin | IsExecutionOwner | IsBenchmarkOwner | IsCommitteeMember
+                IsAdmin
+                | IsExecutionOwner
+                | IsExecutionCollector
+                | IsBenchmarkOwner
+                | IsCommitteeMember
             ]
         return super(self.__class__, self).get_permissions()
 

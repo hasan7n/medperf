@@ -228,6 +228,35 @@ class ResultsTest(MedPerfTest):
         result = self.create_result(result).data
         return result
 
+    def test_an_execution_this_user_collects_is_listed_as_theirs(self):
+        """Somebody else operated it, but only this user can open what it
+        produced -- so it is theirs to find and theirs to report"""
+        # Arrange -- the operator owns the dataset; the reference model, and
+        # so the other key the results could be released to, is bmk_owner's
+        operator = "operator"
+        self.create_user(operator)
+        result = self.__create_asset(operator)
+
+        self.set_credentials(self.bmk_owner)
+        collector_id = self.client.get(self.api_prefix + "/me/").data["id"]
+
+        self.set_credentials(operator)
+        recorded = self.client.put(
+            self.api_prefix + f"/results/{result['id']}/",
+            {"result_collector": collector_id},
+            format="json",
+        )
+        self.assertEqual(recorded.status_code, status.HTTP_200_OK)
+
+        # Act
+        self.set_credentials(self.bmk_owner)
+        response = self.client.get(self.api_prefix + "/me/results/")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [entry["id"] for entry in response.data["results"]]
+        self.assertIn(result["id"], ids)
+
     def test_endpoint_returns_current_user_assets(self):
         url = self.api_prefix + "/me/results/"
 

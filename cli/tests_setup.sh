@@ -178,6 +178,19 @@ OPERATOR_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/operator_cc_config_
 COLLECTOR_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/collector_cc_config_mock.json"
 MODEL_CC_POLICY="$MEDPERF_ROOT_REPO/examples/cc/chestxray/model_cc_policy.json"
 DATASET_CC_POLICY="$MEDPERF_ROOT_REPO/examples/cc/chestxray/dataset_cc_policy.json"
+
+# Who operates the confidential execution: the data owner, or the model owner.
+# Anybody may operate one -- what the policies decide is who *collects*, and
+# both of them release results to the data owner. So in the modelowner
+# scenario the operator is not the collector, which is the case the split
+# exists for: they never see the results at all.
+CC_OPERATOR="${CC_OPERATOR:-dataowner}"
+if [ "$CC_OPERATOR" = "modelowner" ]; then
+  CC_OPERATOR_PROFILE="testmodel"
+else
+  CC_OPERATOR_PROFILE="testdata"
+fi
+CC_COLLECTOR_PROFILE="testdata"
 CC_MOCK_ROOT="/tmp/medperf_cc_mock"
 
 RANO_SCRIPT="$MEDPERF_ROOT_REPO/examples/cc/rano/implementation/container_config.yaml"

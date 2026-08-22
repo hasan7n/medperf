@@ -343,6 +343,142 @@ class ConfidentialResultPutTest(ResultsTest):
         self.assertEqual(response.data["results"], new_results)
 
 
+class ConfidentialCollectorTest(ResultsTest):
+    """Test module for a confidential execution whose collector is not its
+    operator
+
+    The results were encrypted for the collector's key and written to their
+    storage, so reporting them is theirs to do -- and the operator, who cannot
+    open them, must not be the only one who can.
+    """
+
+    def setUp(self):
+        super(ConfidentialCollectorTest, self).setUp()
+        self.generic_setup()
+        self.cc = self.confidential_setup()
+
+        self.data_owner_id = self.__user_id(self.data_owner)
+        self.model_owner_id = self.__user_id(self.model_owner)
+        self.bmk_owner_id = self.__user_id(self.bmk_owner)
+
+        # other_user operates; the data owner collects
+        self.set_credentials(self.other_user)
+        self.url_template = self.url
+        result = self.__create_confidential_result()
+        self.url = self.url.format(result["id"])
+        self.client.put(
+            self.url, {"result_collector": self.data_owner_id}, format="json"
+        )
+        self.set_credentials(None)
+
+    def __user_id(self, username):
+        self.set_credentials(username)
+        return self.client.get(self.api_prefix + "/me/").data["id"]
+
+    def __create_confidential_result(self):
+        benchmark, dataset, model = self.cc
+        return self.create_result(
+            self.mock_result(benchmark["id"], model["id"], dataset["id"])
+        ).data
+
+    def test_the_collector_may_report_what_only_they_could_open(self):
+        # Arrange
+        self.set_credentials(self.data_owner)
+
+        # Act
+        response = self.client.put(self.url, {"results": {"auc": 0.9}}, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"], {"auc": 0.9})
+
+    def test_the_collector_may_read_an_execution_they_did_not_create(self):
+        # Arrange
+        self.set_credentials(self.data_owner)
+
+        # Act
+        response = self.client.get(self.url)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_the_collector_cannot_be_pointed_at_somebody_else(self):
+        """Write-once: whoever it was recorded as is who can open the results"""
+        # Arrange
+        self.set_credentials(self.other_user)
+
+        # Act
+        response = self.client.put(
+            self.url, {"result_collector": self.model_owner_id}, format="json"
+        )
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_only_an_asset_owner_may_be_named_as_the_collector(self):
+        """The operator states this and the server would otherwise take their
+        word for it. Only the two asset owners have a key published to the
+        other parties, so nobody else could have had results encrypted for
+        them -- and naming them would hand a stranger read and write here"""
+        # Arrange -- a second execution, with nobody recorded on it yet
+        self.set_credentials(self.other_user)
+        result = self.__create_confidential_result()
+
+        # Act
+        response = self.client.put(
+            self.url_template.format(result["id"]),
+            {"result_collector": self.bmk_owner_id},
+            format="json",
+        )
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ConfidentialCollectorPermissionTest(ResultsTest):
+    """Test module for permissions of /results/{pk} once a collector is named
+
+    Non-permitted actions:
+        PUT: for all users except the operator, the collector and admin
+        GET: for unauthenticated users
+    """
+
+    def setUp(self):
+        super(ConfidentialCollectorPermissionTest, self).setUp()
+        self.generic_setup()
+        benchmark, dataset, model = self.confidential_setup()
+
+        self.set_credentials(self.data_owner)
+        data_owner_id = self.client.get(self.api_prefix + "/me/").data["id"]
+
+        self.set_credentials(self.other_user)
+        result = self.create_result(
+            self.mock_result(benchmark["id"], model["id"], dataset["id"])
+        ).data
+        self.url = self.url.format(result["id"])
+        self.client.put(self.url, {"result_collector": data_owner_id}, format="json")
+        self.set_credentials(None)
+
+    @parameterized.expand(
+        [
+            ("model_owner", status.HTTP_403_FORBIDDEN),
+            ("bmk_owner", status.HTTP_403_FORBIDDEN),
+            (None, status.HTTP_401_UNAUTHORIZED),
+        ]
+    )
+    def test_put_permissions(self, user, expected_status):
+        """Naming a collector grants that one party something, and nobody
+        else anything"""
+        # Arrange
+        self.set_credentials(user)
+
+        # Act
+        response = self.client.put(self.url, {"results": {"r": 2}}, format="json")
+
+        # Assert
+        self.assertEqual(response.status_code, expected_status)
+
+
 class ConfidentialResultPutPermissionTest(ResultsTest):
     """Test module for permissions of PUT /results/{pk} of a confidential
     execution somebody other than the dataset owner ran

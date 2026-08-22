@@ -83,7 +83,33 @@ class ModelResultDetailSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "User cannot update a result object after it's been finalized."
             )
+        self.__validate_result_collector(data)
         return data
+
+    def __validate_result_collector(self, data):
+        """Who an execution's results may be recorded as being for.
+
+        The operator states this, and the server would otherwise take their
+        word for it -- which would let them hand read and write on the
+        execution to anybody. Only the two asset owners have a key published to
+        the other parties, so only they can be who the results were encrypted
+        for, and once recorded it is fixed."""
+        collector = data.get("result_collector")
+        if collector is None:
+            return
+
+        recorded = self.instance.result_collector
+        if recorded is not None and collector.id != recorded.id:
+            raise serializers.ValidationError(
+                "The result collector of an execution cannot be changed."
+            )
+
+        asset_owners = {self.instance.dataset.owner_id, self.instance.model.owner_id}
+        if collector.id not in asset_owners:
+            raise serializers.ValidationError(
+                "The result collector must own the dataset or the model of"
+                " this execution."
+            )
 
     def update(self, instance, validated_data):
         if "results" in validated_data:

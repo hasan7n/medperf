@@ -55,6 +55,7 @@ class Execution(Entity):
         self.model_report = self._model.model_report
         self.evaluation_report = self._model.evaluation_report
         self.integrity_proof = self._model.integrity_proof
+        self.result_collector = self._model.result_collector
         self.finalized = self._model.finalized
         self.finalized_at = self._model.finalized_at
 

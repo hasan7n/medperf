@@ -118,18 +118,38 @@ client.
 
 ### Who may collect results
 
-Results are encrypted for whoever runs the workload, so `allowed_result_collectors`
-is really a list of who may *operate* an execution involving your asset. Both
-asset owners have to accept the operator before a workload starts — the client
-refuses up front, and the cloud refuses again by withholding the key.
+`allowed_result_collectors` says who may *receive* the results of an execution
+involving your asset — not who may run it. Anybody may run one; what the
+policies control is where the output goes and whose key it is encrypted for.
+
+Both asset owners have to name the same party, because there is one key and one
+destination. MedPerf works out who that is from the two lists, and refuses the
+execution when they name nobody in common, or more than one — that is not a
+choice it can make on your behalf. The cloud refuses again afterwards, by
+withholding the asset key from a workload writing for anyone else.
 
 The benchmark owner does not get to decide this. They are not the party at
 risk, and MedPerf has no way for them to enforce it; `benchmark_owner` is simply
-one of the roles each asset owner may choose to accept.
+one of the roles each asset owner may choose to accept — though nothing
+publishes their key to the other parties yet, so naming only them will fail.
 
 An `inference_script` benchmark is the exception: its predictions are scored
-on-prem against ground truth labels only the data owner holds, so only the data
-owner can operate one whatever the policies say.
+on-prem against ground truth labels only the data owner holds, so the data owner
+both operates and collects one whatever the policies say.
+
+### When the operator is not the collector
+
+Only an `end_to_end_script` benchmark can have them differ. The operator starts
+the workload and stops there: the results are written to the collector's
+storage, encrypted for the collector's key, and the operator can neither reach
+them nor open them. The collector picks them up afterwards:
+
+```bash
+medperf confidential download_cc_results -e <execution-id>
+```
+
+Executions waiting for you are listed among your own results, since only you
+can open them.
 
 ## Choosing where everything lives
 

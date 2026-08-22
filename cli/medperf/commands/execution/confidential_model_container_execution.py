@@ -1,13 +1,14 @@
 from medperf.commands.execution.plan import BenchmarkPlan
+from medperf.entities.benchmark import Benchmark
 from medperf.entities.model import Model
 from medperf.entities.dataset import Dataset
 from medperf.entities.execution import Execution
 import medperf.config as config
-from medperf.exceptions import DecryptionError, ExecutionError
+from medperf.exceptions import ExecutionError
 
 from medperf.account_management import get_medperf_user_object
+from medperf.cc.collector import resolve_collector
 from medperf.cc.config import result_store_for, runner_for
-from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.cc.operator import (
     run_workload,
     workload_configs,
@@ -15,9 +16,7 @@ from medperf.cc.operator import (
 )
 from medperf.cc.results import fetch_results, results_exist
 from medperf.utils import get_string_hash
-from medperf.commands.certificate.utils import load_user_private_key
 from medperf.commands.execution.container_execution import ContainerExecution
-from medperf.enums import CryptoKeyType
 from medperf_cc import WorkloadIdentity
 
 
@@ -79,6 +78,7 @@ class ConfidentialModelContainerExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
+        self.collector = None
         self.result_store = None
         self.dataset_cc_config = None
         self.model_cc_config = None
@@ -116,21 +116,31 @@ class ConfidentialModelContainerExecution:
                 " against ground truth labels only the data owner holds."
                 " This execution must be operated by the data owner."
             )
-        check_operator_is_allowed(
-            self.operator.id, self.benchmark_id, self.dataset, self.model
-        )
 
     def prepare(self):
         self.dataset_cc_config, self.model_cc_config = workload_configs(
             self.dataset, self.model
         )
+        # An inference_script run is always collected by the data owner, who
+        # validate() has just required to be the operator. Resolving still
+        # runs, to refuse a pair of policies that would release the
+        # predictions to somebody else, or to nobody.
+        self.collector = resolve_collector(
+            Benchmark.get(self.benchmark_id), self.dataset, self.model
+        )
+        if self.collector.user_id != self.operator.id:
+            raise ExecutionError(
+                "An inference_script benchmark scores the predictions on-prem,"
+                " but its policies release them to the"
+                f" {self.collector.party.value}. Only the data owner can"
+                " collect an execution they have to score themselves."
+            )
         self.runner = runner_for(self.operator)
-        # The operator's own, for now: they are the party the results are for.
-        self.result_store = result_store_for(self.operator.cc_collector.config)
+        self.result_store = result_store_for(self.collector.settings)
         self.asset = self.model.asset_obj
 
     def setup_workload(self):
-        result_collector_public_key = collector_public_key()
+        result_collector_public_key = self.collector.public_key
         workload = WorkloadIdentity(
             data_hash=self.dataset.generated_uid,
             model_hash=self.asset.asset_hash,
@@ -169,13 +179,8 @@ class ConfidentialModelContainerExecution:
 
     def download_predictions(self):
         config.ui.text = "Downloading inference predictions"
-        results_path = self.local_execution_flow.preds_path
-        private_key_bytes = load_user_private_key(CryptoKeyType.RSA)
-        if private_key_bytes is None:
-            raise DecryptionError("Missing Private Key")
-
         fetch_results(
-            self.result_store, self.workload, private_key_bytes, results_path
+            self.result_store, self.workload, self.local_execution_flow.preds_path
         )
 
     def run_evaluation(self):

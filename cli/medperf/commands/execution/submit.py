@@ -76,6 +76,18 @@ class ResultSubmission:
         self.execution = executions[0]  # this should be only one value
 
     def validate(self):
+        collector = self.execution.result_collector
+        if collector is not None and collector != get_medperf_user_data()["id"]:
+            # Results this user cannot read are not theirs to report. The
+            # operator of a confidential execution written for somebody else
+            # never held the key, so there is nothing here to upload and
+            # nothing has gone wrong.
+            raise CleanExit(
+                "These results were written for somebody else, who will report"
+                " them once they have collected them: `medperf confidential"
+                f" download_cc_results -e {self.execution.id}`."
+            )
+
         if not self.execution.is_executed():
             raise InvalidArgumentError("This execution is not mark as executed.")
 

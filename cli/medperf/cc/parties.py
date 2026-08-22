@@ -10,7 +10,6 @@ import logging
 from typing import Dict, List, Optional, Set
 
 from medperf.account_management import get_medperf_user_data, is_user_logged_in
-from medperf.cc.config import policy_of
 from medperf.commands.certificate.utils import current_user_certificate_status
 from medperf.entities.benchmark import Benchmark
 from medperf.entities.certificate import Certificate
@@ -48,42 +47,78 @@ def current_user_certificate() -> Certificate:
     return user_cert
 
 
-def peer_key_hashes(benchmark_id: int, peer: AssetKind) -> Dict[int, str]:
-    """The key hash of every owner on the other side of one benchmark.
+# Which listing publishes a party's key to the other participants. The
+# benchmark owner appears in neither, so nothing exposes their key yet.
+PARTY_LISTINGS = {
+    Party.DATA_OWNER: AssetKind.DATA,
+    Party.MODEL_OWNER: AssetKind.MODEL,
+}
+
+
+def is_current_user(user_id: int) -> bool:
+    """Whether this id is the person running the command.
+
+    Their own certificate is read locally -- it may have been issued but not
+    yet uploaded, and it is theirs to read either way."""
+    return is_user_logged_in() and user_id == get_medperf_user_data()["id"]
+
+
+def certificates_in(benchmark_id: int, side: AssetKind) -> List[Certificate]:
+    """Every valid certificate on one side of a benchmark.
 
     Nobody may read another user's certificate in general, and rightly so. What
     they may read is the certificates of the parties they are already in a
     benchmark with, through a listing scoped to it -- a data owner sees the
     model owners, a model owner sees the data owners. So which listing to ask
-    for follows from which side the caller is on.
+    for follows from which side is wanted.
+
+    The one lookup both sides go through: a grant pins the hash of a key, and
+    an execution encrypts for that same key, so reading them two different ways
+    could pin a hash the workload never presents.
     """
-    if peer is AssetKind.MODEL:
+    if side is AssetKind.MODEL:
         certificates, _ = Certificate.get_benchmark_models_certificates(benchmark_id)
     else:
         certificates, _ = Certificate.get_benchmark_datasets_certificates(benchmark_id)
+    return [certificate for certificate in certificates if certificate.is_valid]
+
+
+def certificate_of(benchmark_id: int, user_id: int, party: Party) -> Certificate:
+    """One named party's certificate in one benchmark."""
+    side = PARTY_LISTINGS.get(party)
+    if side is None:
+        raise ExecutionError(
+            f"Results are to be released to the {party.value}, but nothing"
+            " publishes their key to the other parties. Name a dataset or"
+            " model owner instead."
+        )
+    for certificate in certificates_in(benchmark_id, side):
+        if certificate.owner == user_id:
+            return certificate
+    raise ExecutionError(
+        f"Results are to be released to the {party.value}, but they hold no"
+        " certificate in this benchmark, so there is no key to encrypt for."
+    )
+
+
+def peer_key_hashes(benchmark_id: int, peer: AssetKind) -> Dict[int, str]:
+    """The key hash of every owner on the other side of one benchmark."""
     return {
         certificate.owner: public_key_hash(certificate)
-        for certificate in certificates
-        if certificate.is_valid
+        for certificate in certificates_in(benchmark_id, peer)
     }
 
 
 def owner_key_hash(owner_id: int, peer_hashes: Dict[int, str]) -> Optional[str]:
-    """The key hash of one party, or None if they hold no certificate.
-
-    The current user's own certificate is read locally: it may have been issued
-    but not yet uploaded, and it is theirs to read either way."""
-    if is_user_logged_in() and owner_id == get_medperf_user_data()["id"]:
+    """The key hash of one party, or None if they hold no certificate."""
+    if is_current_user(owner_id):
         return public_key_hash(current_user_certificate())
 
     return peer_hashes.get(owner_id)
 
 
-def collector_public_key() -> bytes:
-    """The key the results of an execution are encrypted for.
-
-    The operator's own: results are encrypted for whoever decrypts them, and
-    the operator is the one who downloads them."""
+def current_user_public_key() -> bytes:
+    """The current user's key, base64 encoded as the workload receives it."""
     return base64.b64encode(current_user_certificate().public_key())
 
 
@@ -124,29 +159,3 @@ def collector_key_hashes(
             continue
         hashes.append(key_hash)
     return hashes
-
-
-def check_operator_is_allowed(
-    operator_id: int, benchmark_id: int, dataset: Dataset, model: Model
-):
-    """Refuses an execution neither asset owner would release its results to.
-
-    Both owners must accept the operator, because the workload needs both keys.
-    The cloud enforces this too, but only by withholding a key from a VM that
-    has already started, which the operator sees as a workload that produces
-    nothing.
-
-    Every confidential execution belongs to a benchmark, which is where the
-    roles being checked come from."""
-    benchmark = Benchmark.get(benchmark_id)
-    held = parties_of(operator_id, party_owners(benchmark, dataset, model))
-
-    for label, entity in (("Dataset", dataset), ("Model", model)):
-        collectors = policy_of(entity).allowed_result_collectors
-        if not held.intersection(collectors):
-            allowed = ", ".join(party.value for party in collectors)
-            raise ExecutionError(
-                f"The {label.lower()} owner only releases results to: {allowed}."
-                " The current user holds none of those roles in this execution,"
-                " and so cannot operate it."
-            )

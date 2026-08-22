@@ -42,6 +42,23 @@ class IsExecutionOwner(BasePermission):
             return False
 
 
+class IsExecutionCollector(BasePermission):
+    """Whoever the results of a confidential execution were encrypted for.
+
+    They did not create the execution -- somebody else operated it -- but they
+    are the only party who can open what it produced, so reporting it is theirs
+    to do and nobody else's."""
+
+    def has_permission(self, request, view):
+        pk = view.kwargs.get("pk", None)
+        if not pk:
+            return False
+        result = ModelResult.objects.filter(pk=pk).first()
+        if not result or result.result_collector is None:
+            return False
+        return result.result_collector.id == request.user.id
+
+
 class IsConfidentialEndToEndExecution(BasePermission):
     """Anybody may create an execution a confidential VM computes end to end.
 
