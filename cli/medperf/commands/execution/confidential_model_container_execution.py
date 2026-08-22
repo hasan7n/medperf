@@ -106,7 +106,7 @@ class ConfidentialModelContainerExecution:
             raise ExecutionError(
                 f"Model {self.model.id} is not configured for confidential computing."
             )
-        if not self.operator.is_cc_configured():
+        if not self.operator.cc_operator.configured:
             raise ExecutionError(
                 "User does not have a configuration to operate a confidential execution."
             )
@@ -126,7 +126,7 @@ class ConfidentialModelContainerExecution:
         )
         self.runner = runner_for(self.operator)
         # The operator's own, for now: they are the party the results are for.
-        self.result_store = result_store_for(self.operator.get_cc_config())
+        self.result_store = result_store_for(self.operator.cc_collector.config)
         self.asset = self.model.asset_obj
 
     def setup_workload(self):

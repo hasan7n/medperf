@@ -50,11 +50,18 @@ Note: This step should be done in a terminal.
 
 ### Configure Medperf with your confidential VM settings
 
+Two settings, because they are two roles. Operating a workload is running the
+machine; collecting is receiving what it produced. The same person usually does
+both, and they are configured separately so that they need not.
+
 1. Navigate to the `settings` page in the web UI
-2. Scroll down to the `Confidential Computing Operator Settings`
+2. Scroll down to `Confidential Computing Operator Settings`
 3. Check the box `Configure confidential Computing`
 4. Pick a confidential runner, and fill in what it asks for.
 5. Click `Configure`.
+6. Scroll to `Confidential Computing Result Collector`, check its box, and
+   name the bucket you want results written to. It has to be yours: results are
+   encrypted for your key, and nobody else should be asked to hold them.
 
 ### Configure Medperf with your Dataset cloud resources settings
 

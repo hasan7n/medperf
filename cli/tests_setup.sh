@@ -175,6 +175,7 @@ CHESTXRAY_SCRIPT="$MEDPERF_ROOT_REPO/examples/cc/chestxray/implementation/contai
 DATASET_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/dataset_cc_config_mock.json"
 MODEL_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/model_cc_config_mock.json"
 OPERATOR_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/operator_cc_config_mock.json"
+COLLECTOR_CC_CONFIG="$MEDPERF_ROOT_REPO/examples/cc/chestxray/collector_cc_config_mock.json"
 MODEL_CC_POLICY="$MEDPERF_ROOT_REPO/examples/cc/chestxray/model_cc_policy.json"
 DATASET_CC_POLICY="$MEDPERF_ROOT_REPO/examples/cc/chestxray/dataset_cc_policy.json"
 CC_MOCK_ROOT="/tmp/medperf_cc_mock"

@@ -28,18 +28,44 @@ def collectors_accept_everyone(mocker):
     mocker.patch(PATCH_CONTAINER_FLOW.format("check_operator_is_allowed"))
 
 
+class FakeAsset:
+    """A dataset or a model, asked only whether it is set up for CC.
+
+    A real object rather than a Mock: an asset is asked `is_cc_configured` and
+    a user is asked about one of their roles, so calling the wrong one has to
+    fail here rather than quietly return something truthy."""
+
+    def __init__(self, id, owner=None, cc_configured=True):
+        self.id = id
+        self.owner = owner
+        self.cc_configured = cc_configured
+
+    def is_cc_configured(self):
+        return self.cc_configured
+
+
+class FakeRole:
+    def __init__(self, configured=True):
+        self.configured = configured
+
+
+class FakeUser:
+    """An operator, asked about the roles they hold rather than about "CC"."""
+
+    def __init__(self, id, cc_configured=True):
+        self.id = id
+        self.cc_operator = FakeRole(cc_configured)
+        self.cc_collector = FakeRole(cc_configured)
+
+
 @pytest.fixture()
 def configured(mocker):
     """A dataset, a model and an operator all set up for confidential
     computing."""
-
-    def entity(**kwargs):
-        return mocker.MagicMock(**{"is_cc_configured.return_value": True}, **kwargs)
-
     return {
-        "dataset": entity(id=1, owner=DATA_OWNER_ID),
-        "model": entity(id=2),
-        "operator": entity(id=DATA_OWNER_ID),
+        "dataset": FakeAsset(id=1, owner=DATA_OWNER_ID),
+        "model": FakeAsset(id=2),
+        "operator": FakeUser(id=DATA_OWNER_ID),
         "execution": mocker.MagicMock(id=EXECUTION_ID),
     }
 
@@ -68,9 +94,7 @@ def test_predictions_scored_on_prem_need_the_data_owner(mocker, configured):
     """An inference_script benchmark scores its predictions against ground
     truth labels nobody but the data owner holds"""
     # Arrange
-    configured["operator"] = mocker.MagicMock(
-        id=99, **{"is_cc_configured.return_value": True}
-    )
+    configured["operator"] = FakeUser(id=99)
     flow = flow_for(
         ConfidentialModelContainerExecution,
         BenchmarkTopology.INFERENCE_SCRIPT,
@@ -98,9 +122,7 @@ def test_an_end_to_end_run_may_be_operated_by_anyone(mocker, configured):
     """The metric is computed inside the VM, so no on-prem labels are involved
     and there is nothing tying the run to the data owner"""
     # Arrange
-    configured["operator"] = mocker.MagicMock(
-        id=99, **{"is_cc_configured.return_value": True}
-    )
+    configured["operator"] = FakeUser(id=99)
     flow = flow_for(
         ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
     )
@@ -114,7 +136,11 @@ def test_every_party_must_be_configured_for_confidential_computing(
     mocker, configured, unconfigured
 ):
     # Arrange
-    configured[unconfigured].is_cc_configured.return_value = False
+    party = configured[unconfigured]
+    if isinstance(party, FakeUser):
+        party.cc_operator = FakeRole(configured=False)
+    else:
+        party.cc_configured = False
     flow = flow_for(
         ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
     )

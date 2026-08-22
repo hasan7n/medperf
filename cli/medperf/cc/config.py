@@ -38,7 +38,7 @@ def asset_for(entity, kind: AssetKind) -> ConfidentialAsset:
 
 
 def runner_for(user: User) -> WorkloadRunner:
-    return get_runner(user.get_cc_config())
+    return get_runner(user.cc_operator.config)
 
 
 def result_store_for(settings: dict) -> ResultStore:
@@ -63,6 +63,17 @@ def check_asset_setup(cc_config: dict, cc_policy: dict, entity, kind: AssetKind)
 
 def check_operator_setup(cc_config: dict):
     """Fails unless this configuration describes a usable operator."""
+    __check_setup(cc_config, get_runner)
+
+
+def check_collector_setup(cc_config: dict):
+    """Fails unless this configuration describes a usable place for results."""
+    __check_setup(cc_config, get_result_store)
+
+
+def __check_setup(cc_config: dict, build):
+    """Building it is the check: every backend the configuration selects
+    parses its own settings, and refuses what it cannot work with."""
     if cc_config == {}:
         return
-    get_runner(cc_config)
+    build(cc_config)

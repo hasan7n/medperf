@@ -16,12 +16,12 @@ class SetupCCOperator:
     def run(cls, cc_config: dict):
         check_operator_setup(cc_config)
         user = get_medperf_user_object()
-        user.set_cc_config(cc_config)
+        user.cc_operator.set(cc_config)
         body = {"metadata": user.metadata}
         config.comms.update_user(user.id, body)
 
         with config.ui.interactive():
             setup_operator(user)
-            user.set_cc_initialized()
+            user.cc_operator.mark_initialized()
             body = {"metadata": user.metadata}
             config.comms.update_user(user.id, body)

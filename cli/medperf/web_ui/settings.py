@@ -10,13 +10,18 @@ from medperf.account_management.account_management import get_medperf_user_objec
 from medperf.commands.utils import set_profile_args
 from medperf.config_management.config_management import read_config, write_config
 from medperf.commands.cc.setup_cc_operator import SetupCCOperator
+from medperf.commands.cc.setup_cc_collector import SetupCCCollector
 from medperf.entities.ca import CA
 from medperf.exceptions import InvalidArgumentError
 from medperf.utils import make_pretty_dict
 from medperf.init import initialize
 from medperf.enums import CryptoKeyType
-from medperf.web_ui.cc_forms import backend_settings_from_form, field_label, selected_backend
-from medperf_cc import runner_backends
+from medperf.web_ui.cc_forms import (
+    backend_settings_from_form,
+    field_label,
+    selected_backend,
+)
+from medperf_cc import result_store_backends, runner_backends
 from medperf.web_ui.common import (
     check_user_api,
     check_user_ui,
@@ -31,6 +36,53 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# The confidential-computing roles a user can hold, and what each needs from
+# them. Operating a workload and receiving its results are separate roles --
+# results are written to whoever they are for, who need not be whoever ran the
+# machine -- so each gets a form of its own. Everything downstream, in the
+# template and in the JavaScript, is driven by this list.
+CC_SECTIONS = {
+    "operator": {
+        "title": "Confidential Computing Operator Settings",
+        "prompt": "Configure Confidential Computing",
+        "field_title": "Confidential runner",
+        "backends": runner_backends,
+        "setup": SetupCCOperator,
+        "role": "cc_operator",
+    },
+    "collector": {
+        "title": "Confidential Computing Result Collector",
+        "prompt": "Receive results of confidential executions",
+        "field_title": "Result store",
+        "backends": result_store_backends,
+        "setup": SetupCCCollector,
+        "role": "cc_collector",
+    },
+}
+
+
+def cc_sections(user) -> list:
+    """Each role as the template renders it: what it is called, what it holds
+    now, and what it could hold."""
+    sections = []
+    for name, section in CC_SECTIONS.items():
+        settings = getattr(user, section["role"]) if user else None
+        defaults = settings.config if settings else {}
+        sections.append(
+            {
+                "name": name,
+                "title": section["title"],
+                "prompt": section["prompt"],
+                "field_title": section["field_title"],
+                "backends": section["backends"](),
+                "backend": selected_backend(defaults),
+                "defaults": defaults,
+                "configured": settings.configured if settings else False,
+                "initialized": settings.initialized if settings else False,
+            }
+        )
+    return sections
+
 
 @router.get("/", response_class=HTMLResponse)
 def settings_ui(request: Request, current_user: bool = Depends(check_user_ui)):
@@ -39,9 +91,7 @@ def settings_ui(request: Request, current_user: bool = Depends(check_user_ui)):
     certificate_status = None
     signing_certificate_status = None
 
-    cc_config_defaults = {}
-    cc_configured = False
-    cc_initialized = False
+    user = None
 
     if is_logged_in():
         cas = CA.all()
@@ -52,9 +102,6 @@ def settings_ui(request: Request, current_user: bool = Depends(check_user_ui)):
         )
 
         user = get_medperf_user_object()
-        cc_config_defaults = user.get_cc_config()
-        cc_configured = user.is_cc_configured()
-        cc_initialized = user.is_cc_initialized()
 
     return templates.TemplateResponse(
         "settings.html",
@@ -69,12 +116,8 @@ def settings_ui(request: Request, current_user: bool = Depends(check_user_ui)):
             "certificate_status": certificate_status,
             "signing_certificate_status": signing_certificate_status,
             "CryptoKeyType": CryptoKeyType,
-            "cc_config_defaults": cc_config_defaults,
-            "cc_configured": cc_configured,
-            "cc_backends": runner_backends(),
-            "cc_backend": selected_backend(cc_config_defaults),
+            "cc_sections": cc_sections(user),
             "cc_field_label": field_label,
-            "cc_initialized": cc_initialized,
         },
     )
 
@@ -237,18 +280,27 @@ def submit_certificate(
     return return_response
 
 
-@router.post("/edit_cc_operator", response_class=JSONResponse)
-async def edit_cc_operator(
+@router.post("/edit_cc/{section}", response_class=JSONResponse)
+async def edit_cc_settings(
+    section: str,
     request: Request,
     current_user: bool = Depends(check_user_api),
 ):
+    """Saves one confidential-computing role's settings.
+
+    One route for every role: they differ only in which backends they may
+    choose from and what saving them runs, both of which `CC_SECTIONS` names.
+    """
+    if section not in CC_SECTIONS:
+        return {"status": "failed", "error": f"Unknown CC section {section!r}"}
+
     # Read as posted rather than declared field by field: which settings there
     # are depends on the backend chosen, and only medperf_cc knows them.
     form = await request.form()
-    args = backend_settings_from_form(form, runner_backends())
+    args = backend_settings_from_form(form, CC_SECTIONS[section]["backends"]())
 
     try:
-        SetupCCOperator.run(args)
+        CC_SECTIONS[section]["setup"].run(args)
         return {"status": "success", "error": ""}
     except Exception as exp:
         logger.exception(exp)

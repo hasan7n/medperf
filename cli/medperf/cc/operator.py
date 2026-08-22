@@ -27,7 +27,7 @@ def workload_configs(dataset, model):
 
 @as_medperf_error()
 def setup_operator(user: User):
-    if not user.is_cc_configured():
+    if not user.cc_operator.configured:
         return
 
     runner_for(user).verify()

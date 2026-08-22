@@ -7,8 +7,10 @@ them.
 """
 
 import medperf.config as medperf_config
+from medperf.cc.config import result_store_for
 from medperf.cc.errors import as_medperf_error
 from medperf.encryption import AsymmetricEncryption, SymmetricEncryption
+from medperf.entities.user import User
 from medperf.exceptions import ExecutionError
 from medperf.utils import (
     generate_tmp_path,
@@ -18,6 +20,18 @@ from medperf.utils import (
     untar,
 )
 from medperf_cc import ResultStore, WorkloadIdentity
+
+
+@as_medperf_error()
+def setup_collector(user: User):
+    """Checks this user can actually receive results where they said.
+
+    The mirror of `setup_operator`: whoever runs the workload needs a machine,
+    whoever the results are for needs somewhere to receive them."""
+    if not user.cc_collector.configured:
+        return
+
+    result_store_for(user.cc_collector.config).verify()
 
 
 @as_medperf_error(ExecutionError)

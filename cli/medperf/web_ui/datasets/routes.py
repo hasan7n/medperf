@@ -185,7 +185,7 @@ def dataset_detail_ui(  # noqa
                     elif not model.is_cc_initialized():
                         reason = "Wait for model owner to configure their CC settings"
                         can_run = False
-                    elif not user_obj.is_cc_initialized():
+                    elif not user_obj.cc_operator.initialized:
                         reason = "You haven't configured your workload run settings for CC yet"
                         can_run = False
                     else:
