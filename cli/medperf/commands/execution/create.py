@@ -5,12 +5,14 @@ from medperf.commands.execution.execution_flow import ExecutionFlow
 from medperf.commands.execution.plan import resolve_plan
 from medperf.entities.execution import Execution
 from tabulate import tabulate
+from medperf.commands.association.utils import get_user_associations
 from medperf.commands.execution.utils import filter_latest_executions
 
 from medperf.entities.cube import Cube
 from medperf.entities.dataset import Dataset
 from medperf.entities.benchmark import Benchmark
 from medperf.entities.model import Model
+from medperf.enums import Status
 import medperf.config as config
 from medperf.exceptions import (
     InvalidArgumentError,
@@ -136,13 +138,12 @@ class BenchmarkExecution:
             # finding the benchmark's associated models
             return
 
-        benchmark_models = Benchmark.get_models_uids(self.benchmark_uid)
-        benchmark_models.append(self.benchmark.reference_model)
-
         if self.models_uids is None:
-            self.models_uids = benchmark_models
-        else:
-            self.__validate_models(benchmark_models)
+            self.models_uids = Benchmark.get_models_uids(self.benchmark_uid)
+            self.models_uids.append(self.benchmark.reference_model)
+            return
+
+        self.__validate_models()
 
     def __get_models_from_file(self):
         if not os.path.exists(self.models_input_file):
@@ -157,16 +158,48 @@ class BenchmarkExecution:
             msg += "The file should contain a list of comma-separated integers"
             raise InvalidArgumentError(msg)
 
-    def __validate_models(self, benchmark_models):
-        models_set = set(self.models_uids)
-        benchmark_models_set = set(benchmark_models)
-        non_assoc_models = models_set.difference(benchmark_models_set)
+    def __validate_models(self):
+        non_assoc_models = set(self.models_uids).difference(self.__approved_models())
         if non_assoc_models:
-            if len(non_assoc_models) > 1:
-                msg = f"Model of UID {non_assoc_models} is not associated with the specified benchmark."
-            else:
-                msg = f"Models of UIDs {non_assoc_models} are not associated with the specified benchmark."
-            raise InvalidArgumentError(msg)
+            named = ", ".join(str(uid) for uid in sorted(non_assoc_models))
+            subject = (
+                f"Models of UIDs {named} are"
+                if len(non_assoc_models) > 1
+                else f"Model of UID {named} is"
+            )
+            raise InvalidArgumentError(
+                f"{subject} not associated with the specified benchmark."
+            )
+
+    def __approved_models(self) -> set:
+        """Which models the caller may run in this benchmark.
+
+        A benchmark's model list is readable by its owner, its committee and
+        the data owners taking part -- not by a model owner, who would be
+        reading their competitors. A model owner's own approved associations
+        answer the same question for the models they own, and those are the
+        only ones they could run anyway, so that listing is tried first and
+        the benchmark's is read only when it is still needed.
+        """
+        reference = {self.benchmark.reference_model}
+        own = self.__own_approved_models() | reference
+        if set(self.models_uids).issubset(own):
+            return own
+
+        return set(Benchmark.get_models_uids(self.benchmark_uid)) | reference
+
+    def __own_approved_models(self) -> set:
+        """The models this user owns that are approved for this benchmark."""
+        associations = get_user_associations(
+            experiment_type="benchmark",
+            component_type="model",
+            approval_status=Status.APPROVED.value,
+        )
+        return {
+            association["model"]
+            for association in associations
+            if association["benchmark"] == self.benchmark_uid
+        }
 
     def load_existing_executions(self):
         user_id = get_medperf_user_data()["id"]

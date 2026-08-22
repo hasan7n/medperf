@@ -34,6 +34,18 @@ def mock_benchmark(mocker, state_variables):
     )
 
 
+def mock_user_associations(mocker, state_variables):
+    """What this user's own approved model associations say.
+
+    A model owner cannot read the benchmark's model list, so this listing is
+    the only one that answers "may this model run here?" for them."""
+    own_models = state_variables["own_approved_models"]
+    return mocker.patch(
+        PATCH_EXECUTION.format("get_user_associations"),
+        return_value=[{"model": uid, "benchmark": 1} for uid in own_models],
+    )
+
+
 def mock_dataset(mocker, state_variables):
     dataset_prep_cube = state_variables["dataset_prep_cube"]
     operational_dataset = state_variables["operational_dataset"]
@@ -136,6 +148,7 @@ def setup(request, mocker, ui, fs):
         },
         "evaluator": {"uid": 3, "invalid": False},
         "operational_dataset": True,
+        "own_approved_models": [],
     }
     state_variables.update(request.param)
 
@@ -144,6 +157,7 @@ def setup(request, mocker, ui, fs):
     mock_dataset(mocker, state_variables)
     mock_execution_all(mocker, state_variables, fs)
     mock_cube(mocker, state_variables)
+    own_assocs_spy = mock_user_associations(mocker, state_variables)
     exec_spy = mock_execution(mocker, state_variables)
 
     # spies
@@ -160,6 +174,8 @@ def setup(request, mocker, ui, fs):
         "tabulate": tabulate_spy,
         "exec": exec_spy,
         "validate_models": validate_models_spy,
+        "own_associations": own_assocs_spy,
+        "benchmark_models": create_module.Benchmark.get_models_uids,
     }
     return state_variables, spies
 
@@ -249,3 +265,48 @@ class TestDefaultSetup:
 
         # Assert
         self.spies["validate_models"].assert_not_called()
+
+
+@pytest.mark.parametrize("setup", [{"own_approved_models": [4]}], indirect=True)
+def test_a_model_owner_running_their_own_model_never_reads_the_benchmark_list(
+    mocker, setup
+):
+    """That listing is their competitors, and the server refuses it to them --
+    their own approved associations answer the same question"""
+    # Arrange
+    _, spies = setup
+    benchmark_models = mocker.patch(
+        PATCH_EXECUTION.format("Benchmark.get_models_uids"),
+        side_effect=AssertionError("a model owner may not read this"),
+    )
+
+    # Act
+    BenchmarkExecution.run(1, 2, models_uids=[4])
+
+    # Assert
+    benchmark_models.assert_not_called()
+    spies["own_associations"].assert_called_once()
+
+
+@pytest.mark.parametrize("setup", [{"own_approved_models": []}], indirect=True)
+def test_a_model_not_approved_for_its_owner_is_still_refused(mocker, setup):
+    """Owning it is not the question; being approved for this benchmark is"""
+    # Act & Assert
+    with pytest.raises(InvalidArgumentError, match="Model of UID 10"):
+        BenchmarkExecution.run(1, 2, models_uids=[10])
+
+
+@pytest.mark.parametrize("setup", [{"own_approved_models": [4]}], indirect=True)
+def test_a_caller_asking_beyond_their_own_models_falls_back_to_the_benchmark(
+    mocker, setup
+):
+    """A data owner runs models they do not own, and may read the list saying
+    which those are"""
+    # Arrange
+    _, spies = setup
+
+    # Act -- 4 is this user's own, 5 is somebody else's but is in the benchmark
+    BenchmarkExecution.run(1, 2, models_uids=[4, 5])
+
+    # Assert
+    spies["benchmark_models"].assert_called_once_with(1)
