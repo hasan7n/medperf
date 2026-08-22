@@ -8,16 +8,15 @@ from medperf.exceptions import ExecutionError
 
 from medperf.account_management import get_medperf_user_object
 from medperf.cc.collector import resolve_collector
-from medperf.cc.config import result_store_for, runner_for
+from medperf.cc.config import runner_for
+from medperf.cc.run import ConfidentialRun
 from medperf.cc.operator import (
     run_workload,
     workload_configs,
     wait_for_workload,
 )
 from medperf.cc.results import fetch_results, results_exist
-from medperf.utils import get_string_hash
 from medperf.commands.execution.container_execution import ContainerExecution
-from medperf_cc import WorkloadIdentity
 
 
 class ConfidentialModelContainerExecution:
@@ -49,7 +48,6 @@ class ConfidentialModelContainerExecution:
             execution_flow.get_operator()
             execution_flow.validate()
             execution_flow.prepare()
-            execution_flow.setup_workload()
             if not execution_flow.results_exist():
                 execution_flow.run_workload()
                 execution_flow.wait_for_workload_completion()
@@ -78,8 +76,7 @@ class ConfidentialModelContainerExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
-        self.collector = None
-        self.result_store = None
+        self.run = None
         self.dataset_cc_config = None
         self.model_cc_config = None
         self.local_execution_flow = None
@@ -125,38 +122,23 @@ class ConfidentialModelContainerExecution:
         # validate() has just required to be the operator. Resolving still
         # runs, to refuse a pair of policies that would release the
         # predictions to somebody else, or to nobody.
-        self.collector = resolve_collector(
+        collector = resolve_collector(
             Benchmark.get(self.benchmark_id), self.dataset, self.model
         )
-        if self.collector.user_id != self.operator.id:
+        if collector.user_id != self.operator.id:
             raise ExecutionError(
                 "An inference_script benchmark scores the predictions on-prem,"
                 " but its policies release them to the"
-                f" {self.collector.party.value}. Only the data owner can"
-                " collect an execution they have to score themselves."
+                f" {collector.party.value}. Only the data owner can collect"
+                " an execution they have to score themselves."
             )
-        self.runner = runner_for(self.operator)
-        self.result_store = result_store_for(self.collector.settings)
-        self.asset = self.model.asset_obj
-
-    def setup_workload(self):
-        result_collector_public_key = self.collector.public_key
-        workload = WorkloadIdentity(
-            data_hash=self.dataset.generated_uid,
-            model_hash=self.asset.asset_hash,
-            script_hash=self.plan.script_hash,
-            result_collector_hash=get_string_hash(result_collector_public_key),
-            data_id=self.dataset.id,
-            model_id=self.model.id,
-            script_id=self.plan.script_id,
-            execution_id=self.execution.id,
+        self.run = ConfidentialRun.resolve(
+            self.plan, self.dataset, self.model, self.execution, collector
         )
-
-        self.workload = workload
-        self.result_collector_public_key = result_collector_public_key
+        self.runner = runner_for(self.operator)
 
     def results_exist(self):
-        return results_exist(self.result_store, self.workload)
+        return results_exist(self.run.result_store, self.run.workload)
 
     def run_workload(self):
         config.ui.text = "Starting Confidential VM"
@@ -164,23 +146,25 @@ class ConfidentialModelContainerExecution:
         run_workload(
             self.runner,
             docker_image,
-            self.workload,
+            self.run.workload,
             self.dataset_cc_config,
             self.model_cc_config,
-            self.result_store.receiver_config(self.workload),
-            self.result_collector_public_key.decode("utf-8"),
+            self.run.receiver_config,
+            self.run.collector_public_key,
         )
 
     def wait_for_workload_completion(self):
         config.ui.text = "Waiting for workload completion"
-        wait_for_workload(self.runner, self.workload)
+        wait_for_workload(self.runner, self.run.workload)
         if not self.results_exist():
             raise ExecutionError("Workload did not complete successfully.")
 
     def download_predictions(self):
         config.ui.text = "Downloading inference predictions"
         fetch_results(
-            self.result_store, self.workload, self.local_execution_flow.preds_path
+            self.run.result_store,
+            self.run.workload,
+            self.local_execution_flow.preds_path,
         )
 
     def run_evaluation(self):

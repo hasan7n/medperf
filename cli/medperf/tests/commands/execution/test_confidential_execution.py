@@ -34,9 +34,9 @@ def the_operator_collects(mocker):
     for module in (PATCH_FLOW, PATCH_CONTAINER_FLOW):
         mocker.patch(module.format("resolve_collector"), return_value=collector)
         mocker.patch(module.format("Benchmark"))
-        mocker.patch(module.format("result_store_for"))
         mocker.patch(module.format("runner_for"))
         mocker.patch(module.format("workload_configs"), return_value=({}, {}))
+        mocker.patch(module.format("ConfidentialRun"))
     return collector
 
 
@@ -92,7 +92,7 @@ def plan_for(topology):
 
 
 @pytest.fixture()
-def flow_for(configured, the_operator_collects):
+def flow_for(mocker, configured, the_operator_collects):
     """A flow with what `get_operator()` and `prepare()` would have resolved
     already in place, so each test can start at the step it is about."""
 
@@ -104,7 +104,7 @@ def flow_for(configured, the_operator_collects):
             configured["execution"],
         )
         flow.operator = configured["operator"]
-        flow.collector = the_operator_collects
+        flow.run = mocker.MagicMock(collector=the_operator_collects)
         return flow
 
     return _flow
@@ -167,8 +167,6 @@ def test_results_are_not_downloaded_before_they_are_there(mocker, flow_for):
     pick up whatever happens to be there, which is nothing"""
     # Arrange
     flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
-    flow.result_store = mocker.MagicMock()
-    flow.workload = mocker.MagicMock()
     order = []
     mocker.patch(
         PATCH_FLOW.format("results_exist"),
@@ -189,8 +187,6 @@ def test_results_are_not_downloaded_before_they_are_there(mocker, flow_for):
 def test_a_workload_that_produced_nothing_is_reported(mocker, flow_for):
     # Arrange
     flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
-    flow.result_store = mocker.MagicMock()
-    flow.workload = mocker.MagicMock()
     mocker.patch(PATCH_FLOW.format("results_exist"), return_value=False)
 
     # Act & Assert
@@ -207,8 +203,6 @@ def test_an_operator_who_is_not_the_collector_downloads_nothing(
     # Arrange
     the_operator_collects.user_id = 12345
     flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
-    flow.result_store = mocker.MagicMock()
-    flow.workload = mocker.MagicMock()
     download = mocker.patch(PATCH_FLOW.format("download_results"))
     ready = mocker.patch(PATCH_FLOW.format("results_exist"))
 
@@ -219,30 +213,3 @@ def test_an_operator_who_is_not_the_collector_downloads_nothing(
     download.assert_not_called()
     ready.assert_not_called()
     assert flow.results == {}
-
-
-@pytest.mark.parametrize(
-    "cls,topology",
-    [
-        (ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT),
-        (ConfidentialModelContainerExecution, BenchmarkTopology.INFERENCE_SCRIPT),
-    ],
-)
-def test_a_launched_workload_says_which_execution_it_is(
-    mocker, cls, topology, flow_for
-):
-    """Its storage prefix is built from this. Without it, two runs of the same
-    dataset, model and script write to the same place and the second overwrites
-    the first"""
-    # Arrange
-    flow = flow_for(cls, topology)
-    flow.asset = mocker.MagicMock(asset_hash="assethash")
-    flow.plan = mocker.MagicMock(script_hash="scripthash", script_id=7)
-    flow.dataset.generated_uid = "datahash"
-
-    # Act
-    flow.setup_workload()
-
-    # Assert
-    assert flow.workload.execution_id == EXECUTION_ID
-    assert str(EXECUTION_ID) in flow.workload.results_path

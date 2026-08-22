@@ -10,15 +10,14 @@ from medperf.exceptions import ExecutionError, CommunicationError
 
 from medperf.account_management import get_medperf_user_object
 from medperf.cc.collector import resolve_collector
-from medperf.cc.config import result_store_for, runner_for
+from medperf.cc.config import runner_for
+from medperf.cc.run import ConfidentialRun
 from medperf.cc.operator import (
     run_workload,
     wait_for_workload,
     workload_configs,
 )
 from medperf.cc.results import download_results, results_exist
-from medperf.utils import get_string_hash
-from medperf_cc import WorkloadIdentity
 
 
 class ConfidentialExecution:
@@ -49,7 +48,6 @@ class ConfidentialExecution:
         execution_flow.prepare()
         execution_flow.record_collector()
         execution_flow.set_pending_status()
-        execution_flow.setup_workload()
         execution_flow.run_workload()
         execution_flow.wait_for_workload_completion()
         execution_flow.collect_results()
@@ -75,8 +73,7 @@ class ConfidentialExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
-        self.collector = None
-        self.result_store = None
+        self.run = None
         # Stays empty when the results are somebody else's to collect.
         self.results = {}
         self.integrity_proof = None
@@ -107,12 +104,13 @@ class ConfidentialExecution:
         # Who the results are for. Not a check on the operator: anybody may
         # run the machine, and this refuses only when the asset owners have
         # not agreed on a single party to release the results to.
-        self.collector = resolve_collector(
+        collector = resolve_collector(
             Benchmark.get(self.benchmark_id), self.dataset, self.model
         )
+        self.run = ConfidentialRun.resolve(
+            self.plan, self.dataset, self.model, self.execution, collector
+        )
         self.runner = runner_for(self.operator)
-        self.result_store = result_store_for(self.collector.settings)
-        self.asset = self.model.asset_obj
 
     def record_collector(self):
         """Tells the server who these results will be for.
@@ -125,37 +123,21 @@ class ConfidentialExecution:
             return
         try:
             config.comms.update_execution(
-                self.execution.id, {"result_collector": self.collector.user_id}
+                self.execution.id, {"result_collector": self.run.collector.user_id}
             )
         except CommunicationError as e:
             raise ExecutionError(
                 "Could not record who the results of this execution are for,"
-                f" so the {self.collector.party.value} would not be able to"
+                f" so the {self.run.collector.party.value} would not be able to"
                 f" collect them: {e}"
             )
 
     @property
     def collecting_for_operator(self) -> bool:
-        return self.collector.user_id == self.operator.id
+        return self.run.collector.user_id == self.operator.id
 
     def set_pending_status(self):
         self.__send_report("pending")
-
-    def setup_workload(self):
-        result_collector_public_key = self.collector.public_key
-        workload = WorkloadIdentity(
-            data_hash=self.dataset.generated_uid,
-            model_hash=self.asset.asset_hash,
-            script_hash=self.plan.script_hash,
-            result_collector_hash=get_string_hash(result_collector_public_key),
-            data_id=self.dataset.id,
-            model_id=self.model.id,
-            script_id=self.plan.script_id,
-            execution_id=self.execution.id,
-        )
-
-        self.workload = workload
-        self.result_collector_public_key = result_collector_public_key
 
     def run_workload(self):
         config.ui.text = "Running CC workload..."
@@ -163,16 +145,16 @@ class ConfidentialExecution:
         run_workload(
             self.runner,
             docker_image,
-            self.workload,
+            self.run.workload,
             self.dataset_cc_config,
             self.model_cc_config,
-            self.result_store.receiver_config(self.workload),
-            self.result_collector_public_key.decode("utf-8"),
+            self.run.receiver_config,
+            self.run.collector_public_key,
         )
 
     def wait_for_workload_completion(self):
         config.ui.text = "Waiting for workload completion"
-        wait_for_workload(self.runner, self.workload)
+        wait_for_workload(self.runner, self.run.workload)
 
     def collect_results(self):
         """Picks the results up, when they are this user's to pick up.
@@ -183,17 +165,17 @@ class ConfidentialExecution:
         nothing -- the collector fetches them with `download_cc_results`."""
         if not self.collecting_for_operator:
             config.ui.print_warning(
-                f"Results were written for the {self.collector.party.value},"
+                f"Results were written for the {self.run.collector.party.value},"
                 " who is not you. They are encrypted for their key, so only"
                 " they can fetch them: `medperf confidential"
                 f" download_cc_results -e {self.execution.id}`."
             )
             return
 
-        if not results_exist(self.result_store, self.workload):
+        if not results_exist(self.run.result_store, self.run.workload):
             raise ExecutionError("Workload did not complete successfully.")
         self.results, self.integrity_proof = download_results(
-            self.result_store, self.workload, self.execution.id
+            self.run.result_store, self.run.workload, self.execution.id
         )
 
     def todict(self):

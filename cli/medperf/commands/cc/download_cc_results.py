@@ -8,16 +8,15 @@ the same command as for anything else.
 from medperf import config
 from medperf.account_management import get_medperf_user_object
 from medperf.cc.collector import collector_recorded_as, resolve_collector
-from medperf.cc.config import result_store_for
 from medperf.cc.errors import as_medperf_error
 from medperf.cc.results import download_results, results_exist
+from medperf.cc.run import ConfidentialRun
 from medperf.commands.execution.plan import resolve_plan
 from medperf.entities.benchmark import Benchmark
 from medperf.entities.dataset import Dataset
 from medperf.entities.execution import Execution
 from medperf.entities.model import Model
 from medperf.exceptions import ExecutionError
-from medperf_cc import WorkloadIdentity
 
 
 class DownloadCCResults:
@@ -94,15 +93,18 @@ class DownloadCCResults:
             )
 
     def collect(self):
-        result_store = result_store_for(self.collector.settings)
-        workload = self.__workload()
-        if not results_exist(result_store, workload):
+        # Resolved after validate(), so that "these are not yours" is what a
+        # user hears rather than something about somebody else's storage.
+        run = ConfidentialRun.resolve(
+            self.plan, self.dataset, self.model, self.execution, self.collector
+        )
+        if not results_exist(run.result_store, run.workload):
             raise ExecutionError(
                 f"Execution {self.execution_uid} has left no results to collect."
                 " The workload may still be running, or may have failed."
             )
         self.results, self.integrity_proof = download_results(
-            result_store, workload, self.execution.id
+            run.result_store, run.workload, self.execution.id
         )
 
     def write(self):
@@ -123,21 +125,4 @@ class DownloadCCResults:
         config.ui.print(
             "Results collected. Report them with"
             f" `medperf result submit -r {self.execution.id}`."
-        )
-
-    def __workload(self) -> WorkloadIdentity:
-        """The identity the operator ran under, rebuilt from the same facts.
-
-        Every term of it is recorded -- the assets by their hashes, the script
-        by the benchmark, the collector by their key -- so it can be derived
-        rather than stored."""
-        return WorkloadIdentity(
-            data_hash=self.dataset.generated_uid,
-            model_hash=self.model.asset_obj.asset_hash,
-            script_hash=self.plan.script_hash,
-            result_collector_hash=self.collector.key_hash,
-            data_id=self.dataset.id,
-            model_id=self.model.id,
-            script_id=self.plan.script_id,
-            execution_id=self.execution.id,
         )
