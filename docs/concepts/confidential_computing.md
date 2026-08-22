@@ -126,7 +126,7 @@ owner can operate one whatever the policies say.
 
 ## Choosing where everything lives
 
-A confidential execution needs three things, and your configuration file picks a
+A confidential execution needs four things, and your configuration file picks a
 provider for each:
 
 | Service | What it is | Choices |
@@ -134,6 +134,7 @@ provider for each:
 | `storage` | where your asset's ciphertext lives | `gcp`, `medperf_kbs`, `mock` |
 | `vault` | who may have the key that opens it | `gcp`, `medperf_kbs`, `mock` |
 | `runner` | what starts the confidential workload | `gcp`, `mock` |
+| `result_store` | where the results are written, and whose it is | `gcp`, `mock` |
 
 Name one backend at the top level and it serves everything:
 

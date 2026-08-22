@@ -6,15 +6,14 @@ import medperf.config as config
 from medperf.exceptions import DecryptionError, ExecutionError
 
 from medperf.account_management import get_medperf_user_object
-from medperf.cc.config import runner_for
+from medperf.cc.config import result_store_for, runner_for
 from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.cc.operator import (
     run_workload,
-    download_results,
     workload_configs,
-    workload_results_exists,
     wait_for_workload,
 )
+from medperf.cc.results import fetch_results, results_exist
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
 from medperf.commands.execution.container_execution import ContainerExecution
@@ -80,6 +79,7 @@ class ConfidentialModelContainerExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
+        self.result_store = None
         self.dataset_cc_config = None
         self.model_cc_config = None
         self.local_execution_flow = None
@@ -125,6 +125,8 @@ class ConfidentialModelContainerExecution:
             self.dataset, self.model
         )
         self.runner = runner_for(self.operator)
+        # The operator's own, for now: they are the party the results are for.
+        self.result_store = result_store_for(self.operator.get_cc_config())
         self.asset = self.model.asset_obj
 
     def setup_workload(self):
@@ -144,7 +146,7 @@ class ConfidentialModelContainerExecution:
         self.result_collector_public_key = result_collector_public_key
 
     def results_exist(self):
-        return workload_results_exists(self.runner, self.workload)
+        return results_exist(self.result_store, self.workload)
 
     def run_workload(self):
         config.ui.text = "Starting Confidential VM"
@@ -155,6 +157,7 @@ class ConfidentialModelContainerExecution:
             self.workload,
             self.dataset_cc_config,
             self.model_cc_config,
+            self.result_store.receiver_config(self.workload),
             self.result_collector_public_key.decode("utf-8"),
         )
 
@@ -171,7 +174,9 @@ class ConfidentialModelContainerExecution:
         if private_key_bytes is None:
             raise DecryptionError("Missing Private Key")
 
-        download_results(self.runner, self.workload, private_key_bytes, results_path)
+        fetch_results(
+            self.result_store, self.workload, private_key_bytes, results_path
+        )
 
     def run_evaluation(self):
         return self.local_execution_flow.run_evaluation()

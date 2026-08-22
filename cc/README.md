@@ -23,6 +23,7 @@ asset        an asset's ciphertext, its key, and who may have them
 storage/     service: where the ciphertext lives   gcp · medperf_kbs · mock
 vault/       service: who may have the key         gcp · medperf_kbs · mock
 runner/      service: running the workload         gcp · mock
+result_store/  service: where the results land       gcp · mock
 backends/    choosing one, and the plumbing they share, a folder each
 ```
 
@@ -83,7 +84,10 @@ for by name.
 - **Assets arrive already encrypted.** The key belongs to the asset owner, so
   there is no reason for it to pass through here.
 - **Results leave still encrypted.** Only the party holding the result
-  collector's private key can open them, and that party is not this code.
+  collector's private key can open them, and that party is not this code --
+  nor, necessarily, whoever ran the workload. They land in the collector's own
+  storage, which is why `result_store` is a service of its own rather than
+  something the runner decides.
 
 ## Installing
 

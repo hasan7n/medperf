@@ -132,6 +132,7 @@ def test_results_are_not_collected_before_the_workload_has_finished(mocker, conf
         ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
     )
     flow.runner = mocker.MagicMock()
+    flow.result_store = mocker.MagicMock()
     flow.workload = mocker.MagicMock()
     order = []
     mocker.patch(
@@ -139,7 +140,7 @@ def test_results_are_not_collected_before_the_workload_has_finished(mocker, conf
         side_effect=lambda *a: order.append("wait"),
     )
     mocker.patch(
-        PATCH_FLOW.format("workload_results_exists"),
+        PATCH_FLOW.format("results_exist"),
         side_effect=lambda *a: order.append("check") or True,
     )
 
@@ -156,9 +157,10 @@ def test_a_workload_that_produced_nothing_is_reported(mocker, configured):
         ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT, configured
     )
     flow.runner = mocker.MagicMock()
+    flow.result_store = mocker.MagicMock()
     flow.workload = mocker.MagicMock()
     mocker.patch(PATCH_FLOW.format("wait_for_workload"))
-    mocker.patch(PATCH_FLOW.format("workload_results_exists"), return_value=False)
+    mocker.patch(PATCH_FLOW.format("results_exist"), return_value=False)
 
     # Act & Assert
     with pytest.raises(ExecutionError, match="did not complete"):

@@ -12,14 +12,13 @@ import medperf.config as config
 from medperf.exceptions import DecryptionError, ExecutionError, CommunicationError
 
 from medperf.account_management import get_medperf_user_object
-from medperf.cc.config import runner_for
+from medperf.cc.config import result_store_for, runner_for
 from medperf.cc.operator import (
-    download_results,
     run_workload,
     wait_for_workload,
     workload_configs,
-    workload_results_exists,
 )
+from medperf.cc.results import fetch_results, results_exist
 from medperf.cc.parties import check_operator_is_allowed, collector_public_key
 from medperf.utils import get_string_hash
 from medperf.commands.certificate.utils import load_user_private_key
@@ -81,6 +80,7 @@ class ConfidentialExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
+        self.result_store = None
         self.integrity_proof = None
         self.dataset_cc_config = None
         self.model_cc_config = None
@@ -110,6 +110,8 @@ class ConfidentialExecution:
             self.dataset, self.model
         )
         self.runner = runner_for(self.operator)
+        # The operator's own, for now: they are the party the results are for.
+        self.result_store = result_store_for(self.operator.get_cc_config())
         self.asset = self.model.asset_obj
 
     def set_pending_status(self):
@@ -140,13 +142,14 @@ class ConfidentialExecution:
             self.workload,
             self.dataset_cc_config,
             self.model_cc_config,
+            self.result_store.receiver_config(self.workload),
             self.result_collector_public_key.decode("utf-8"),
         )
 
     def wait_for_workload_completion(self):
         config.ui.text = "Waiting for workload completion"
         wait_for_workload(self.runner, self.workload)
-        if not workload_results_exists(self.runner, self.workload):
+        if not results_exist(self.result_store, self.workload):
             raise ExecutionError("Workload did not complete successfully.")
 
     def download_results(self):
@@ -159,7 +162,9 @@ class ConfidentialExecution:
         if private_key_bytes is None:
             raise DecryptionError("Missing Private Key")
 
-        download_results(self.runner, self.workload, private_key_bytes, results_path)
+        fetch_results(
+            self.result_store, self.workload, private_key_bytes, results_path
+        )
 
         # The workload tars the contents of its results directory, so what
         # lands here is those files, not a directory containing them.

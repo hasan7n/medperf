@@ -11,13 +11,10 @@ import os
 import subprocess
 from typing import Iterator
 
-from medperf_cc.backends.mock import MOCK, MockConfig, MockStore
+from medperf_cc.backends.mock import MOCK, MockConfig
 from medperf_cc.errors import OperationError
 from medperf_cc.identity import WorkloadIdentity
 from medperf_cc.runner.base import WorkloadRunner
-
-RESULTS_FILE = "results.enc"
-RESULTS_KEY_FILE = "results_key.enc"
 
 # What a Confidential Space launcher would attest to, handed over instead. The
 # workload cannot measure its own image, so without this it could not name the
@@ -58,13 +55,6 @@ class MockRunner(WorkloadRunner):
                 f" to start a workload: {e}"
             )
         os.makedirs(self.mock.root, exist_ok=True)
-
-    def result_config(self, workload: WorkloadIdentity) -> dict:
-        return {
-            "backend": self.backend,
-            "root": self.mock.root,
-            "results_name": workload.storage_prefix,
-        }
 
     def launch(self, workload: WorkloadIdentity, image: str, env: dict) -> None:
         env = {**env, ATTESTED_SCRIPT_ENV: workload.script_hash}
@@ -111,26 +101,6 @@ class MockRunner(WorkloadRunner):
         exit_code = self.__exit_code(name)
         if exit_code not in (0, None):
             logging.error(f"The workload exited with status {exit_code}")
-
-    def results_ready(self, workload: WorkloadIdentity) -> bool:
-        store = self.__results(workload)
-        return store.exists(RESULTS_FILE) and store.exists(RESULTS_KEY_FILE)
-
-    def fetch_results(
-        self, workload: WorkloadIdentity, encrypted_results_path: str
-    ) -> bytes:
-        if not self.results_ready(workload):
-            raise OperationError(
-                f"The workload for {workload.storage_prefix} has produced no"
-                " results to fetch"
-            )
-        store = self.__results(workload)
-        with open(encrypted_results_path, "wb") as f:
-            f.write(store.read(RESULTS_FILE))
-        return store.read(RESULTS_KEY_FILE)
-
-    def __results(self, workload: WorkloadIdentity) -> MockStore:
-        return MockStore({"root": self.mock.root}, workload.storage_prefix)
 
     def __container_name(self, workload: WorkloadIdentity) -> str:
         return f"medperf-cc-mock-{workload.storage_prefix}"

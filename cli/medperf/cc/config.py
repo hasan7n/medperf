@@ -11,7 +11,9 @@ from medperf_cc import (
     AssetKind,
     AssetPolicy,
     ConfidentialAsset,
+    ResultStore,
     WorkloadRunner,
+    get_result_store,
     get_runner,
 )
 
@@ -37,6 +39,14 @@ def asset_for(entity, kind: AssetKind) -> ConfidentialAsset:
 
 def runner_for(user: User) -> WorkloadRunner:
     return get_runner(user.get_cc_config())
+
+
+def result_store_for(settings: dict) -> ResultStore:
+    """Where results are received, from the settings of whoever they are for.
+
+    Takes the settings rather than a user, because the party holding them is
+    not always the one asking."""
+    return get_result_store(settings)
 
 
 def check_asset_setup(cc_config: dict, cc_policy: dict, entity, kind: AssetKind):
