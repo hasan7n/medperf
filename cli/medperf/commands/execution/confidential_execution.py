@@ -17,7 +17,7 @@ from medperf.cc.operator import (
     wait_for_workload,
     workload_configs,
 )
-from medperf.cc.results import download_results, results_exist
+from medperf.cc.results import download_metrics, results_exist
 
 
 class ConfidentialExecution:
@@ -46,7 +46,6 @@ class ConfidentialExecution:
         execution_flow.get_operator()
         execution_flow.validate()
         execution_flow.prepare()
-        execution_flow.record_collector()
         execution_flow.set_pending_status()
         execution_flow.run_workload()
         execution_flow.wait_for_workload_completion()
@@ -73,7 +72,7 @@ class ConfidentialExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
-        self.run = None
+        self.confidential_run = None
         # Stays empty when the results are somebody else's to collect.
         self.results = {}
         self.integrity_proof = None
@@ -107,34 +106,14 @@ class ConfidentialExecution:
         collector = resolve_collector(
             Benchmark.get(self.benchmark_id), self.dataset, self.model
         )
-        self.run = ConfidentialRun.resolve(
+        self.confidential_run = ConfidentialRun.resolve(
             self.plan, self.dataset, self.model, self.execution, collector
         )
         self.runner = runner_for(self.operator)
 
-    def record_collector(self):
-        """Tells the server who these results will be for.
-
-        The operator can do this and the collector cannot: the execution is
-        the operator's until it exists. Recording it is what later lets the
-        collector read and report an execution they did not create, and it is
-        write-once, so it cannot be pointed at somebody else afterwards."""
-        if self.collecting_for_operator:
-            return
-        try:
-            config.comms.update_execution(
-                self.execution.id, {"result_collector": self.run.collector.user_id}
-            )
-        except CommunicationError as e:
-            raise ExecutionError(
-                "Could not record who the results of this execution are for,"
-                f" so the {self.run.collector.party.value} would not be able to"
-                f" collect them: {e}"
-            )
-
     @property
     def collecting_for_operator(self) -> bool:
-        return self.run.collector.user_id == self.operator.id
+        return self.confidential_run.collector.user_id == self.operator.id
 
     def set_pending_status(self):
         self.__send_report("pending")
@@ -145,16 +124,16 @@ class ConfidentialExecution:
         run_workload(
             self.runner,
             docker_image,
-            self.run.workload,
+            self.confidential_run.workload,
             self.dataset_cc_config,
             self.model_cc_config,
-            self.run.receiver_config,
-            self.run.collector_public_key,
+            self.confidential_run.store_config,
+            self.confidential_run.collector_public_key,
         )
 
     def wait_for_workload_completion(self):
         config.ui.text = "Waiting for workload completion"
-        wait_for_workload(self.runner, self.run.workload)
+        wait_for_workload(self.runner, self.confidential_run.workload)
 
     def collect_results(self):
         """Picks the results up, when they are this user's to pick up.
@@ -165,17 +144,17 @@ class ConfidentialExecution:
         nothing -- the collector fetches them with `download_cc_results`."""
         if not self.collecting_for_operator:
             config.ui.print_warning(
-                f"Results were written for the {self.run.collector.party.value},"
+                f"Results were written for the {self.confidential_run.collector.party.value},"
                 " who is not you. They are encrypted for their key, so only"
                 " they can fetch them: `medperf confidential"
                 f" download_cc_results -e {self.execution.id}`."
             )
             return
 
-        if not results_exist(self.run.result_store, self.run.workload):
+        if not results_exist(self.confidential_run.result_store, self.confidential_run.workload):
             raise ExecutionError("Workload did not complete successfully.")
-        self.results, self.integrity_proof = download_results(
-            self.run.result_store, self.run.workload, self.execution.id
+        self.results, self.integrity_proof = download_metrics(
+            self.confidential_run.result_store, self.confidential_run.workload, self.execution.id
         )
 
     def todict(self):

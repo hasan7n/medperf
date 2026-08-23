@@ -1,12 +1,6 @@
 from medperf.entities.schemas import UserSchema
 from medperf.entities.utils import handle_validation_error
 
-# Before the roles below were told apart, a user had one confidential-computing
-# configuration and it was the operator's. It is still read under its old names
-# so that an existing user does not silently become unconfigured; saving
-# rewrites it into the new shape.
-LEGACY_OPERATOR_NAMES = ("config", "initialized")
-
 
 class CCRoleSettings:
     """One confidential-computing role's settings on a user.
@@ -18,14 +12,13 @@ class CCRoleSettings:
     questions asked of whichever one you name.
     """
 
-    def __init__(self, metadata: dict, role: str, legacy_names: tuple = (None, None)):
+    def __init__(self, metadata: dict, role: str):
         self._metadata = metadata
         self._role = role
-        self._legacy_config, self._legacy_initialized = legacy_names
 
     @property
     def config(self) -> dict:
-        return self.__read(self._role, self._legacy_config, {})
+        return self.__cc_values().get(self._role, {})
 
     @property
     def configured(self) -> bool:
@@ -33,9 +26,7 @@ class CCRoleSettings:
 
     @property
     def initialized(self) -> bool:
-        return self.__read(
-            f"{self._role}_initialized", self._legacy_initialized, False
-        )
+        return self.__cc_values().get(f"{self._role}_initialized", False)
 
     def set(self, config: dict) -> None:
         cc_values = self._metadata.setdefault("cc", {})
@@ -47,13 +38,8 @@ class CCRoleSettings:
             return
         self._metadata.setdefault("cc", {})[f"{self._role}_initialized"] = True
 
-    def __read(self, name: str, legacy_name, default):
-        cc_values = self._metadata.get("cc", {})
-        if name in cc_values:
-            return cc_values[name]
-        if legacy_name is not None:
-            return cc_values.get(legacy_name, default)
-        return default
+    def __cc_values(self) -> dict:
+        return self._metadata.get("cc", {})
 
 
 class User:
@@ -85,7 +71,7 @@ class User:
     @property
     def cc_operator(self) -> CCRoleSettings:
         """How this user runs confidential workloads. Theirs alone."""
-        return CCRoleSettings(self.metadata, "operator", LEGACY_OPERATOR_NAMES)
+        return CCRoleSettings(self.metadata, "operator")
 
     @property
     def cc_collector(self) -> CCRoleSettings:

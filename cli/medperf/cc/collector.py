@@ -10,6 +10,7 @@ built from the `settings` below.
 
 import base64
 from dataclasses import dataclass
+from typing import Tuple
 
 import medperf.config as medperf_config
 from medperf.account_management import get_medperf_user_object
@@ -18,7 +19,6 @@ from medperf.cc.parties import (
     certificate_of,
     current_user_public_key,
     is_current_user,
-    parties_of,
     party_owners,
 )
 from medperf.entities.benchmark import Benchmark
@@ -42,10 +42,14 @@ class CollectorParty:
         return get_string_hash(self.public_key)
 
 
-def resolve_collector(
+def collector_role(
     benchmark: Benchmark, dataset: Dataset, model: Model
-) -> CollectorParty:
-    """The one party both asset owners will release results to.
+) -> Tuple[int, Party]:
+    """Which party both asset owners will release results to.
+
+    The policies are the source of truth for this, and the only one: they say
+    who an execution's results were encrypted for, and they said so before the
+    execution existed. Nothing recorded afterwards is consulted here.
 
     Each owner names the roles they accept; the results are encrypted for a
     single key, so it has to be a role they both named. Two candidates is not a
@@ -80,44 +84,19 @@ def resolve_collector(
             " has to be chosen. Narrow one of the policies."
         )
 
-    user_id, party = next(iter(candidates.items()))
-    return collector_party(benchmark, user_id, party)
+    return next(iter(candidates.items()))
 
 
-def collector_recorded_as(
-    benchmark: Benchmark, dataset: Dataset, model: Model, user_id: int
+def resolve_collector(
+    benchmark: Benchmark, dataset: Dataset, model: Model
 ) -> CollectorParty:
-    """The collector an execution was recorded as being for.
+    """The collecting party, with the key results are encrypted for and the
+    store they are written to.
 
-    The recorded id is the fact: it is what the server enforces, and it was
-    written when the workload was launched. Policies can be edited afterwards,
-    so re-deriving one now could name somebody the execution was never run for
-    -- and their key is not the key the results were sealed with.
-
-    Their role is still worked out, because it is what says which listing
-    publishes their key to the other parties.
-    """
-    roles = parties_of(user_id, party_owners(benchmark, dataset, model))
-    party = next(
-        (
-            candidate
-            for candidate in (Party.DATA_OWNER, Party.MODEL_OWNER)
-            if candidate in roles
-        ),
-        None,
-    )
-    if party is None:
-        raise ExecutionError(
-            f"This execution was recorded as collected by user {user_id}, who"
-            " owns neither the dataset nor the model, so nothing publishes"
-            " their key."
-        )
-    return collector_party(benchmark, user_id, party)
-
-
-def collector_party(
-    benchmark: Benchmark, user_id: int, party: Party
-) -> CollectorParty:
+    `collector_role` answers who; this adds what is needed to actually reach
+    them, which costs a certificate listing and their published settings. Ask
+    for the role alone when that is all you need."""
+    user_id, party = collector_role(benchmark, dataset, model)
     return CollectorParty(
         user_id=user_id,
         party=party,

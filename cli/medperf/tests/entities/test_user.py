@@ -4,8 +4,6 @@ Operating a workload and receiving its results are separate roles, and the
 point of telling them apart is that one user may hold either without the other.
 """
 
-import pytest
-
 from medperf.entities.user import User
 
 
@@ -80,44 +78,3 @@ def test_marking_one_role_verified_leaves_the_other_alone():
     # Assert
     assert user.cc_operator.initialized
     assert not user.cc_collector.initialized
-
-
-@pytest.mark.parametrize("initialized", [True, False])
-def test_a_user_configured_before_the_roles_were_split_is_still_an_operator(
-    initialized,
-):
-    """Their one configuration was the operator's. Reading it only under the
-    new name would leave them silently unconfigured, and their next run would
-    say they had never set anything up"""
-    # Arrange
-    legacy = {"cc": {"config": {"backend": "gcp", "vm_name": "vm"}}}
-    legacy["cc"]["initialized"] = initialized
-    user = a_user(legacy)
-
-    # Assert
-    assert user.cc_operator.configured
-    assert user.cc_operator.config == {"backend": "gcp", "vm_name": "vm"}
-    assert user.cc_operator.initialized is initialized
-
-
-def test_the_old_shape_is_not_read_as_a_place_to_receive_results():
-    """It was the operator's alone -- a bucket they ran from is not a bucket
-    somebody else agreed to have results written to"""
-    # Arrange
-    user = a_user({"cc": {"config": {"backend": "gcp", "bucket": "b"}}})
-
-    # Assert
-    assert not user.cc_collector.configured
-
-
-def test_saving_rewrites_the_old_shape_into_the_new_one():
-    # Arrange
-    user = a_user({"cc": {"config": {"backend": "gcp"}, "initialized": True}})
-
-    # Act
-    user.cc_operator.set({"backend": "mock"})
-
-    # Assert
-    assert user.metadata["cc"]["operator"] == {"backend": "mock"}
-    assert user.cc_operator.config == {"backend": "mock"}
-    assert not user.cc_operator.initialized

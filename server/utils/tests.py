@@ -120,7 +120,7 @@ class BenchmarksTest(MedPerfTest):
 
 
 class DatasetsTest(MedPerfTest):
-    def __create_asset(self, user):
+    def __create_asset(self, user, **result_kwargs):
         self.set_credentials(user)
         prep = self.mock_mlcube(
             name=f"{user}name", container_config={f"{user}hash": f"{user}hash"}
@@ -161,7 +161,7 @@ class DatasetsTest(MedPerfTest):
 
 
 class MlCubesTest(MedPerfTest):
-    def __create_asset(self, user):
+    def __create_asset(self, user, **result_kwargs):
         self.set_credentials(user)
         mlcube = self.mock_mlcube(
             name=f"{user}name", container_config={f"{user}hash": f"{user}hash"}
@@ -212,7 +212,7 @@ class ResultsTest(MedPerfTest):
         self.prep = prep
         self.refmodel = refmodel
 
-    def __create_asset(self, user):
+    def __create_asset(self, user, **result_kwargs):
         self.set_credentials(user)
         dataset = self.mock_dataset(
             self.prep["id"], generated_uid=f"{user}genid", state="OPERATION"
@@ -223,7 +223,7 @@ class ResultsTest(MedPerfTest):
         )
         self.create_dataset_association(assoc, user, self.bmk_owner)
         result = self.mock_result(
-            self.benchmark["id"], self.refmodel["id"], dataset["id"]
+            self.benchmark["id"], self.refmodel["id"], dataset["id"], **result_kwargs
         )
         result = self.create_result(result).data
         return result
@@ -231,22 +231,15 @@ class ResultsTest(MedPerfTest):
     def test_an_execution_this_user_collects_is_listed_as_theirs(self):
         """Somebody else operated it, but only this user can open what it
         produced -- so it is theirs to find and theirs to report"""
-        # Arrange -- the operator owns the dataset; the reference model, and
-        # so the other key the results could be released to, is bmk_owner's
+        # Arrange -- somebody else operates, the bmk_owner collects. Stated
+        # when the execution is created, which is the only time it can be.
         operator = "operator"
         self.create_user(operator)
-        result = self.__create_asset(operator)
 
         self.set_credentials(self.bmk_owner)
         collector_id = self.client.get(self.api_prefix + "/me/").data["id"]
 
-        self.set_credentials(operator)
-        recorded = self.client.put(
-            self.api_prefix + f"/results/{result['id']}/",
-            {"result_collector": collector_id},
-            format="json",
-        )
-        self.assertEqual(recorded.status_code, status.HTTP_200_OK)
+        result = self.__create_asset(operator, result_collector=collector_id)
 
         # Act
         self.set_credentials(self.bmk_owner)
@@ -518,7 +511,7 @@ class BenchmarkModelTest(MedPerfTest):
 
 
 class CertificatesTest(MedPerfTest):
-    def __create_asset(self, user):
+    def __create_asset(self, user, **result_kwargs):
         self.set_credentials(user)
         # Create CA
         ca = self.mock_ca(name=f"{user}ca")
@@ -559,7 +552,7 @@ class CertificatesTest(MedPerfTest):
 
 
 class EncryptedKeysTest(MedPerfTest):
-    def __create_asset(self, user):
+    def __create_asset(self, user, **result_kwargs):
         self.set_credentials(user)
         # Create CA
         ca = self.mock_ca(name=f"{user}ca")

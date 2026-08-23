@@ -9,7 +9,7 @@ import os
 
 import pytest
 
-from medperf_cc import WorkloadIdentity, get_result_store, receiver_config
+from medperf_cc import WorkloadIdentity, get_result_store, store_config
 from medperf_cc.result_store.mock import RESULTS_FILE, RESULTS_KEY_FILE
 
 SETTINGS = {"backend": "mock"}
@@ -40,7 +40,7 @@ def workload():
 
 
 def test_the_workload_is_told_where_to_write(result_store, workload):
-    config = result_store.receiver_config(workload)
+    config = result_store.store_config(workload)
 
     assert config["backend"] == "mock"
     assert config["results_name"] == workload.storage_prefix
@@ -48,7 +48,7 @@ def test_the_workload_is_told_where_to_write(result_store, workload):
 
 def test_what_travels_to_the_vm_is_an_address_and_nothing_else(result_store, workload):
     """The operator can read it, and it belongs to somebody else"""
-    assert set(result_store.receiver_config(workload)) == {
+    assert set(result_store.store_config(workload)) == {
         "backend",
         "root",
         "results_name",
@@ -60,7 +60,7 @@ def test_an_operator_can_work_out_the_address_without_holding_a_store(
 ):
     """The whole of what an operator needs from somebody else's store: a
     function of their published settings, reaching nothing and holding nothing"""
-    assert receiver_config(settings, workload) == result_store.receiver_config(workload)
+    assert store_config(settings, workload) == result_store.store_config(workload)
 
 
 def test_results_are_not_ready_before_a_workload_has_run(result_store, workload):

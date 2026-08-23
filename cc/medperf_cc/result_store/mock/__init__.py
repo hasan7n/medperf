@@ -29,7 +29,7 @@ class MockResultStore(ResultStore):
     def verify(self) -> None:
         os.makedirs(self.mock.root, exist_ok=True)
 
-    def receiver_config(self, workload: WorkloadIdentity) -> dict:
+    def store_config(self, workload: WorkloadIdentity) -> dict:
         return {
             "backend": self.backend,
             "root": self.mock.root,

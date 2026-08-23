@@ -359,26 +359,25 @@ class ConfidentialCollectorTest(ResultsTest):
 
         self.data_owner_id = self.__user_id(self.data_owner)
         self.model_owner_id = self.__user_id(self.model_owner)
-        self.bmk_owner_id = self.__user_id(self.bmk_owner)
 
-        # other_user operates; the data owner collects
+        # other_user operates; the data owner collects. Stated when the
+        # execution is created, which is the only time it can be stated.
         self.set_credentials(self.other_user)
         self.url_template = self.url
-        result = self.__create_confidential_result()
-        self.url = self.url.format(result["id"])
-        self.client.put(
-            self.url, {"result_collector": self.data_owner_id}, format="json"
+        result = self.__create_confidential_result(
+            result_collector=self.data_owner_id
         )
+        self.url = self.url.format(result["id"])
         self.set_credentials(None)
 
     def __user_id(self, username):
         self.set_credentials(username)
         return self.client.get(self.api_prefix + "/me/").data["id"]
 
-    def __create_confidential_result(self):
+    def __create_confidential_result(self, **kwargs):
         benchmark, dataset, model = self.cc
         return self.create_result(
-            self.mock_result(benchmark["id"], model["id"], dataset["id"])
+            self.mock_result(benchmark["id"], model["id"], dataset["id"], **kwargs)
         ).data
 
     def test_the_collector_may_report_what_only_they_could_open(self):
@@ -402,8 +401,10 @@ class ConfidentialCollectorTest(ResultsTest):
         # Assert
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_the_collector_cannot_be_pointed_at_somebody_else(self):
-        """Write-once: whoever it was recorded as is who can open the results"""
+    def test_the_collector_cannot_be_changed_afterwards(self):
+        """It is what grants the collector rights on this execution, so a PUT
+        that could rewrite it would be a PUT that hands them to somebody
+        else. Stated at creation, and read-only from then on"""
         # Arrange
         self.set_credentials(self.other_user)
 
@@ -413,26 +414,8 @@ class ConfidentialCollectorTest(ResultsTest):
         )
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_only_an_asset_owner_may_be_named_as_the_collector(self):
-        """The operator states this and the server would otherwise take their
-        word for it. Only the two asset owners have a key published to the
-        other parties, so nobody else could have had results encrypted for
-        them -- and naming them would hand a stranger read and write here"""
-        # Arrange -- a second execution, with nobody recorded on it yet
-        self.set_credentials(self.other_user)
-        result = self.__create_confidential_result()
-
-        # Act
-        response = self.client.put(
-            self.url_template.format(result["id"]),
-            {"result_collector": self.bmk_owner_id},
-            format="json",
-        )
-
-        # Assert
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["result_collector"], self.data_owner_id)
 
 
 class ConfidentialCollectorPermissionTest(ResultsTest):
@@ -453,10 +436,14 @@ class ConfidentialCollectorPermissionTest(ResultsTest):
 
         self.set_credentials(self.other_user)
         result = self.create_result(
-            self.mock_result(benchmark["id"], model["id"], dataset["id"])
+            self.mock_result(
+                benchmark["id"],
+                model["id"],
+                dataset["id"],
+                result_collector=data_owner_id,
+            )
         ).data
         self.url = self.url.format(result["id"])
-        self.client.put(self.url, {"result_collector": data_owner_id}, format="json")
         self.set_credentials(None)
 
     @parameterized.expand(

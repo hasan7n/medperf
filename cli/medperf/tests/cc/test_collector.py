@@ -8,7 +8,7 @@ anybody's behalf.
 
 import pytest
 
-from medperf.cc.collector import collector_recorded_as, resolve_collector
+from medperf.cc.collector import collector_role, resolve_collector
 from medperf.exceptions import ExecutionError
 from medperf.tests.mocks.benchmark import TestBenchmark
 from medperf.tests.mocks.dataset import TestDataset
@@ -127,28 +127,19 @@ def test_a_collector_with_nowhere_to_receive_results_is_refused(
         resolve(entities)
 
 
-def test_the_recorded_collector_is_used_rather_than_the_policies(mocker, entities):
-    """The recorded id is what the results were sealed for. Policies can be
-    edited afterwards, and re-reading them could name somebody whose key would
-    not open anything"""
+def test_the_role_alone_costs_no_certificate_or_settings_lookup(mocker, entities):
+    """Whoever only needs to know *who* collects -- to refuse reporting
+    results that are not theirs, say -- should not pay for the key and the
+    store as well"""
     # Arrange
-    policies = mocker.patch(PATCH_COLLECTOR.format("policy_of"))
+    set_policies(mocker, [Party.MODEL_OWNER], [Party.MODEL_OWNER])
+    certificate = mocker.patch(PATCH_COLLECTOR.format("certificate_of"))
 
     # Act
-    collector = collector_recorded_as(
-        entities["benchmark"], entities["dataset"], entities["model"], DATA_OWNER_ID
+    user_id, party = collector_role(
+        entities["benchmark"], entities["dataset"], entities["model"]
     )
 
     # Assert
-    assert collector.user_id == DATA_OWNER_ID
-    assert collector.party is Party.DATA_OWNER
-    policies.assert_not_called()
-
-
-def test_a_recorded_collector_who_owns_neither_asset_is_refused(mocker, entities):
-    """Nothing publishes their key, so there is no listing to read it from"""
-    # Act & Assert
-    with pytest.raises(ExecutionError, match="owns neither"):
-        collector_recorded_as(
-            entities["benchmark"], entities["dataset"], entities["model"], 999
-        )
+    assert (user_id, party) == (MODEL_OWNER_ID, Party.MODEL_OWNER)
+    certificate.assert_not_called()

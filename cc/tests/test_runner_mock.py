@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from medperf_cc import WorkloadIdentity, get_runner, receiver_config
+from medperf_cc import WorkloadIdentity, get_runner, store_config
 from medperf_cc.errors import OperationError
 
 IMAGE = "ghcr.io/example/benchmark-script@sha256:scripthash"
@@ -40,7 +40,7 @@ def address(tmp_path, workload):
 
     Worked out from the settings they published; under the mock that is the
     same directory, but the runner is told rather than asked either way."""
-    return receiver_config(
+    return store_config(
         {"backend": "mock", "root": str(tmp_path / "cc")}, workload
     )
 

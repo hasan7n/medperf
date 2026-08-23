@@ -104,7 +104,7 @@ def flow_for(mocker, configured, the_operator_collects):
             configured["execution"],
         )
         flow.operator = configured["operator"]
-        flow.run = mocker.MagicMock(collector=the_operator_collects)
+        flow.confidential_run = mocker.MagicMock(collector=the_operator_collects)
         return flow
 
     return _flow
@@ -173,7 +173,7 @@ def test_results_are_not_downloaded_before_they_are_there(mocker, flow_for):
         side_effect=lambda *a: order.append("check") or True,
     )
     mocker.patch(
-        PATCH_FLOW.format("download_results"),
+        PATCH_FLOW.format("download_metrics"),
         side_effect=lambda *a: order.append("download") or ({}, None),
     )
 
@@ -203,7 +203,7 @@ def test_an_operator_who_is_not_the_collector_downloads_nothing(
     # Arrange
     the_operator_collects.user_id = 12345
     flow = flow_for(ConfidentialExecution, BenchmarkTopology.END_TO_END_SCRIPT)
-    download = mocker.patch(PATCH_FLOW.format("download_results"))
+    download = mocker.patch(PATCH_FLOW.format("download_metrics"))
     ready = mocker.patch(PATCH_FLOW.format("results_exist"))
 
     # Act

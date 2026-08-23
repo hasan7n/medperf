@@ -9,6 +9,19 @@ from medperf.commands.execution.submit import ResultSubmission
 PATCH_SUBMISSION = "medperf.commands.execution.submit.{}"
 
 
+@pytest.fixture(autouse=True)
+def an_ordinary_execution(mocker):
+    """Not confidential, so nobody but its owner was ever going to report it.
+
+    Whether a confidential execution's results are somebody else's to report
+    is decided by the asset owners' policies, and covered in
+    `tests/cc/test_collector.py`."""
+    mocker.patch(
+        PATCH_SUBMISSION.format("Model.get"),
+        return_value=mocker.MagicMock(**{"requires_cc.return_value": False}),
+    )
+
+
 @pytest.fixture
 def result(fs):
     exec = TestExecution()
@@ -130,3 +143,60 @@ def test_an_execution_without_a_proof_sends_no_proof_field(mocker, ui):
 
     # Assert
     assert "integrity_proof" not in update.call_args.args[1]
+
+
+def test_results_written_for_somebody_else_are_not_reported_here(mocker, ui):
+    """`medperf run` submits as soon as it finishes. An operator who is not
+    the collector holds nothing -- reporting it would upload empty results and
+    finalize the execution, locking out the one party who can fill it in"""
+    # Arrange
+    execution = TestExecution(id=1)
+    mocker.patch(PATCH_SUBMISSION.format("Execution.get"), return_value=execution)
+    mocker.patch(
+        PATCH_SUBMISSION.format("Model.get"),
+        return_value=mocker.MagicMock(**{"requires_cc.return_value": True}),
+    )
+    mocker.patch(PATCH_SUBMISSION.format("Benchmark.get"))
+    mocker.patch(PATCH_SUBMISSION.format("Dataset.get"))
+    mocker.patch(
+        PATCH_SUBMISSION.format("collector_role"), return_value=(999, "data_owner")
+    )
+    mocker.patch(
+        PATCH_SUBMISSION.format("get_medperf_user_data"), return_value={"id": 1}
+    )
+    update = mocker.patch(PATCH_SUBMISSION.format("config.comms.update_execution"))
+
+    # Act & Assert
+    with pytest.raises(CleanExit, match="written for somebody else"):
+        ResultSubmission.run(1, approved=True)
+    update.assert_not_called()
+
+
+def test_the_collector_reports_their_own_confidential_results(mocker, ui):
+    # Arrange
+    execution = TestExecution(id=1)
+    mocker.patch(PATCH_SUBMISSION.format("Execution.get"), return_value=execution)
+    mocker.patch(
+        PATCH_SUBMISSION.format("Model.get"),
+        return_value=mocker.MagicMock(**{"requires_cc.return_value": True}),
+    )
+    mocker.patch(PATCH_SUBMISSION.format("Benchmark.get"))
+    mocker.patch(PATCH_SUBMISSION.format("Dataset.get"))
+    mocker.patch(
+        PATCH_SUBMISSION.format("collector_role"), return_value=(1, "data_owner")
+    )
+    mocker.patch(
+        PATCH_SUBMISSION.format("get_medperf_user_data"), return_value={"id": 1}
+    )
+    mocker.patch.object(execution, "read_results", return_value={"auc": 0.9})
+    mocker.patch.object(execution, "is_partial", return_value=False)
+    mocker.patch.object(execution, "is_executed", return_value=True)
+    mocker.patch.object(execution, "read_integrity_proof", return_value={})
+    mocker.patch.object(execution, "write")
+    update = mocker.patch(PATCH_SUBMISSION.format("config.comms.update_execution"))
+
+    # Act
+    ResultSubmission.run(1, approved=True)
+
+    # Assert
+    update.assert_called_once()

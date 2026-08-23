@@ -7,9 +7,9 @@ the same command as for anything else.
 
 from medperf import config
 from medperf.account_management import get_medperf_user_object
-from medperf.cc.collector import collector_recorded_as, resolve_collector
+from medperf.cc.collector import resolve_collector
 from medperf.cc.errors import as_medperf_error
-from medperf.cc.results import download_results, results_exist
+from medperf.cc.results import download_metrics, results_exist
 from medperf.cc.run import ConfidentialRun
 from medperf.commands.execution.plan import resolve_plan
 from medperf.entities.benchmark import Benchmark
@@ -57,27 +57,13 @@ class DownloadCCResults:
         self.dataset = Dataset.get(self.execution.dataset)
         self.model = Model.get(self.execution.model)
         self.plan = resolve_plan(self.benchmark)
-        self.collector = self.__collector()
-
-    def __collector(self):
-        """Who these results were sealed for.
-
-        The recorded id when there is one: it is what the server enforces, and
-        it was written when the workload was launched. Policies can be edited
-        afterwards, so re-deriving one here could name a party this execution
-        was never run for, whose key would not open anything.
-
-        Nothing is recorded when the operator collected for themselves, since
-        there was no second party to name -- then the policies are all there
-        is, and they still say the same thing they said at launch."""
-        if self.execution.result_collector is not None:
-            return collector_recorded_as(
-                self.benchmark,
-                self.dataset,
-                self.model,
-                self.execution.result_collector,
-            )
-        return resolve_collector(self.benchmark, self.dataset, self.model)
+        # Who these results were sealed for: the asset owners' policies said
+        # so before the execution existed, and they are the only thing that
+        # says it. What the server recorded grants this user permission to
+        # read and report the execution; it decides nothing here.
+        self.collector = resolve_collector(
+            self.benchmark, self.dataset, self.model
+        )
 
     def validate(self):
         if self.collector.user_id != self.user.id:
@@ -103,7 +89,7 @@ class DownloadCCResults:
                 f"Execution {self.execution_uid} has left no results to collect."
                 " The workload may still be running, or may have failed."
             )
-        self.results, self.integrity_proof = download_results(
+        self.results, self.integrity_proof = download_metrics(
             run.result_store, run.workload, self.execution.id
         )
 

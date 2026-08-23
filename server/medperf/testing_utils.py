@@ -151,6 +151,9 @@ def mock_result(benchmark, model, dataset, **kwargs):
         "is_valid": True,
         "model_report": {"execution_status": "finished"},
         "evaluator_report": {"execution_status": "finished"},
+        # Whoever a confidential execution's results are for. Stated at
+        # creation or not at all.
+        "result_collector": None,
     }
 
     for key, val in kwargs.items():

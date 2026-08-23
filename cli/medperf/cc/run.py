@@ -65,9 +65,9 @@ class ConfidentialRun:
         )
 
     @property
-    def receiver_config(self) -> dict:
+    def store_config(self) -> dict:
         """Where the workload is to write, as it travels to the VM."""
-        return self.result_store.receiver_config(self.workload)
+        return self.result_store.store_config(self.workload)
 
     @property
     def collector_public_key(self) -> str:

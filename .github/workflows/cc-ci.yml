@@ -39,7 +39,7 @@ jobs:
         # be pulled from. build.sh serves it from a registry on this machine
         # until it is published to mlcommons.
         working-directory: .
-        run: sh examples/cc/chestxray/implementation/build.sh
+        run: bash examples/cc/chestxray/implementation/build.sh
 
       - name: Set server environment vars
         working-directory: ./server

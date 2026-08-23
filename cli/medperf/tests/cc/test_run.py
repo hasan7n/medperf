@@ -96,7 +96,7 @@ def test_what_reaches_the_vm_comes_from_the_collectors_store(parts, collector, a
 
     # Assert
     a_store.assert_called_once_with(collector.settings)
-    assert run.receiver_config is a_store.return_value.receiver_config.return_value
+    assert run.store_config is a_store.return_value.store_config.return_value
 
 
 def test_the_key_reaches_the_workload_as_text(parts, collector):

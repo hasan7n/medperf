@@ -53,16 +53,16 @@ def results_exist(result_store: ResultStore, workload: WorkloadIdentity) -> bool
 
 
 @as_medperf_error(ExecutionError)
-def download_results(
+def download_metrics(
     result_store: ResultStore, workload: WorkloadIdentity, execution_id: int
 ) -> Tuple[dict, Optional[IntegrityProof]]:
-    """Fetches one execution's results, opens them, and reads what is inside.
+    """Downloads one execution's results and reads what is inside them.
 
     Returns the metrics as the server will hold them, and the integrity proof
     if the workload produced one. Each attempt lands in a directory of its own
     so a second collection cannot overwrite the first."""
     results_path = __attempt_directory(execution_id)
-    fetch_results(result_store, workload, results_path)
+    download_result_files(result_store, workload, results_path)
 
     # The workload tars the contents of its results directory, so what lands
     # here is those files, not a directory containing them.
@@ -82,12 +82,12 @@ def download_results(
 
 
 @as_medperf_error(ExecutionError)
-def fetch_results(
+def download_result_files(
     result_store: ResultStore, workload: WorkloadIdentity, results_path: str
 ) -> None:
-    """Downloads one workload's output and unpacks it, still as files.
+    """Downloads one workload's output and unpacks it, leaving it as files.
 
-    What `download_results` does before it looks inside. An inference_script
+    What `download_metrics` does before it looks inside. An inference_script
     run wants only this: predictions to be scored on-prem, with no results.yaml
     to read and no proof to pair with metrics."""
     medperf_config.ui.text = "Downloading results..."

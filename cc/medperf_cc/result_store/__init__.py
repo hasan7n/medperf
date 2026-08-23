@@ -25,7 +25,7 @@ def get_result_store(config: dict) -> ResultStore:
     return RESULT_STORES[backend](settings_of(config))
 
 
-def receiver_config(config: dict, workload: WorkloadIdentity) -> dict:
+def store_config(config: dict, workload: WorkloadIdentity) -> dict:
     """Where a workload is to write, worked out from the collector's settings.
 
     The whole of what an operator needs from a store they do not own, and the
@@ -33,13 +33,13 @@ def receiver_config(config: dict, workload: WorkloadIdentity) -> dict:
     network or a credential, which is why the operator is handed a dict rather
     than a store to keep.
     """
-    return get_result_store(config).receiver_config(workload)
+    return get_result_store(config).store_config(workload)
 
 
 __all__ = [
     "RESULT_STORES",
     "ResultStore",
     "get_result_store",
-    "receiver_config",
+    "store_config",
     "result_store_backends",
 ]

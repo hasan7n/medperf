@@ -27,7 +27,7 @@ from medperf_cc.policy import AssetPolicy, Party
 from medperf_cc.result_store import (
     ResultStore,
     get_result_store,
-    receiver_config,
+    store_config,
     result_store_backends,
 )
 from medperf_cc.runner import WorkloadRunner, get_runner, runner_backends
@@ -45,7 +45,7 @@ __all__ = [
     "generate_encryption_key",
     "get_result_store",
     "get_runner",
-    "receiver_config",
+    "store_config",
     "result_store_backends",
     "runner_backends",
 ]

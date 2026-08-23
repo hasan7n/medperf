@@ -10,7 +10,7 @@ Two sides use this, and they are not always the same person. Only one of them
 holds credentials:
 
 - the operator, before starting a workload, to tell it where to write. That
-  needs the address and nothing else, which is why `receiver_config` is offered
+  needs the address and nothing else, which is why `store_config` is offered
   as a plain function in this package's `__init__`: no credentials, no network,
   nothing for the operator to hold on to.
 - the collector, afterwards, to fetch what was written. That needs credentials
@@ -40,7 +40,7 @@ class ResultStore(ABC):
         """Fails unless the collector can receive results here."""
 
     @abstractmethod
-    def receiver_config(self, workload: WorkloadIdentity) -> dict:
+    def store_config(self, workload: WorkloadIdentity) -> dict:
         """Where the workload is to write, in this backend's shape.
 
         Travels to the VM as metadata the operator can read, so it carries an

@@ -41,7 +41,7 @@ class GCPResultStore(ResultStore):
                 f"Result store setup verification failed: {problem}"
             )
 
-    def receiver_config(self, workload: WorkloadIdentity) -> dict:
+    def store_config(self, workload: WorkloadIdentity) -> dict:
         return {
             "backend": self.backend,
             "bucket": self.gcp.bucket,

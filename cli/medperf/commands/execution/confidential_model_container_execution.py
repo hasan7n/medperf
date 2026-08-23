@@ -15,7 +15,7 @@ from medperf.cc.operator import (
     workload_configs,
     wait_for_workload,
 )
-from medperf.cc.results import fetch_results, results_exist
+from medperf.cc.results import download_result_files, results_exist
 from medperf.commands.execution.container_execution import ContainerExecution
 
 
@@ -76,7 +76,7 @@ class ConfidentialModelContainerExecution:
         self.ignore_model_errors = ignore_model_errors
         self.operator = None
         self.runner = None
-        self.run = None
+        self.confidential_run = None
         self.dataset_cc_config = None
         self.model_cc_config = None
         self.local_execution_flow = None
@@ -132,13 +132,13 @@ class ConfidentialModelContainerExecution:
                 f" {collector.party.value}. Only the data owner can collect"
                 " an execution they have to score themselves."
             )
-        self.run = ConfidentialRun.resolve(
+        self.confidential_run = ConfidentialRun.resolve(
             self.plan, self.dataset, self.model, self.execution, collector
         )
         self.runner = runner_for(self.operator)
 
     def results_exist(self):
-        return results_exist(self.run.result_store, self.run.workload)
+        return results_exist(self.confidential_run.result_store, self.confidential_run.workload)
 
     def run_workload(self):
         config.ui.text = "Starting Confidential VM"
@@ -146,24 +146,24 @@ class ConfidentialModelContainerExecution:
         run_workload(
             self.runner,
             docker_image,
-            self.run.workload,
+            self.confidential_run.workload,
             self.dataset_cc_config,
             self.model_cc_config,
-            self.run.receiver_config,
-            self.run.collector_public_key,
+            self.confidential_run.store_config,
+            self.confidential_run.collector_public_key,
         )
 
     def wait_for_workload_completion(self):
         config.ui.text = "Waiting for workload completion"
-        wait_for_workload(self.runner, self.run.workload)
+        wait_for_workload(self.runner, self.confidential_run.workload)
         if not self.results_exist():
             raise ExecutionError("Workload did not complete successfully.")
 
     def download_predictions(self):
         config.ui.text = "Downloading inference predictions"
-        fetch_results(
-            self.run.result_store,
-            self.run.workload,
+        download_result_files(
+            self.confidential_run.result_store,
+            self.confidential_run.workload,
             self.local_execution_flow.preds_path,
         )
 

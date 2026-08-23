@@ -62,18 +62,17 @@ def check_asset_setup(cc_config: dict, cc_policy: dict, entity, kind: AssetKind)
 
 
 def check_operator_setup(cc_config: dict):
-    """Fails unless this configuration describes a usable operator."""
-    __check_setup(cc_config, get_runner)
+    """Fails unless this configuration describes a usable operator.
+
+    Building it is the check: the backend the configuration selects parses its
+    own settings, and refuses what it cannot work with."""
+    if cc_config == {}:
+        return
+    get_runner(cc_config)
 
 
 def check_collector_setup(cc_config: dict):
     """Fails unless this configuration describes a usable place for results."""
-    __check_setup(cc_config, get_result_store)
-
-
-def __check_setup(cc_config: dict, build):
-    """Building it is the check: every backend the configuration selects
-    parses its own settings, and refuses what it cannot work with."""
     if cc_config == {}:
         return
-    build(cc_config)
+    get_result_store(cc_config)
