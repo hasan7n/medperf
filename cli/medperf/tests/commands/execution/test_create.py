@@ -77,21 +77,6 @@ def mock_execution_all(mocker, state_variables, fs):
     mocker.patch(PATCH_EXECUTION.format("Execution.all"), side_effect=__get_side_effect)
 
 
-def mock_model(mocker, state_variables):
-    """Whether each model needs a confidential VM.
-
-    Creating an execution asks, because a confidential one has to say who its
-    results are for at that point and nothing else ever can."""
-    confidential = state_variables["confidential_models"]
-
-    def __get_side_effect(id):
-        return mocker.MagicMock(
-            id=id, **{"requires_cc.return_value": id in confidential}
-        )
-
-    mocker.patch(PATCH_EXECUTION.format("Model.get"), side_effect=__get_side_effect)
-
-
 def mock_cube(mocker, state_variables):
     models_props = state_variables["models_props"]
     evaluator = state_variables["evaluator"]
@@ -151,7 +136,6 @@ def setup(request, mocker, ui, fs):
         },
         "evaluator": {"uid": 3, "invalid": False},
         "operational_dataset": True,
-        "confidential_models": [],
     }
     state_variables.update(request.param)
 
@@ -160,7 +144,6 @@ def setup(request, mocker, ui, fs):
     mock_dataset(mocker, state_variables)
     mock_execution_all(mocker, state_variables, fs)
     mock_cube(mocker, state_variables)
-    mock_model(mocker, state_variables)
     exec_spy = mock_execution(mocker, state_variables)
 
     # spies

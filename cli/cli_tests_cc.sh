@@ -419,8 +419,7 @@ echo "====================================="
 if [ "$CC_OPERATOR" = "modelowner" ]; then
   # The operator never held the key, so the results are still sealed in the
   # collector's storage. The id is read back from what the operator was told to
-  # hand over -- the collector can also find it in `/me/results/`, which lists
-  # executions recorded as theirs to collect.
+  # hand over, which is the only way they learn of it today.
   EXECUTION_UID=$(grep -o "download_cc_results -e [0-9]*" "$DIRECTORY/cc_run.log" | tail -n 1 | tr -s " " | cut -d " " -f 3)
   echo "EXECUTION_UID=$EXECUTION_UID"
   if [ -z "$EXECUTION_UID" ]; then

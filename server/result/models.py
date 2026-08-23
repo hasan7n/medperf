@@ -29,17 +29,6 @@ class ModelResult(models.Model):
     # field rather than a corner of `metadata`, so an execution without one is
     # visibly unverified rather than quietly indistinguishable.
     integrity_proof = models.JSONField(default=dict, blank=True, null=True)
-    # Whoever the results were encrypted for, when that is not the operator.
-    # Both asset owners' policies name a role and the client resolves it to one
-    # party before launching; recording it here is what lets that party read
-    # and report an execution they did not create. Null for everything else.
-    result_collector = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="collected_results",
-    )
     evaluation_report = models.JSONField(default=dict, blank=True, null=True)
     finalized_at = models.DateTimeField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)

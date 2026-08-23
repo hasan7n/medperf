@@ -5,7 +5,6 @@ from medperf.commands.execution.execution_flow import ExecutionFlow
 from medperf.commands.execution.plan import resolve_plan
 from medperf.entities.execution import Execution
 from tabulate import tabulate
-from medperf.cc.collector import collector_role
 from medperf.commands.execution.utils import filter_latest_executions
 
 from medperf.entities.cube import Cube
@@ -287,14 +286,6 @@ class BenchmarkExecution:
             "benchmark": self.benchmark_uid,
             "name": self.__execution_name(model_uid),
         }
-        model = Model.get(model_uid)
-        if model.requires_cc():
-            # Stated once, when the execution is created, because it is what
-            # lets the collector read and report an execution somebody else
-            # operated. The policies decide who it is; this only records the
-            # answer so the server can grant them that much.
-            collector_id, _ = collector_role(self.benchmark, self.dataset, model)
-            query_dict["result_collector"] = collector_id
         execution = Execution(**query_dict)
         updated_exec_dict = execution.upload()
         execution = Execution(**updated_exec_dict)

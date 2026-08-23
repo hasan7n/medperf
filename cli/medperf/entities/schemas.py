@@ -178,8 +178,6 @@ class ExecutionSchema(MedperfSchema):
     model_report: dict = {}
     evaluation_report: dict = {}
     integrity_proof: dict = {}
-    # Whoever the results were encrypted for, when that is not the operator.
-    result_collector: Optional[int] = None
     finalized: bool = False
     finalized_at: Optional[datetime]
 

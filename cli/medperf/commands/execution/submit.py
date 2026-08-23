@@ -1,7 +1,3 @@
-from medperf.cc.collector import collector_role
-from medperf.entities.benchmark import Benchmark
-from medperf.entities.dataset import Dataset
-from medperf.entities.model import Model
 from medperf.exceptions import CleanExit, InvalidArgumentError, MedperfException
 from medperf.utils import dict_pretty_print, approval_prompt
 from medperf.entities.execution import Execution
@@ -80,8 +76,6 @@ class ResultSubmission:
         self.execution = executions[0]  # this should be only one value
 
     def validate(self):
-        self.__stop_if_collected_by_somebody_else()
-
         if not self.execution.is_executed():
             raise InvalidArgumentError("This execution is not mark as executed.")
 
@@ -89,32 +83,6 @@ class ResultSubmission:
             raise InvalidArgumentError(
                 "Results of this execution were already uploaded."
             )
-
-    def __stop_if_collected_by_somebody_else(self):
-        """Results this user cannot read are not theirs to report.
-
-        The operator of a confidential execution written for somebody else
-        never held the key, so there is nothing here to upload and nothing has
-        gone wrong. Who that somebody is comes from the asset owners'
-        policies, which is where it is decided -- reporting it is the
-        collector's to do once they have collected."""
-        model = Model.get(self.execution.model)
-        if not model.requires_cc():
-            return
-
-        collector_id, _ = collector_role(
-            Benchmark.get(self.execution.benchmark),
-            Dataset.get(self.execution.dataset),
-            model,
-        )
-        if collector_id == get_medperf_user_data()["id"]:
-            return
-
-        raise CleanExit(
-            "These results were written for somebody else, who will report"
-            " them once they have collected them: `medperf confidential"
-            f" download_cc_results -e {self.execution.id}`."
-        )
 
     def prepare(self):
         self.results = self.execution.read_results()

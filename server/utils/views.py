@@ -247,13 +247,8 @@ class ModelResultList(GenericAPIView):
     queryset = ""
 
     def get_object(self, pk):
-        # An execution this user is to collect is theirs too: somebody else
-        # operated it, but only this user can open what it produced, so it is
-        # theirs to find and theirs to report.
         try:
-            return ModelResult.objects.filter(
-                Q(owner__id=pk) | Q(result_collector__id=pk)
-            )
+            return ModelResult.objects.filter(owner__id=pk)
         except ModelResult.DoesNotExist:
             raise Http404
 

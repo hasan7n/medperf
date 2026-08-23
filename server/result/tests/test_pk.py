@@ -343,44 +343,38 @@ class ConfidentialResultPutTest(ResultsTest):
         self.assertEqual(response.data["results"], new_results)
 
 
-class ConfidentialCollectorTest(ResultsTest):
-    """Test module for a confidential execution whose collector is not its
-    operator
+class ConfidentialDataOwnerAccessTest(ResultsTest):
+    """Test module for the dataset owner's access to a confidential execution
+    somebody else operated
 
-    The results were encrypted for the collector's key and written to their
-    storage, so reporting them is theirs to do -- and the operator, who cannot
-    open them, must not be the only one who can.
+    They did not create it, but the results are of their data, so reading and
+    reporting it is theirs to do as much as the operator's.
     """
 
     def setUp(self):
-        super(ConfidentialCollectorTest, self).setUp()
+        super(ConfidentialDataOwnerAccessTest, self).setUp()
         self.generic_setup()
-        self.cc = self.confidential_setup()
+        benchmark, dataset, model = self.confidential_setup()
 
-        self.data_owner_id = self.__user_id(self.data_owner)
-        self.model_owner_id = self.__user_id(self.model_owner)
-
-        # other_user operates; the data owner collects. Stated when the
-        # execution is created, which is the only time it can be stated.
+        # other_user operates on the data owner's dataset
         self.set_credentials(self.other_user)
-        self.url_template = self.url
-        result = self.__create_confidential_result(
-            result_collector=self.data_owner_id
-        )
+        result = self.create_result(
+            self.mock_result(benchmark["id"], model["id"], dataset["id"])
+        ).data
         self.url = self.url.format(result["id"])
         self.set_credentials(None)
 
-    def __user_id(self, username):
-        self.set_credentials(username)
-        return self.client.get(self.api_prefix + "/me/").data["id"]
+    def test_the_data_owner_may_read_an_execution_they_did_not_create(self):
+        # Arrange
+        self.set_credentials(self.data_owner)
 
-    def __create_confidential_result(self, **kwargs):
-        benchmark, dataset, model = self.cc
-        return self.create_result(
-            self.mock_result(benchmark["id"], model["id"], dataset["id"], **kwargs)
-        ).data
+        # Act
+        response = self.client.get(self.url)
 
-    def test_the_collector_may_report_what_only_they_could_open(self):
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_the_data_owner_may_report_results_of_their_own_data(self):
         # Arrange
         self.set_credentials(self.data_owner)
 
@@ -391,88 +385,15 @@ class ConfidentialCollectorTest(ResultsTest):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["results"], {"auc": 0.9})
 
-    def test_the_collector_may_read_an_execution_they_did_not_create(self):
-        # Arrange
-        self.set_credentials(self.data_owner)
-
-        # Act
-        response = self.client.get(self.url)
-
-        # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-    def test_the_collector_cannot_be_changed_afterwards(self):
-        """It is what grants the collector rights on this execution, so a PUT
-        that could rewrite it would be a PUT that hands them to somebody
-        else. Stated at creation, and read-only from then on"""
-        # Arrange
-        self.set_credentials(self.other_user)
-
-        # Act
-        response = self.client.put(
-            self.url, {"result_collector": self.model_owner_id}, format="json"
-        )
-
-        # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["result_collector"], self.data_owner_id)
-
-
-class ConfidentialCollectorPermissionTest(ResultsTest):
-    """Test module for permissions of /results/{pk} once a collector is named
-
-    Non-permitted actions:
-        PUT: for all users except the operator, the collector and admin
-        GET: for unauthenticated users
-    """
-
-    def setUp(self):
-        super(ConfidentialCollectorPermissionTest, self).setUp()
-        self.generic_setup()
-        benchmark, dataset, model = self.confidential_setup()
-
-        self.set_credentials(self.data_owner)
-        data_owner_id = self.client.get(self.api_prefix + "/me/").data["id"]
-
-        self.set_credentials(self.other_user)
-        result = self.create_result(
-            self.mock_result(
-                benchmark["id"],
-                model["id"],
-                dataset["id"],
-                result_collector=data_owner_id,
-            )
-        ).data
-        self.url = self.url.format(result["id"])
-        self.set_credentials(None)
-
-    @parameterized.expand(
-        [
-            ("model_owner", status.HTTP_403_FORBIDDEN),
-            ("bmk_owner", status.HTTP_403_FORBIDDEN),
-            (None, status.HTTP_401_UNAUTHORIZED),
-        ]
-    )
-    def test_put_permissions(self, user, expected_status):
-        """Naming a collector grants that one party something, and nobody
-        else anything"""
-        # Arrange
-        self.set_credentials(user)
-
-        # Act
-        response = self.client.put(self.url, {"results": {"r": 2}}, format="json")
-
-        # Assert
-        self.assertEqual(response.status_code, expected_status)
-
 
 class ConfidentialResultPutPermissionTest(ResultsTest):
     """Test module for permissions of PUT /results/{pk} of a confidential
     execution somebody other than the dataset owner ran
 
     Non-permitted actions:
-        PUT: for all users except the execution owner and admin -- the dataset
-            owner included, since the execution is not theirs
+        PUT: for all users except the execution owner, the dataset owner and
+            admin. The dataset owner may: the results are of their data, so
+            reporting them is theirs to do even though the execution is not.
     """
 
     def setUp(self):
@@ -489,7 +410,6 @@ class ConfidentialResultPutPermissionTest(ResultsTest):
 
     @parameterized.expand(
         [
-            ("data_owner", status.HTTP_403_FORBIDDEN),
             ("model_owner", status.HTTP_403_FORBIDDEN),
             ("bmk_owner", status.HTTP_403_FORBIDDEN),
             ("committee_user", status.HTTP_403_FORBIDDEN),

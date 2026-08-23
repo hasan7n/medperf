@@ -148,8 +148,8 @@ them nor open them. The collector picks them up afterwards:
 medperf confidential download_cc_results -e <execution-id>
 ```
 
-Executions waiting for you are listed among your own results, since only you
-can open them.
+The operator passes the execution id on; nothing lists an execution waiting for
+you yet.
 
 ## Choosing where everything lives
 

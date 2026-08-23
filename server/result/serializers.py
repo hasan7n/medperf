@@ -76,11 +76,6 @@ class ModelResultDetailSerializer(serializers.ModelSerializer):
             "benchmark",
             "model",
             "dataset",
-            # Stated when the execution is created and never afterwards. It is
-            # what grants the collector permission to read and report this
-            # execution, so a PUT that could change it would be a PUT that
-            # hands those rights to somebody else.
-            "result_collector",
         ]
 
     def validate(self, data):
