@@ -14,7 +14,7 @@ from medperf.commands.dataset.import_dataset import ImportDataset
 from medperf.commands.dataset.prepare import DataPreparation
 from medperf.commands.dataset.set_operational import DatasetSetOperational
 from medperf.commands.dataset.submit import DataCreation
-from medperf.commands.execution.create import BenchmarkExecution
+from medperf.commands.execution.dataset_benchmark_run import DatasetBenchmarkRun
 from medperf.commands.execution.submit import ResultSubmission
 from medperf.commands.execution.utils import filter_latest_executions
 from medperf.commands.cc.dataset_configure_for_cc import DatasetConfigureForCC
@@ -484,7 +484,7 @@ def run(
     return_response = {"status": "", "error": ""}
 
     try:
-        BenchmarkExecution.run(
+        DatasetBenchmarkRun.run(
             benchmark_id,
             entity_id,
             model_ids,

@@ -400,12 +400,13 @@ echo "====================================="
 echo "Run benchmark execution ($CC_OPERATOR is operator)"
 echo "====================================="
 if [ "$CC_OPERATOR" = "modelowner" ]; then
-  # Their own model only. The benchmark's reference model is a public asset
-  # that needs no confidential VM, and creating an execution of it against
+  # The model owner's own command: their one model against the benchmark's
+  # datasets. The mirror of the data owner's, minus a counterpart to the
+  # reference model -- that one is the benchmark's, and running it against
   # somebody else's dataset is the dataset owner's to do.
-  print_eval medperf run -b $BMK_UID -d $DSET_UID -m $MOBILENET_MODEL_UID -y 2>&1 | tee "$DIRECTORY/cc_run.log"
+  print_eval medperf model run_benchmark -b $BMK_UID -m $MOBILENET_MODEL_UID 2>&1 | tee "$DIRECTORY/cc_run.log"
 else
-  print_eval medperf benchmark run -b $BMK_UID -d $DSET_UID
+  print_eval medperf dataset run_benchmark -b $BMK_UID -d $DSET_UID
 fi
 checkFailed "Benchmark execution failed"
 ##########################################################

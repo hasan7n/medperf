@@ -137,6 +137,32 @@ An `inference_script` benchmark is the exception: its predictions are scored
 on-prem against ground truth labels only the data owner holds, so the data owner
 both operates and collects one whatever the policies say.
 
+### Running as a model owner
+
+A data owner runs a benchmark's models against their dataset:
+
+```bash
+medperf benchmark run -b <benchmark-id> -d <dataset-id>
+# or, from the dataset: medperf dataset run_benchmark -b <benchmark-id> -d <dataset-id>
+```
+
+A model owner runs the mirror of it — their one model against the benchmark's
+datasets:
+
+```bash
+medperf model run_benchmark -b <benchmark-id> -m <your-model-id>
+```
+
+Naming no datasets takes every dataset the benchmark approved that is
+configured for confidential computing; name them with `-d` (repeat the flag) or
+`--datasets-from-file` to pick. Only the model's owner can run this, and only
+for a model that runs inside a confidential VM: you never see the data, so
+there is nothing to run anywhere else. The machine is yours and so is its bill.
+
+It is also only for an `end_to_end_script` benchmark. An `inference_script` one
+scores on-prem, for the reason just given, so its executions are the data
+owner's to operate.
+
 ### When the operator is not the collector
 
 Only an `end_to_end_script` benchmark can have them differ. The operator starts
@@ -271,4 +297,6 @@ It is also topology dependent:
 
 ## What's next?
 
-You can now run the model that required confidential computing, by clicking the button `Run` near the model of interest. After execution finishes, submit the results by clicking the `Submit` button that will later appear.
+As a data owner, you can now run the model that required confidential computing, by clicking the button `Run` near the model of interest on your dataset's page. After execution finishes, submit the results by clicking the `Submit` button that will later appear.
+
+As a model owner, your model's page lists the datasets of every benchmark it was approved for, with the same `Run` button beside each. It only appears for a model that runs inside a confidential VM, and it is greyed out until both sides are ready: the data owner has to have configured their dataset for confidential computing, and you have to have configured where your workloads run. Running one starts a machine in your own cloud account, and the results go to whoever the two policies release them to — which may not be you.

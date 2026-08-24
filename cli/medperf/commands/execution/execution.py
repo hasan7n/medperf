@@ -7,7 +7,7 @@ from medperf.commands.view import EntityView
 from medperf.entities.execution import Execution
 from medperf.exceptions import InvalidArgumentError
 from medperf.commands.list import EntityList
-from medperf.commands.execution.create import BenchmarkExecution
+from medperf.commands.execution.dataset_benchmark_run import DatasetBenchmarkRun
 from medperf.commands.execution.submit import ResultSubmission
 from medperf.commands.execution.show_local_results import ShowLocalResults
 from medperf.commands.execution.verify_proof import VerifyExecutionProof
@@ -47,7 +47,7 @@ def create(
     ),
 ):
     """Runs the benchmark execution step for a given benchmark, prepared dataset and model"""
-    BenchmarkExecution.run(
+    DatasetBenchmarkRun.run(
         benchmark_uid,
         data_uid,
         [model_uid],

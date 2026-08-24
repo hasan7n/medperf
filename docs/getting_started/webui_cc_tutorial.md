@@ -423,6 +423,9 @@ Click the `Run` button next to a model to launch the confidential execution. Beh
 !!! note
     If a model shows `Not Ready`, hover over the status to see what is missing (for example, the model's or dataset's CC policy has not been synced yet, or the operator is not configured).
 
+!!! note "The model owner can run it too"
+    The same execution can be started from the other side. A model owner's model detail page lists the datasets of every benchmark their model was approved for, with the same `Run` button beside each — it appears only for a model that runs inside a confidential VM, and is greyed out until the data owner has configured their dataset and the model owner has set up their own operator (step 11, done by whoever runs it). Starting one there puts the confidential VM on the model owner's cloud account instead, and the results still go to whoever the two policies release them to. If that is not the model owner, the execution finishes with nothing they can read, and the collector picks the results up with `medperf confidential download_cc_results`.
+
 ## 13. Data Owner: Submit the results
 
 Once an execution finishes, a `View Result` button appears so you can inspect the metrics locally. When you are ready to share them, click the `Submit` button next to the model to upload the result to the MedPerf server, so that the benchmark owner can view it.
