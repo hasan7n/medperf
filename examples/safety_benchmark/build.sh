@@ -1,5 +1,10 @@
 #!/bin/bash
-# Builds the safety benchmark script image and makes it pullable.
+# Builds the safety benchmark script image and publishes it.
+#
+# MedPerf pulls whatever image a benchmark names, so a run executes the
+# published tag rather than this working tree. After any change under
+# benchmark/, bump the version in IMAGE and in container_config.yaml and rerun
+# this.
 #
 # The grader's weights are baked in, which is what makes this image the whole
 # benchmark. Download them into grader_weights/ before building; this refuses
@@ -11,9 +16,7 @@ set -eo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_IMAGE="${BASE_IMAGE:-mlcommons/medperf-confidential-benchmark-base:0.0.0}"
-IMAGE="${IMAGE:-localhost:5555/medperf-safety-benchmark:test}"
-REGISTRY_PORT="${REGISTRY_PORT:-5555}"
-REGISTRY_CONTAINER="${REGISTRY_CONTAINER:-medperf-cc-test-registry}"
+IMAGE="${IMAGE:-mlcommons/medperf-safety-benchmark:0.0.0}"
 WEIGHTS="$HERE/grader_weights"
 
 # Before the base image build, which is slow and would otherwise happen only to
@@ -32,15 +35,6 @@ docker build -t "$IMAGE" \
     --build-arg "GRADER_LLAMA_GUARD_VERSION=${GRADER_LLAMA_GUARD_VERSION:-2}" \
     --build-arg "TORCH_INDEX_URL=${TORCH_INDEX_URL:-}" \
     "$HERE"
-
-if [[ "$IMAGE" == localhost:* ]]; then
-    if ! docker ps --format '{{.Names}}' | grep -q "^${REGISTRY_CONTAINER}$"; then
-        docker rm -f "$REGISTRY_CONTAINER" >/dev/null 2>&1 || true
-        docker run -d --name "$REGISTRY_CONTAINER" \
-            -p "127.0.0.1:${REGISTRY_PORT}:5000" registry:2
-        sleep 3
-    fi
-fi
 
 docker push "$IMAGE"
 echo "Pushed $IMAGE"

@@ -33,13 +33,6 @@ jobs:
           pip install -e cc/
           pip install -e cli/
 
-      - name: Build the confidential benchmark image
-        # Out of band, as a real benchmark owner would: MedPerf pulls whatever
-        # image the benchmark names, so it has to already exist somewhere it can
-        # be pulled from. build.sh serves it from a registry on this machine
-        # until it is published to mlcommons.
-        working-directory: .
-        run: bash examples/cc/chestxray/implementation/build.sh
 
       - name: Set server environment vars
         working-directory: ./server

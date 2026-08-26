@@ -23,6 +23,15 @@ COPY ./grader_weights /project/benchmark/grader/weights
 
 COPY ./benchmark /project/benchmark
 
+# Redistributing Llama Guard in a pullable image is what the Llama 2 Community
+# Licence calls redistribution, which it permits on four conditions. The weights
+# directory already carries three of them -- the agreement itself (LICENSE.txt)
+# and the acceptable use policy (USE_POLICY.md) are copied in above, and
+# MedPerf is nowhere near the 700M-monthly-user threshold that section 2 sets.
+# This is the fourth: the attribution notice section 1.b.iii requires to travel
+# with every copy. After the weights layer, so it costs nothing to change.
+COPY ./NOTICE /project/benchmark/grader/weights/NOTICE
+
 # Which Llama Guard prompt format those weights expect. Baked in beside them,
 # so a run cannot pair one version's weights with another's format.
 ARG GRADER_LLAMA_GUARD_VERSION=2

@@ -150,5 +150,11 @@ end_to_end_script`.
   1,200-prompt demo set; a 12,000-prompt run wants batching, which is a
   `sut_loader/` swap (vLLM) rather than a change here.
 - **No resume.** A run that dies starts over.
-- **Llama Guard is gated.** Baking its weights into a pullable image is
-  redistribution — settle that before publishing one.
+- **Llama Guard 2 and 3 are gated.** Only version 1 can be baked into a public
+  image, so the published `mlcommons/medperf-safety-benchmark` grades with
+  version 1 while AILuminate scores with version 2. A run that wants to match
+  AILuminate builds its own image and keeps it in a registry of its own —
+  [RUNBOOK-GCP.md](RUNBOOK-GCP.md) step 2. Redistributing version 1 this way is
+  what the Llama 2 Community Licence permits and the image meets its four
+  conditions; see [NOTICE](NOTICE) and the comment beside the `COPY` in the
+  Dockerfile.

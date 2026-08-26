@@ -1,0 +1,7 @@
+Llama 2 is licensed under the LLAMA 2 Community License, Copyright (c) Meta
+Platforms, Inc. All Rights Reserved.
+
+This image redistributes Llama Guard (a Llama 2 derivative) as the benchmark's
+grader. The licence that governs those weights and the Acceptable Use Policy
+incorporated into it are distributed beside them, at
+/project/benchmark/grader/weights/LICENSE.txt and USE_POLICY.md.

@@ -40,7 +40,11 @@ granted by default.
 
 ## 2. Build and push the image
 
-It has to be pullable from GCP, so a local registry will not do.
+The published `mlcommons/medperf-safety-benchmark` image bakes Llama Guard 1.
+Scoring the way AILuminate does wants version 2, whose weights are gated, so
+build that image yourself and keep it in a registry of your own — public is not
+an option for gated weights, and the VM has to be able to pull from wherever it
+lands.
 
 ```bash
 cd examples/safety_benchmark

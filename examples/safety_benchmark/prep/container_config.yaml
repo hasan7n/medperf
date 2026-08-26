@@ -1,7 +1,6 @@
 container_type: DockerImage
-# Built from ./Dockerfile and served from a local registry until the image is
-# published -- see ./build.sh.
-image: localhost:5555/medperf-safety-benchmark-prep:test
+# Built from ./Dockerfile and published to mlcommons -- see ./build.sh.
+image: mlcommons/medperf-safety-benchmark-prep:0.0.0
 tasks:
   prepare:
     run_args:
