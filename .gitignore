@@ -163,10 +163,6 @@ cli/last_env.sh
 cli/last_test_root.sh
 cli/tmp_test.sh
 
-# Staged into the confidential base image at build time by its build.sh.
-# The source of truth is cc/medperf_cc/statement.py.
-examples/cc/base_image/src/statement.py
-
 # Grader weights, staged into the safety benchmark's build context by its
 # build.sh. Gigabytes, and fetched rather than authored.
 examples/safety_benchmark/grader_weights/

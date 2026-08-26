@@ -15,12 +15,11 @@
 set -eo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_IMAGE="${BASE_IMAGE:-mlcommons/medperf-confidential-benchmark-base:0.0.0}"
 IMAGE="${IMAGE:-mlcommons/medperf-safety-benchmark:0.0.0}"
 WEIGHTS="$HERE/grader_weights"
 
-# Before the base image build, which is slow and would otherwise happen only to
-# be thrown away.
+# Before the docker build, which is slow and would otherwise happen only to be
+# thrown away.
 if [[ -z "$(ls -A "$WEIGHTS" 2>/dev/null)" ]]; then
     echo "No grader weights in $WEIGHTS" >&2
     echo "Fetch them there first, e.g." >&2
@@ -28,8 +27,6 @@ if [[ -z "$(ls -A "$WEIGHTS" 2>/dev/null)" ]]; then
     exit 1
 fi
 echo "Grader weights: $(du -sh "$WEIGHTS" | cut -f1) in $WEIGHTS"
-
-IMAGE="$BASE_IMAGE" bash "$HERE/../cc/base_image/build.sh"
 
 docker build -t "$IMAGE" \
     --build-arg "GRADER_LLAMA_GUARD_VERSION=${GRADER_LLAMA_GUARD_VERSION:-2}" \
