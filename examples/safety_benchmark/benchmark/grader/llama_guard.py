@@ -8,8 +8,8 @@ there is, and none of that belongs inside a confidential VM.
 
 Both versions are here because both are upstream, and because Meta gates the
 Llama Guard 2 and 3 weights while a mirror of version 1 is open -- which is
-what a machine without a HuggingFace token can actually run. Version 2 is the
-default, since that is the one AILuminate scores with.
+what an anonymous fetch can actually reach. Which one this grader uses is
+`weights.py`, beside the weights it names.
 
 One deliberate departure: no logprobs. The original records the log probability
 of the safe/unsafe token as metadata and decides nothing with it. Plain

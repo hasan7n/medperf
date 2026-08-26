@@ -40,28 +40,29 @@ granted by default.
 
 ## 2. Build and push the image
 
-The published `mlcommons/medperf-safety-benchmark` image bakes Llama Guard 1.
-Scoring the way AILuminate does wants version 2, whose weights are gated, so
-build that image yourself and keep it in a registry of your own — public is not
-an option for gated weights, and the VM has to be able to pull from wherever it
-lands.
+The published `mlcommons/medperf-safety-benchmark` grades with Llama Guard 1,
+which is what an anonymous fetch can reach. Scoring the way AILuminate does
+wants version 2, whose weights are gated, so build that image yourself.
+
+Edit `benchmark/grader/weights.py` first: point `REPO` at
+`meta-llama/Meta-Llama-Guard-2-8B`, pin its `REVISION`, set `VERSION` to `"2"`,
+and replace `FILES` with that revision's filenames and sha256s. A gated
+repository will not serve an anonymous request, so the fetch needs a token —
+which is why this image belongs in a registry of your own rather than a public
+one.
 
 ```bash
 cd examples/safety_benchmark
 
-# Grader weights. Llama Guard 2 is gated -- accept the licence on HuggingFace
-# and `hf auth login` first.
-hf download meta-llama/Meta-Llama-Guard-2-8B --local-dir grader_weights
-
 IMAGE=us-docker.pkg.dev/PROJECT_ID/REPO/medperf-safety-benchmark:v1 \
-GRADER_LLAMA_GUARD_VERSION=2 \
   bash build.sh
 ```
 
 Then point `container_config.yaml` at that same image name.
 
-~26 GB. The VM's boot disk must be bigger than that — the admin script defaults
-to 500 GB.
+The image is small now, but the grader downloads ~16 GB into the VM on first
+start. The boot disk must have room for that — the admin script defaults to
+500 GB — and the VM needs egress to huggingface.co.
 
 ---
 

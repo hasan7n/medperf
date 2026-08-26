@@ -163,7 +163,6 @@ cli/last_env.sh
 cli/last_test_root.sh
 cli/tmp_test.sh
 
-# Grader weights, staged into the safety benchmark's build context by its
-# build.sh. Gigabytes, and fetched rather than authored.
-examples/safety_benchmark/grader_weights/
+# Fetched by the grader at run time, hash-pinned in benchmark/grader/weights.py.
+examples/safety_benchmark/benchmark/grader/weights/
 ruff.toml

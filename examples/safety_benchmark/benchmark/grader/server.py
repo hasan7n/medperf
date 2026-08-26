@@ -21,12 +21,14 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import llama_guard
+import weights
 
 
 class Grader:
-    def __init__(self, model_path: str, version: str):
-        self.data = llama_guard.VERSIONS[version]
-        self.uid = f"llama_guard_{version}"
+    def __init__(self):
+        model_path = weights.ensure()
+        self.data = llama_guard.VERSIONS[weights.VERSION]
+        self.uid = f"llama_guard_{weights.VERSION}"
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_path, torch_dtype="auto", device_map="auto"
@@ -85,17 +87,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", required=True)
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument(
-        "--llama-guard-version",
-        default="2",
-        choices=sorted(llama_guard.VERSIONS),
-        help="Which Llama Guard prompt format the weights expect.",
-    )
     args = parser.parse_args()
 
-    Handler.grader = Grader(args.model_path, args.llama_guard_version)
+    Handler.grader = Grader()
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 
 

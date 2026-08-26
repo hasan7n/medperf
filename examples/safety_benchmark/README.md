@@ -38,8 +38,9 @@ results record — so a grade says what actually produced it rather than what
 the benchmark assumed would.
 
 `sut_loader/run.sh` also takes `--model-path`, pointed at the decrypted model
-asset. The grader's weights ship in the image instead — what grades a
-benchmark is part of the benchmark.
+asset. The grader takes nothing: it fetches its own weights and checks them
+against hashes pinned in `grader/weights.py` — what grades a benchmark is part
+of the benchmark, and is not the operator's to choose.
 
 Swapping the public grader for MLCommons' ensemble means replacing
 `grader/` and keeping `POST /grade`. `main.py` never learns what is behind it.
@@ -50,18 +51,16 @@ business depending on a file outside itself.
 
 ## Which knob picks the grader
 
-Two knobs, plus the weights themselves:
-
-| | Where | When | What it decides |
-| --- | --- | --- | --- |
-| `grader_weights/` | the build context | build | The weights baked into the image. Put them there yourself; `build.sh` refuses to build without them |
-| `--model-path` (`GRADER_MODEL_PATH`) | `grader/run.sh` | run | Where the weights are on disk. Defaults to the ones in the image; override only when running outside the container |
-| `--llama-guard-version` (`GRADER_LLAMA_GUARD_VERSION`) | `grader/run.sh` | run | Which prompt format and taxonomy to use, and the name the results record |
+None. `grader/weights.py` names the repository, the revision, the sha256 of
+every file and the Llama Guard version those weights expect, and the grader
+fetches them on first start. Nothing is an argument or an environment variable,
+so an operator cannot point the run at another judge, and the expectation lives
+in the image whose digest the attestation policy pins.
 
 The version and the weights have to agree — version 1 with `Llama-Guard-7b`,
 version 2 with `LlamaGuard-2-8b`. Mismatch them and the replies parse as
-invalid rather than failing loudly. `build.sh` bakes the version in beside the
-weights so a run cannot disagree with the image it is running.
+invalid rather than failing loudly. They sit in one file for that reason.
+Changing the grader means editing that file and publishing a new image.
 
 Nothing inside `llama_guard.py` names a model. Upstream carried a HuggingFace
 id there to address Together AI; this grader loads from disk, so that field
@@ -121,19 +120,18 @@ Locally, without the container:
 
 ```bash
 cd benchmark
-GRADER_MODEL_PATH=/path/to/llama-guard python3 main.py \
+python3 main.py \
     --input-data ../demo/data \
     --input-labels ../demo/labels \
     --model-files /path/to/Qwen2.5-0.5B-Instruct \
     --output-results /tmp/results
 ```
 
-Building the image: fetch the grader first, then build. Meta gates Llama Guard
-2 and 3, so a machine without a HuggingFace token can reach version 1 only.
+The grader downloads its weights into `grader/weights/` on first run, ~13GB,
+and reuses them afterwards.
 
 ```bash
-hf download llamas-community/LlamaGuard-7b --local-dir grader_weights
-GRADER_LLAMA_GUARD_VERSION=1 bash build.sh
+bash build.sh
 ```
 
 Add `TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu` on a machine with no
@@ -150,11 +148,12 @@ end_to_end_script`.
   1,200-prompt demo set; a 12,000-prompt run wants batching, which is a
   `sut_loader/` swap (vLLM) rather than a change here.
 - **No resume.** A run that dies starts over.
-- **Llama Guard 2 and 3 are gated.** Only version 1 can be baked into a public
-  image, so the published `mlcommons/medperf-safety-benchmark` grades with
-  version 1 while AILuminate scores with version 2. A run that wants to match
-  AILuminate builds its own image and keeps it in a registry of its own —
-  [RUNBOOK-GCP.md](RUNBOOK-GCP.md) step 2. Redistributing version 1 this way is
-  what the Llama 2 Community Licence permits and the image meets its four
-  conditions; see [NOTICE](NOTICE) and the comment beside the `COPY` in the
-  Dockerfile.
+- **The enclave needs egress to fetch the grader.** The weights are no longer in
+  the image, so a run reaches huggingface.co on first start. What it fetches is
+  hash-pinned, so the network is trusted for availability only, not integrity.
+- **Llama Guard 2 and 3 are gated**, and an anonymous fetch cannot reach them,
+  so this grades with version 1 while AILuminate scores with version 2. Matching
+  AILuminate means an authenticated download and a `grader/weights.py` that
+  names version 2 — [RUNBOOK-GCP.md](RUNBOOK-GCP.md) step 2.
+- **The grader downloads ~13GB on every fresh container.** Nothing caches it
+  across enclave boots, which are ephemeral.
