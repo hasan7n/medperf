@@ -163,6 +163,4 @@ cli/last_env.sh
 cli/last_test_root.sh
 cli/tmp_test.sh
 
-# Fetched by the grader at run time, hash-pinned in benchmark/grader/weights.py.
-examples/safety_benchmark/benchmark/grader/weights/
 ruff.toml

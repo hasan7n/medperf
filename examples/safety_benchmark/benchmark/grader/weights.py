@@ -16,7 +16,7 @@ REVISION = "6efebd6fbad466480971c69d9a5a52f8a7dd87af"
 VERSION = "1"
 
 BASE_URL = f"https://huggingface.co/{REPO}/resolve/{REVISION}"
-DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weights")
+DIRECTORY = os.path.join(os.environ.get("TMP_FILES", "/tmp"), "grader_weights")
 
 FILES = {
     "config.json": "35ec40685a6669878e5d98335192437b4b401ced8aec7e9274b04d812c9b4654",
