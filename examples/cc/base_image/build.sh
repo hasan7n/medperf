@@ -10,7 +10,7 @@
 set -eo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE="mlcommons/medperf-confidential-benchmark-base:0.0.0"
+IMAGE="mlcommons/medperf-confidential-benchmark-base:0.0.1"
 CONTRACT="$HERE/../../../cc/medperf_cc/statement.py"
 IMAGE_COPY="$HERE/src/statement.py"
 
