@@ -143,7 +143,10 @@ echo "\n"
 echo "====================================="
 echo "Submit the safety benchmark"
 echo "====================================="
-print_eval medperf benchmark submit --name safety-bmk --description AILuminate-shaped-safety-benchmark --demo-url $SAFETY_DEMO_URL --data-preparation-container $PREP_UID --reference-model $REF_MODEL_UID --topology end_to_end_script --benchmark-script $SCRIPT_UID --operational
+# Compatibility tests are skipped: they run the script container on the local
+# medium, which MedPerf gives no network, and the grader fetches its weights.
+# The flag also skips them at both association steps below.
+print_eval medperf benchmark submit --name safety-bmk --description AILuminate-shaped-safety-benchmark --demo-url $SAFETY_DEMO_URL --data-preparation-container $PREP_UID --reference-model $REF_MODEL_UID --topology end_to_end_script --benchmark-script $SCRIPT_UID --skip-compatibility-tests --operational
 checkFailed "Benchmark submission failed"
 BMK_UID=$(medperf benchmark ls | grep safety-bmk | tail -n 1 | tr -s ' ' | cut -d ' ' -f 2)
 echo "BMK_UID=$BMK_UID" >> "$LAST_ENV_FILE"
