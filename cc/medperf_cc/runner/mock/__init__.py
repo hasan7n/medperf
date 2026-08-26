@@ -24,19 +24,12 @@ from medperf_cc.runner.base import WorkloadRunner
 ATTESTED_SCRIPT_ENV = "MEDPERF_MOCK_ATTESTED_SCRIPT"
 
 
-class MockRunnerConfig(MockConfig):
-    container_runtime: str = "docker"
-    # The workload writes as whoever the image says. Running it as this user
-    # keeps the results readable once they are back on the host.
-    run_as_current_user: bool = True
-
-
 class MockRunner(WorkloadRunner):
-    SETTINGS = MockRunnerConfig
+    SETTINGS = MockConfig
 
     def __init__(self, config: dict):
         super().__init__(config)
-        self.mock = MockRunnerConfig(**config)
+        self.mock = MockConfig(**config)
 
     @property
     def backend(self) -> str:
@@ -45,14 +38,13 @@ class MockRunner(WorkloadRunner):
     def verify(self) -> None:
         try:
             subprocess.run(
-                [self.mock.container_runtime, "version"],
+                ["docker", "version"],
                 capture_output=True,
                 check=True,
             )
         except (OSError, subprocess.CalledProcessError) as e:
             raise OperationError(
-                f"The mock runner needs {self.mock.container_runtime}"
-                f" to start a workload: {e}"
+                f"The mock runner needs docker to start a workload: {e}"
             )
         os.makedirs(self.mock.root, exist_ok=True)
 
@@ -63,7 +55,7 @@ class MockRunner(WorkloadRunner):
         self.__remove_container(name)
 
         command = [
-            self.mock.container_runtime,
+            "docker",
             "run",
             "--detach",
             "--name",
@@ -75,9 +67,11 @@ class MockRunner(WorkloadRunner):
             # gnupg wants somewhere to put its keyring
             "--env",
             "HOME=/tmp",
+            # The workload writes as whoever the image says. Running it as this
+            # user keeps the results readable once they are back on the host.
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
         ]
-        if self.mock.run_as_current_user:
-            command += ["--user", f"{os.getuid()}:{os.getgid()}"]
         for key, value in env.items():
             command += ["--env", f"{key}={value}"]
         command.append(image)
@@ -89,7 +83,7 @@ class MockRunner(WorkloadRunner):
     def wait(self, workload: WorkloadIdentity) -> Iterator[str]:
         name = self.__container_name(workload)
         logs = subprocess.Popen(
-            [self.mock.container_runtime, "logs", "--follow", name],
+            ["docker", "logs", "--follow", name],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -107,13 +101,13 @@ class MockRunner(WorkloadRunner):
 
     def __remove_container(self, name: str) -> None:
         subprocess.run(
-            [self.mock.container_runtime, "rm", "--force", name], capture_output=True
+            ["docker", "rm", "--force", name], capture_output=True
         )
 
     def __exit_code(self, name: str):
         inspected = subprocess.run(
             [
-                self.mock.container_runtime,
+                "docker",
                 "inspect",
                 "--format",
                 "{{.State.ExitCode}}",

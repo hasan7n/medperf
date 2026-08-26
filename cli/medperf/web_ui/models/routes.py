@@ -1,5 +1,6 @@
 import logging
 
+import anyio
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
@@ -334,7 +335,7 @@ def submit_result(
 
 
 @router.post("/edit_cc_config", response_class=JSONResponse)
-async def edit_cc_config(
+def edit_cc_config(
     request: Request,
     entity_id: int = Form(...),
     configure_cc: bool = Form(False),
@@ -344,7 +345,7 @@ async def edit_cc_config(
 ):
     # Read as posted rather than declared field by field: which settings there
     # are depends on the backends chosen, and only medperf_cc knows them.
-    form = await request.form()
+    form = anyio.from_thread.run(lambda: request.form())
     backends = asset_backends()
     args = {
         "storage": backend_settings_from_form(form, backends["storage"], "storage_"),

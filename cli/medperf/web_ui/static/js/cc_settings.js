@@ -9,9 +9,20 @@ function ccSectionPreferences(section) {
 }
 
 function ccFieldInputs(section) {
+    // Only the chosen backend's fields. Every backend's fields are rendered
+    // and all but one are hidden, so taking the whole container would judge
+    // the form on settings belonging to a provider nobody selected -- leaving
+    // the apply button disabled until every backend was filled in.
     var container = document.getElementById("edit-cc-" + section + "-fields");
     if (!container) return [];
-    return Array.prototype.slice.call(container.querySelectorAll("input[type='text']"));
+    var select = container.querySelector(".cc-backend-select");
+    var backend = select ? select.value : "";
+    if (!backend) return [];
+    var group = container.querySelector(
+        ".cc-backend-fields[data-backend='" + backend + "']"
+    );
+    if (!group) return [];
+    return Array.prototype.slice.call(group.querySelectorAll("input[type='text']"));
 }
 
 function ccFieldKey(input) {

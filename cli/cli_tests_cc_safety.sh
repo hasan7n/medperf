@@ -354,6 +354,10 @@ echo "====================================="
 echo "Run the benchmark ($CC_OPERATOR is operator)"
 echo "====================================="
 if [ "$CC_OPERATOR" = "modelowner" ]; then
+  # Nothing else in this test writes to $DIRECTORY -- unlike cli_tests_cc.sh,
+  # the model tarball comes from $SAFETY_MODEL_TARBALL -- so it may not exist,
+  # and tee failing here would fail the run after a workload that succeeded.
+  mkdir -p "$DIRECTORY"
   print_eval medperf model run_benchmark -b $BMK_UID -m $MODEL_UID 2>&1 | tee "$DIRECTORY/cc_safety_run.log"
 else
   print_eval medperf dataset run_benchmark -b $BMK_UID -d $DSET_UID
