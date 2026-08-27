@@ -31,7 +31,7 @@ class GCPStorageConfig:
     backend: str
     bucket: str
     object_path: str
-    workload_identity_pool: str
+    workload_identity_pool_provider: str
 
 
 @dataclass

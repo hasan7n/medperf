@@ -12,11 +12,13 @@ from medperf.entities.benchmark import Benchmark
 from medperf.entities.user import User
 from medperf.commands.model.associate import AssociateModel
 from medperf.commands.mlcube.utils import check_access_to_container
+from medperf.commands.cc.download_cc_results import DownloadCCResults
 from medperf.commands.cc.model_configure_for_cc import ModelConfigureForCC
 from medperf.commands.cc.model_update_cc_policy import ModelUpdateCCPolicy
 from medperf.commands.execution.model_benchmark_run import ModelBenchmarkRun
 from medperf.commands.execution.submit import ResultSubmission
 from medperf.commands.execution.utils import filter_latest_executions
+from medperf.cc.collector import collects_results
 import medperf.config as config
 from medperf.web_ui.common import (
     check_user_api,
@@ -66,7 +68,9 @@ def cc_run_status(model: Model, dataset: Dataset, operator: User) -> dict:
     return {"can_run": True, "reason": ""}
 
 
-def datasets_to_run(model: Model, benchmark_uids: List[int], operator: User) -> dict:
+def datasets_to_run(
+    model: Model, benchmarks: dict, benchmark_uids: List[int], operator: User
+) -> dict:
     """The datasets of each benchmark this model can be run against.
 
     The mirror of the dataset dashboard's list of models to run. Only reachable
@@ -80,12 +84,20 @@ def datasets_to_run(model: Model, benchmark_uids: List[int], operator: User) -> 
 
     per_benchmark = {}
     for benchmark_uid in benchmark_uids:
+        benchmark = benchmarks.get(benchmark_uid)
         datasets = [
             Dataset.get(data_uid)
             for data_uid in Benchmark.get_datasets_uids(benchmark_uid)
         ]
         for dataset in datasets:
             dataset.cc_run_status = cc_run_status(model, dataset, operator)
+            # Whether a run of this pair would seal its results for this user.
+            # A run they operated themselves has usually already left them the
+            # results inline; this is the other case, and the one where the
+            # inline collection was interrupted.
+            dataset.cc_can_collect = benchmark is not None and collects_results(
+                operator.id, benchmark, dataset, model
+            )
             dataset.result = __result_of(
                 user_executions, benchmark_uid, model.id, dataset.id
             )
@@ -201,7 +213,7 @@ def model_detail_ui(
     evaluating = request.app.state.ui_mode == request.app.state.EVALUATION_MODE
     if is_owner and model._requires_cc and evaluating:
         benchmark_datasets = datasets_to_run(
-            model, approved_benchmarks, get_medperf_user_object()
+            model, benchmarks, approved_benchmarks, get_medperf_user_object()
         )
 
     return templates.TemplateResponse(
@@ -292,6 +304,36 @@ def run(
         return_response["status"] = "failed"
         return_response["error"] = str(exp)
         notification_message = "Error during execution"
+        logger.exception(exp)
+
+    config.ui.end_task(return_response)
+    reset_state_task(request)
+    config.ui.add_notification(
+        message=notification_message,
+        return_response=return_response,
+        url=f"/models/ui/display/{entity_id}",
+    )
+    return return_response
+
+
+@router.post("/download_cc_results", response_class=JSONResponse)
+def download_cc_results(
+    request: Request,
+    entity_id: int = Form(...),
+    execution_id: int = Form(...),
+    current_user: bool = Depends(check_user_api),
+):
+    initialize_state_task(request, task_name="download_cc_results")
+    return_response = {"status": "", "error": "", "entity_id": entity_id}
+
+    try:
+        DownloadCCResults.run(execution_id)
+        return_response["status"] = "success"
+        notification_message = "Results successfully collected"
+    except Exception as exp:
+        return_response["status"] = "failed"
+        return_response["error"] = str(exp)
+        notification_message = "Failed to collect results"
         logger.exception(exp)
 
     config.ui.end_task(return_response)

@@ -12,6 +12,8 @@ import base64
 from dataclasses import dataclass
 from typing import Tuple
 
+from pydantic import ValidationError
+
 import medperf.config as medperf_config
 from medperf.account_management import get_medperf_user_object
 from medperf.cc.config import policy_of
@@ -24,7 +26,7 @@ from medperf.cc.parties import (
 from medperf.entities.benchmark import Benchmark
 from medperf.entities.dataset import Dataset
 from medperf.entities.model import Model
-from medperf.exceptions import ExecutionError
+from medperf.exceptions import ExecutionError, MedperfException
 from medperf.utils import get_string_hash
 from medperf_cc import Party
 
@@ -85,6 +87,29 @@ def collector_role(
         )
 
     return next(iter(candidates.items()))
+
+
+def collects_results(
+    user_id: int, benchmark: Benchmark, dataset: Dataset, model: Model
+) -> bool:
+    """Whether an execution of this pair would release its results to this user.
+
+    The cheap half of `resolve_collector`: who, without the key and the storage
+    that reaching them needs. Nothing here leaves the process -- it is
+    arithmetic over the two policies and the three owners -- so it is safe to
+    ask about every model on a page.
+
+    An answer of no is not a refusal, only a "not yours to collect". An asset
+    with no policy yet, two owners who have not agreed, and two owners who have
+    agreed on two different people are all the same "no" here; `collector_role`
+    is where those are told apart, and the collection itself is where they are
+    reported.
+    """
+    try:
+        collector_id, _ = collector_role(benchmark, dataset, model)
+    except (MedperfException, ValidationError):
+        return False
+    return collector_id == user_id
 
 
 def resolve_collector(

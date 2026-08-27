@@ -126,7 +126,7 @@ class GCPVault(AssetVault):
         }
 
     def __provider_name(self) -> str:
-        return f"{self.pool.full_name}/providers/{self.gcp.wip_provider}"
+        return self.pool.provider_name
 
     def __install_attribute_mapping(self) -> None:
         attribute_mapping = {

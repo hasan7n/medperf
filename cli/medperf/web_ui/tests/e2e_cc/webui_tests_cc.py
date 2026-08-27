@@ -15,9 +15,11 @@ It also records itself. The browser draws on a virtual display and ffmpeg
 records that display for the whole run, captioned with the step it is on --
 see `recorder.py`. A headless run is otherwise invisible.
 
-Only the `dataowner` operator scenario is covered, because collecting results
-as somebody other than the operator needs `download_cc_results`, which the web
-UI does not expose. The CLI test covers that half.
+Either operator scenario runs from here, chosen by `$CC_OPERATOR` exactly as in
+`cli/tests_setup.sh`. Both release results to the data owner, so `dataowner`
+collects its own results inline while `modelowner` does not collect at all --
+the data owner picks them up afterwards, by clicking, with the execution id the
+operator was told to hand over.
 """
 
 import argparse
@@ -94,8 +96,16 @@ CC_MOCK_ROOT = os.environ.get("CC_MOCK_ROOT", "/tmp/medperf_cc_mock")
 # Every mock backend takes a root and nothing else.
 CC_SETTINGS = {"root": CC_MOCK_ROOT}
 
-# Both owners release results to the data owner, who is also the operator here.
+# Both owners release results to the data owner. Who *operates* is a separate
+# question, and the one this switch answers: anybody may, and when it is not
+# the data owner the results are left sealed for them to collect afterwards.
 COLLECTORS = ["data_owner"]
+
+CC_OPERATOR = os.environ.get("CC_OPERATOR", "dataowner")
+if CC_OPERATOR == "modelowner":
+    OPERATOR_PROFILE, OPERATOR_EMAIL = MODEL_PROFILE, MODEL_OWNER
+else:
+    OPERATOR_PROFILE, OPERATOR_EMAIL = DATA_PROFILE, DATA_OWNER
 
 TASK_TIMEOUT = int(os.environ.get("WEBUI_TASK_TIMEOUT", "1800"))
 SHORT_WAIT = 30
@@ -178,7 +188,7 @@ def displayed(page, locator):
         return False
 
 
-def wait_for_task(page, timeout=TASK_TIMEOUT, answer=True):
+def wait_for_task(page, timeout=TASK_TIMEOUT, answer=True, prompt="Confirmation Prompt"):
     """Confirms a prompted action and waits for the task to report back.
 
     Two different questions can appear, and conflating them is what makes this
@@ -188,19 +198,24 @@ def wait_for_task(page, timeout=TASK_TIMEOUT, answer=True):
     show, such as a compatibility test's metrics. A task that is waiting on the
     second looks exactly like a task that is simply slow, so it has to be
     answered rather than waited out.
+
+    `prompt` is the title the first one is expected to carry. Starting a
+    confidential run asks its own question -- it puts a machine up in the
+    operator's cloud account -- so that one is not the generic modal.
     """
     modal = page.find(page.PAGE_MODAL)
     WebDriverWait(page.driver, SHORT_WAIT).until(EC.visibility_of(modal))
 
     title = page.get_text(page.PAGE_MODAL_TITLE)
-    if title != "Confirmation Prompt":
-        raise StepFailed(f"expected a confirmation prompt, got {title!r}")
+    if title != prompt:
+        raise StepFailed(f"expected {prompt!r}, got {title!r}")
 
     page.confirm_run_task()
 
     deadline = time.time() + timeout
     while time.time() < deadline:
         REC.tick()
+        page.follow_logs()
         if displayed(page, page.PAGE_MODAL):
             break
         if displayed(page, page.PROMPT_CONTAINER):
@@ -599,25 +614,83 @@ def run_workflow(runner):
         lambda: configure_asset_cc(runner, state["dataset_url"]),
     )
 
-    def cc_roles():
+    def cc_role(section):
         page = SettingsCCPage(runner.driver)
-        for section in ("collector", "operator"):
-            page.open(runner.url("/settings"))
-            page.configure(section, CC_BACKEND, CC_SETTINGS)
-            wait_for_task(page)
-            dismiss_task_modal(page)
-
-    runner.step("Set up the CC collector and operator", cc_roles)
-
-    # -------------------------------------------------------------- the run
-    def run_benchmark():
-        page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
-        page.open(runner.url(state["dataset_url"]))
-        page.run_execution()
+        page.open(runner.url("/settings"))
+        page.configure(section, CC_BACKEND, CC_SETTINGS)
         wait_for_task(page)
         dismiss_task_modal(page)
 
-    runner.step("Run the benchmark (dataowner is operator)", run_benchmark)
+    # Receiving results and running the workload are two roles, and this is
+    # where they come apart: the data owner is always the collector because
+    # both policies say so, while the operator is whoever $CC_OPERATOR names.
+    runner.step(
+        "Set up where the data owner receives results",
+        lambda: cc_role("collector"),
+    )
+    runner.step(
+        f"Activate {OPERATOR_PROFILE} profile to operate",
+        lambda: as_user(runner, OPERATOR_PROFILE, OPERATOR_EMAIL),
+    )
+    runner.step(
+        "Set up the machine the operator runs the workload on",
+        lambda: cc_role("operator"),
+    )
+
+    # -------------------------------------------------------------- the run
+    def run_benchmark():
+        if CC_OPERATOR == "modelowner":
+            page = ContainerDetailsPage(runner.driver, MODEL_NAME, BMK_NAME)
+            page.open(runner.url(state["model_url"]))
+            # A model owner is warned what a run costs them before it starts,
+            # so their confirmation is not the generic one.
+            prompt = "Confirm confidential run"
+        else:
+            page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
+            page.open(runner.url(state["dataset_url"]))
+            prompt = "Confirmation Prompt"
+        page.run_execution()
+        wait_for_task(page, prompt=prompt)
+        dismiss_task_modal(page)
+
+    runner.step(f"Run the benchmark ({CC_OPERATOR} is operator)", run_benchmark)
+
+    # ------------------------------------------ collecting somebody else's run
+    if CC_OPERATOR == "modelowner":
+        def read_execution_id():
+            """What the operator has to hand over, read off their own page.
+
+            The results are the data owner's and the execution is the model
+            owner's, so neither can see the whole of it: nothing lists this
+            execution for the collector, and the operator cannot open what it
+            produced. The number is the only thing that crosses.
+            """
+            page = ContainerDetailsPage(runner.driver, MODEL_NAME, BMK_NAME)
+            page.open(runner.url(state["model_url"]))
+            execution_ids = page.get_collector_execution_ids()
+            if not execution_ids:
+                raise StepFailed("the operator was not told which execution to hand over")
+            state["execution_id"] = execution_ids[-1]
+            print(f"    execution to collect: {state['execution_id']}", flush=True)
+
+        runner.step("Read the execution the operator hands over", read_execution_id)
+
+        runner.step(
+            "Activate dataowner profile to collect",
+            lambda: as_user(runner, DATA_PROFILE, DATA_OWNER),
+        )
+
+        def collect_results():
+            page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
+            page.open(runner.url(state["dataset_url"]))
+            forms = page.get_collect_forms()
+            if not forms:
+                raise StepFailed("the dataset page offers nothing to collect")
+            page.collect_results(forms[0], state["execution_id"])
+            wait_for_task(page)
+            dismiss_task_modal(page)
+
+        runner.step("Collect the results as the data owner", collect_results)
 
     def submit_result():
         page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)

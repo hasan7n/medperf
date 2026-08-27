@@ -10,6 +10,13 @@
 #   sh cli/webui_tests_cc.sh              records itself, port 8200
 #   sh cli/webui_tests_cc.sh -p 8300      another port
 #   sh cli/webui_tests_cc.sh -H           watch it live instead of recording
+#   sh cli/webui_tests_cc.sh -o modelowner   the model owner runs the workload
+#
+# The operator is whoever runs the confidential workload, and it is not
+# necessarily whoever the results are for -- both policies here release them to
+# the data owner. With `-o modelowner` the operator never sees the results and
+# the data owner collects them afterwards, which is the half `download_cc_results`
+# exists for. Same switch, same name, as `CC_OPERATOR` in cli/tests_setup.sh.
 #
 # By default the browser draws on a virtual display and ffmpeg records that
 # display for the whole run, leaving one mp4 in the artifacts directory.
@@ -22,13 +29,16 @@ set -e
 
 PORT=8200
 HEADED=""
-while getopts p:H flag; do
+CC_OPERATOR="${CC_OPERATOR:-dataowner}"
+while getopts p:Ho: flag; do
     case "${flag}" in
         p) PORT=${OPTARG} ;;
         H) HEADED="--headed" ;;
-        *) echo "usage: $0 [-p port] [-H]" >&2; exit 1 ;;
+        o) CC_OPERATOR=${OPTARG} ;;
+        *) echo "usage: $0 [-p port] [-H] [-o dataowner|modelowner]" >&2; exit 1 ;;
     esac
 done
+export CC_OPERATOR
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
@@ -49,6 +59,7 @@ export WEBUI_ARTIFACTS="$TEST_ROOT/artifacts"
 mkdir -p "$MEDPERF_CONFIG_STORAGE" "$MEDPERF_STORAGE" "$ASSETS" "$WEBUI_ARTIFACTS"
 
 echo "Test root:   $TEST_ROOT"
+echo "Operator:    $CC_OPERATOR"
 echo "Web UI:      http://127.0.0.1:$PORT"
 echo "Web UI log:  $WEBUI_LOG"
 echo "Artifacts:   $WEBUI_ARTIFACTS"

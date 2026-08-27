@@ -190,6 +190,17 @@
 							<button type="submit" id="run-{{ assoc }}-{{ dataset.id }}" class="btn btn-sm btn-primary btn-compact mx-2 cursor-pointer disabled:cursor-not-allowed" {% if task_running or not dataset.cc_run_status["can_run"] %}disabled{% endif %}><i class="fas fa-play mr-2"></i>{% if dataset.result and dataset.result.ran %} Rerun {% else %} Run {% endif %}</button>
 						</form>
 					</div>
+					{% if dataset.cc_can_collect and not results_exist %}
+					<div class="mx-2">
+						<form id="collect-{{ assoc }}-{{ dataset.id }}-form" action="/models/download_cc_results" method="post" class="model-action-form flex items-center gap-2" data-panel-title="Collecting results" data-confirm-message="collect the results of this execution?">
+							<input type="hidden" name="entity_id" value="{{ entity.id }}">
+							<input type="hidden" name="benchmark_id" value="{{ assoc }}">
+							<input type="hidden" name="data_id" value="{{ dataset.id }}">
+							<input type="number" name="execution_id" id="collect-execution-{{ assoc }}-{{ dataset.id }}" class="w-32 px-3 py-1.5 rounded-lg border-2 border-border-strong dark:border-border dark:bg-card-muted dark:text-ink focus:outline-none focus:border-brand-accent" placeholder="Execution ID" min="1" required value="{% if dataset.result %}{{ dataset.result.id }}{% endif %}" title="The execution whose results to collect. Whoever ran it was told this number when their run finished." {% if task_running %}disabled{% endif %}>
+							<button type="submit" id="collect-{{ assoc }}-{{ dataset.id }}" class="btn btn-sm btn-primary btn-compact cursor-pointer disabled:cursor-not-allowed" {% if task_running %}disabled{% endif %}><i class="fas fa-download mr-2"></i>Collect results</button>
+						</form>
+					</div>
+					{% endif %}
 					{% if results_exist %}
 					<div class="mx-2">
 						<button
@@ -214,9 +225,9 @@
 						</form>
 					</div>
 					{% endif %}
-					{% elif dataset.result and dataset.result.ran %}
+					{% elif dataset.result and dataset.result.ran and not dataset.cc_can_collect %}
 					<div class="mx-2">
-						<span class="inline-block px-3 py-1 rounded-lg bg-info-muted text-info-fg font-semibold cursor-help" title="The results were encrypted for whoever the policies release them to. If that is not you, only they can open them.">Ran &mdash; results are the collector's</span>
+						<span class="inline-block px-3 py-1 rounded-lg bg-info-muted text-info-fg font-semibold cursor-help" data-testid="collector-execution" data-execution-id="{{ dataset.result.id }}" title="The results were encrypted for whoever the policies release them to. Only they can open them, and this is the execution they have to ask for.">Ran &mdash; execution {{ dataset.result.id }} is the collector's to fetch</span>
 					</div>
 					{% endif %}
 				</div>
@@ -269,6 +280,12 @@
         } else {
             resumeRunningTask("#run-{{ form_data.get('benchmark_id') }}-{{ form_data.get('data_ids') }}-form");
         }
+    });
+</script>
+{% elif request.app.state.task.name == "download_cc_results" %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        resumeRunningTask("#collect-{{ form_data.get('benchmark_id') }}-{{ form_data.get('data_id') }}-form");
     });
 </script>
 {% elif request.app.state.task.name == "submit_result" %}

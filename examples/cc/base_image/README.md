@@ -51,7 +51,7 @@ operator can read.
 ```json
 {
     "storage": {"backend": "gcp", "bucket": "...", "object_path": "...",
-                "workload_identity_pool": "..."},
+                "workload_identity_pool_provider": "..."},
     "vault": {"backend": "gcp", "bucket": "...", "wrapped_key_path": "...",
               "key_name": "...", "workload_identity_pool_provider": "..."}
 }

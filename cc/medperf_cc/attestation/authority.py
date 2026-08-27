@@ -9,7 +9,9 @@ fetches its own trust anchor while verifying is not verifying anything. Whoever
 needs one asks for it here, once, and hands it over.
 """
 
+import json
 from dataclasses import dataclass
+from typing import Optional
 
 import requests
 
@@ -31,9 +33,49 @@ class Authority:
     pki_root_url: str
 
     def fetch_pki_root(self, timeout: int) -> bytes:
-        response = requests.get(self.pki_root_url, timeout=timeout)
+        """The root certificate, in PEM, however this authority publishes it.
+
+        Google's well-known document used to be the PEM itself and is now a
+        JSON pointer to it -- `{"root_ca_uri": "..."}`. Both shapes are
+        accepted, and only one redirection is followed: a document that points
+        at another document that points on is not a certificate chain, it is a
+        loop somebody else controls.
+        """
+        body = self._get(self.pki_root_url, timeout)
+        pointed_at = self._root_ca_uri(body)
+        if pointed_at is None:
+            return body
+        return self._get(pointed_at, timeout)
+
+    @staticmethod
+    def _get(url: str, timeout: int) -> bytes:
+        response = requests.get(url, timeout=timeout)
         response.raise_for_status()
         return response.content
+
+    @staticmethod
+    def _root_ca_uri(body: bytes) -> Optional[str]:
+        """Where a pointer document points, or None if this is the PEM itself."""
+        if body.lstrip().startswith(b"-----BEGIN"):
+            return None
+        try:
+            pointer = json.loads(body)
+        except ValueError:
+            return None
+        uri = pointer.get("root_ca_uri") if isinstance(pointer, dict) else None
+        if not isinstance(uri, str) or not uri:
+            return None
+        # A trust anchor is only worth what the transport carrying it is worth.
+        # Forging the pointer already takes control of the authority's own
+        # endpoint, but a pointer to plaintext would hand the certificate to
+        # anybody on the path instead, and that is a cheaper attack than the
+        # one it takes to write the pointer.
+        if not uri.startswith("https://"):
+            raise ValueError(
+                f"{GOOGLE_PKI_ROOT_URL} points at a root certificate over"
+                f" something other than https: {uri}"
+            )
+        return uri
 
 
 AUTHORITIES = {

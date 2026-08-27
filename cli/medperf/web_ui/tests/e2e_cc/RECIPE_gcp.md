@@ -170,7 +170,7 @@ import json; print(json.dumps({'asset': asset_backends(), 'runner': runner_backe
 
 The `gcp` entries must be exactly:
 
-- storage: `bucket`, `project_number`, `wip`
+- storage: `bucket`, `project_number`, `wip`, `wip_provider`
 - vault: `project_id`, `project_number`, `bucket`, `keyring_name`, `key_name`,
   `key_location`, `wip`, `wip_provider`
 - runner: `project_id`, `service_account_name`, `vm_name`, `vm_zone`,
@@ -401,12 +401,19 @@ for role in ("model", "data"):
                 f"{sa}:generateAccessToken",
             "source_credentials": master,
             "delegates": [],
-            "quota_project_id": project,
         }, f)
     os.chmod(path, 0o600)
     print(path)
 PY
 ```
+
+No `quota_project_id` in that file, on purpose. It would put an
+`x-goog-user-project` header on every call, and billing quota to a project needs
+`serviceusage.services.use` *on that project* — which these two accounts do not
+have and should not: step 3 grants them their own bucket, key and pool and
+nothing wider. With the field in, every call 403s with "does not have
+serviceusage.services.use access". Step 5's `GOOGLE_CLOUD_PROJECT` is what tells
+the storage client which project to use, and it is a separate mechanism.
 
 Check each one actually becomes that account:
 

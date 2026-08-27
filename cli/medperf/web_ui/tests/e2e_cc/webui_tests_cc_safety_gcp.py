@@ -1,32 +1,31 @@
-"""The confidential-computing workflow on Google Cloud, through the web UI.
+"""The safety benchmark, run confidentially on Google Cloud, through the web UI.
 
-The cloud counterpart of `webui_tests_cc.py`: the same three parties, the same
-chest X-ray benchmark, the same steps clicked in the same order -- with real
-buckets, a real KMS key, a real workload identity pool and a real Confidential
-Space VM in place of a directory on this machine.
+The safety counterpart of `webui_tests_cc_gcp.py`: the same three parties, the
+same three web UIs, the same recorder -- with the AILuminate-shaped safety
+benchmark in place of the chest X-ray one, and with the two halves of a
+confidential run held by different people.
 
-One thing the cloud forces to be different. The mock run is three profiles in
-one web UI, because activating a profile does not change who the process is to
-a cloud provider. A GCP backend authenticates as whatever
-`GOOGLE_APPLICATION_CREDENTIALS` names, once per process, so here each party
-gets a web UI of its own: its own configuration storage, its own credentials,
-its own port. Switching party is switching port rather than activating a
-profile -- which is also what three separate machines look like.
+Two things differ from the chest X-ray run, and both are the point of this one:
 
-Two consequences worth knowing:
+- **The model owner operates and the data owner collects.** Both asset policies
+  release results to `data_owner` only, and the model owner is the party who
+  starts the VM. The operator therefore cannot read what their own machine
+  produced: their run ends with the execution id and an instruction to hand it
+  over. The data owner types that id into **Collect results** on their dataset
+  page and submits what comes back. `webui_tests_cc.py` drives the same shape
+  against the mock backends under `CC_OPERATOR=modelowner`.
+- **Compatibility tests are skipped at benchmark registration.** The script
+  container's grader fetches its weights from HuggingFace and MedPerf gives a
+  local-medium run no network, so a compatibility test cannot pass. The flag is
+  recorded on the benchmark, so it also skips the test at both association
+  steps.
 
-- Cookies ignore ports, so the three web UIs on `127.0.0.1` share one
-  `auth_token` cookie while each has a security token of its own. Every switch
-  therefore unlocks the UI it is switching to.
-- Only the `dataowner` operator scenario is covered here. The web UI does
-  expose `download_cc_results`, and the mock run drives both scenarios through
-  it; what this run is for is the cloud, and a second Confidential Space VM
-  proves nothing about it that the first one has not.
+`cli/webui_tests_cc_safety_gcp.sh` builds all of this and describes the parties
+to this script in the JSON file named by `$WEBUI_PARTIES`. Like the other runs,
+it records itself onto a virtual display -- see `recorder.py`.
 
-`cli/webui_tests_cc_gcp.sh` builds all of this and describes the parties to this
-script in the JSON file named by `$WEBUI_PARTIES`. Like the mock run, it records
-itself: the browser draws on a virtual display and ffmpeg records that display
-from the first click to the last -- see `recorder.py`.
+Everything around a run -- the cloud resources, the server, what to check
+afterwards -- is `RECIPE_gcp_safety.md`.
 """
 
 import argparse
@@ -68,41 +67,52 @@ BENCHMARK = "benchmark"
 MODEL = "model"
 DATA = "data"
 
-PREP_NAME = "cc-prep"
-SCRIPT_NAME = "cc-script"
-REF_MODEL_NAME = "cc-cnn-weights"
-MODEL_NAME = "cc-mobilenet-weights"
-BMK_NAME = "cc-bmk"
-DATASET_NAME = "cc_dataset_a"
+PREP_NAME = "safety-prep"
+SCRIPT_NAME = "safety-script"
+REF_MODEL_NAME = "safety-reference-model"
+MODEL_NAME = "safety-model-under-test"
+BMK_NAME = "safety-bmk"
+DATASET_NAME = "safety_prompts"
 
-CHESTXRAY = os.path.join(REPO, "examples", "chestxray_tutorial")
-CC_CHESTXRAY = os.path.join(REPO, "examples", "cc", "chestxray")
+SAFETY = os.path.join(REPO, "examples", "safety_benchmark")
 
 PREP = ContainerInput(
     name=PREP_NAME,
-    config=os.path.join(CHESTXRAY, "data_preparator", "container_config.yaml"),
-    parameters=os.path.join(CHESTXRAY, "data_preparator", "workspace", "parameters.yaml"),
+    config=os.path.join(SAFETY, "prep", "container_config.yaml"),
+    # The test-sized prompt set: twelve prompts, one per hazard.
+    parameters=os.path.join(SAFETY, "prep", "workspace", "parameters_test.yaml"),
 )
 SCRIPT = ContainerInput(
     name=SCRIPT_NAME,
-    config=os.path.join(CC_CHESTXRAY, "implementation", "container_config.yaml"),
+    config=os.path.join(SAFETY, "container_config.yaml"),
 )
 
-DEMO_URL = "https://storage.googleapis.com/medperf-storage/chestxray_tutorial/demo_data.tar.gz"
-CNN_URL = "https://storage.googleapis.com/medperf-storage/chestxray_tutorial/cnn_weights.tar.gz"
+# Both are served by the shell script from this machine. The reference model
+# has to be a URL: it runs on the local medium during association, and a
+# local-path asset is what makes an asset require CC.
+MODEL_URL = os.environ.get("SAFETY_MODEL_URL", "")
+DEMO_URL = os.environ.get("SAFETY_DEMO_URL", "")
 
-# `mock` is available here for one reason: it smoke tests what this script adds
-# over the mock run -- three web UIs, three sets of credentials, a party switch
-# that has to unlock the UI it switches to -- without a cloud account. It
-# protects nothing, and a mock run proves nothing about GCP.
+# `mock` smoke tests everything this script does except the cloud: three web
+# UIs, three sets of credentials, the party switch, the operator/collector
+# split. It proves nothing about GCP.
 CC_BACKEND = os.environ.get("MPCC_BACKEND", "gcp")
 
-# Both owners release results to the data owner, who is also the operator here.
+# Both owners release results to the data owner -- and only to them. Naming two
+# would be refused: results are encrypted for one key.
 COLLECTORS = ["data_owner"]
 
-# A confidential VM has to boot, pull the workload image and run it, so the
-# ceiling here is a cloud's, not a container's.
-TASK_TIMEOUT = int(os.environ.get("WEBUI_TASK_TIMEOUT", "5400"))
+# The model owner operates. The data owner collects. Neither can do the other's
+# half, and that is what this run exists to show.
+OPERATOR = MODEL
+COLLECTOR = DATA
+
+# A confidential VM has to boot, pull the workload image and run it, and this
+# workload answers twelve prompts with a language model and then grades the
+# answers with a second one. On CPU that is a long way past the chest X-ray
+# run's ninety minutes, and nobody has measured it, so the ceiling here is
+# three hours. Report what it actually took.
+TASK_TIMEOUT = int(os.environ.get("WEBUI_TASK_TIMEOUT", "10800"))
 SHORT_WAIT = 30
 
 REC = NullRecorder()
@@ -199,20 +209,25 @@ def displayed(page, locator):
         return False
 
 
-def wait_for_task(page, timeout=TASK_TIMEOUT, answer=True):
+def wait_for_task(page, timeout=TASK_TIMEOUT, answer=True, prompt="Confirmation Prompt"):
     """Confirms a prompted action and waits for the task to report back.
 
     Two different questions can appear, and conflating them is what makes this
     hang -- see the mock script for the whole of it. The second one is the web
     UI's equivalent of the CLI's `-y`, and has to be answered rather than
     waited out.
+
+    `prompt` is the title the first one is expected to carry. Starting a
+    confidential run from the model page asks its own question -- it puts a
+    machine up in the operator's cloud account, and warns them they may never
+    see what it produces -- so that one is not the generic modal.
     """
     modal = page.find(page.PAGE_MODAL)
     WebDriverWait(page.driver, SHORT_WAIT).until(EC.visibility_of(modal))
 
     title = page.get_text(page.PAGE_MODAL_TITLE)
-    if title != "Confirmation Prompt":
-        raise StepFailed(f"expected a confirmation prompt, got {title!r}")
+    if title != prompt:
+        raise StepFailed(f"expected {prompt!r}, got {title!r}")
 
     page.confirm_run_task()
 
@@ -377,11 +392,11 @@ def open_display(args, parser):
 def cc_settings():
     """What each party puts in the confidential-computing forms.
 
-    Every value is a cloud resource somebody created before this ran; the
-    shell script passes them in, and nothing here invents one. Two asset
-    owners means two of everything: separate buckets, separate keys and
-    separate workload identity pools, so that neither can read the other's
-    asset and neither's policy sync overwrites the other's provider.
+    Every value is a cloud resource somebody created before this ran; the shell
+    script passes them in, and nothing here invents one. Two asset owners means
+    two of everything: separate buckets, separate keys and separate workload
+    identity pools, so that neither can read the other's asset and neither's
+    policy sync overwrites the other's provider.
     """
     env = os.environ
 
@@ -443,7 +458,9 @@ def main():
     )
     parser.add_argument(
         "--artifacts",
-        default=os.environ.get("WEBUI_ARTIFACTS", "/tmp/medperf_webui_cc_gcp_artifacts"),
+        default=os.environ.get(
+            "WEBUI_ARTIFACTS", "/tmp/medperf_webui_cc_safety_gcp_artifacts"
+        ),
     )
     parser.add_argument("--no-record", action="store_true", help="skip the video")
     parser.add_argument("--fps", type=int, default=int(os.environ.get("WEBUI_FPS", "10")))
@@ -451,6 +468,9 @@ def main():
 
     if not args.parties:
         parser.error("--parties, or $WEBUI_PARTIES, is required")
+    for name, value in (("SAFETY_MODEL_URL", MODEL_URL), ("SAFETY_DEMO_URL", DEMO_URL)):
+        if not value:
+            parser.error(f"${name} is required -- see RECIPE_gcp_safety.md step 5")
 
     parties = load_parties(args.parties)
     settings = cc_settings()
@@ -491,7 +511,7 @@ def run_workflow(runner, parties, settings):
     # ------------------------------------------------------- benchmark owner
     runner.step("Act as the benchmark owner", lambda: switch(BENCHMARK))
     runner.step(
-        "Submit data preparation container",
+        "Submit prompt-set preparation container",
         lambda: register_container(runner, PREP),
     )
     runner.step(
@@ -500,7 +520,7 @@ def run_workflow(runner, parties, settings):
     )
     runner.step(
         "Submit the reference model asset",
-        lambda: register_asset(runner, REF_MODEL_NAME, url=CNN_URL),
+        lambda: register_asset(runner, REF_MODEL_NAME, url=MODEL_URL),
     )
 
     def submit_benchmark():
@@ -508,19 +528,23 @@ def run_workflow(runner, parties, settings):
         page.open(runner.url("/benchmarks/register/ui"))
         page.register_benchmark(
             name=BMK_NAME,
-            description="CC-benchmark-test",
+            description="AILuminate-shaped-safety-benchmark",
             reference_dataset=DEMO_URL,
             data_preparator=PREP_NAME,
             reference_model=REF_MODEL_NAME,
             metrics=None,
             benchmark_script=SCRIPT_NAME,
             topology="end_to_end_script",
+            # Not optional: the grader fetches its weights from HuggingFace and
+            # a local-medium run has no network. Recorded on the benchmark, so
+            # it skips the test at both association steps too.
+            skip_compatibility_tests=True,
         )
         wait_for_task(page)
         dismiss_task_modal(page)
         state["bmk_url"] = captured_detail_url(runner, "/benchmarks/ui/display/")
 
-    runner.step("Submit the benchmark", submit_benchmark)
+    runner.step("Submit the safety benchmark", submit_benchmark)
 
     # ----------------------------------------------------------- model owner
     runner.step("Act as the model owner", lambda: switch(MODEL))
@@ -548,11 +572,13 @@ def run_workflow(runner, parties, settings):
     def submit_dataset():
         page = RegDatasetPage(runner.driver)
         page.open(runner.url("/datasets/register/ui"))
+        # AILuminate ships prompts and their hazard labels in one CSV, so both
+        # paths point at the same folder. The prep container splits them.
         page.register_dataset(
             benchmark=BMK_NAME,
             name=DATASET_NAME,
-            description="cc-gcp-dataset-a",
-            location="gcp-location-a",
+            description="AILuminate-shaped-prompt-set",
+            location="gcp-safety-location",
             data_path=os.environ["CC_DATA_PATH"],
             labels_path=os.environ["CC_LABELS_PATH"],
         )
@@ -560,7 +586,7 @@ def run_workflow(runner, parties, settings):
         dismiss_task_modal(page)
         state["dataset_url"] = captured_detail_url(runner, "/datasets/ui/display/")
 
-    runner.step("Submit the dataset", submit_dataset)
+    runner.step("Submit the prompt set as a dataset", submit_dataset)
 
     def dataset_step(action):
         page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
@@ -569,10 +595,10 @@ def run_workflow(runner, parties, settings):
         wait_for_task(page)
         dismiss_task_modal(page)
 
-    runner.step("Prepare the dataset", lambda: dataset_step("prepare_dataset"))
-    runner.step("Mark the dataset operational", lambda: dataset_step("set_operational"))
+    runner.step("Prepare the prompt set", lambda: dataset_step("prepare_dataset"))
+    runner.step("Mark the prompt set operational", lambda: dataset_step("set_operational"))
     runner.step(
-        "Associate the dataset with the benchmark",
+        "Associate the prompt set with the benchmark",
         lambda: dataset_step("request_association"),
     )
 
@@ -603,25 +629,79 @@ def run_workflow(runner, parties, settings):
 
     runner.step("Act as the data owner for CC", lambda: switch(DATA))
     runner.step(
-        "Publish the dataset to the data owner's bucket and key",
+        "Publish the prompt set to the data owner's bucket and key",
         lambda: configure_asset_cc(runner, state["dataset_url"], *settings["data"]),
     )
 
-    def cc_roles():
+    def cc_role(section):
         page = SettingsCCPage(runner.driver)
-        for section in ("collector", "operator"):
-            page.open(runner.url("/settings"))
-            page.configure(section, CC_BACKEND, settings[section])
-            wait_for_task(page)
-            dismiss_task_modal(page)
+        page.open(runner.url("/settings"))
+        page.configure(section, CC_BACKEND, settings[section])
+        wait_for_task(page)
+        dismiss_task_modal(page)
 
-    runner.step("Set up the result bucket and the confidential VM", cc_roles)
+    # Receiving results and running the workload are two roles, and here they
+    # are held by two different people: the data owner is the collector because
+    # both policies say so, and the model owner is the operator because they
+    # are the one who spends the machine.
+    runner.step(
+        "Set up where the data owner receives results",
+        lambda: cc_role("collector"),
+    )
+    runner.step("Act as the model owner to operate", lambda: switch(OPERATOR))
+    runner.step(
+        "Set up the confidential VM the model owner runs on",
+        lambda: cc_role("operator"),
+    )
 
     # -------------------------------------------------------------- the run
+    def run_benchmark():
+        page = ContainerDetailsPage(runner.driver, MODEL_NAME, BMK_NAME)
+        page.open(runner.url(state["model_url"]))
+        page.run_execution()
+        # A model owner is warned what a run costs them, and that they may not
+        # be the one who gets to read it, so their confirmation is not the
+        # generic one.
+        wait_for_task(page, prompt="Confirm confidential run")
+        dismiss_task_modal(page)
+
     runner.step(
-        "Run the benchmark in the confidential VM (dataowner is operator)",
-        lambda: dataset_step("run_execution"),
+        "Run the safety benchmark in the confidential VM (modelowner is operator)",
+        run_benchmark,
     )
+
+    # ------------------------------------------ collecting somebody else's run
+    def read_execution_id():
+        """What the operator has to hand over, read off their own page.
+
+        The results are the data owner's and the execution is the model
+        owner's, so neither can see the whole of it: nothing lists this
+        execution for the collector, and the operator cannot open what it
+        produced. The number is the only thing that crosses.
+        """
+        page = ContainerDetailsPage(runner.driver, MODEL_NAME, BMK_NAME)
+        page.open(runner.url(state["model_url"]))
+        execution_ids = page.get_collector_execution_ids()
+        if not execution_ids:
+            raise StepFailed("the operator was not told which execution to hand over")
+        state["execution_id"] = execution_ids[-1]
+        print(f"    execution to collect: {state['execution_id']}", flush=True)
+
+    runner.step("Read the execution the operator hands over", read_execution_id)
+
+    runner.step("Act as the data owner to collect", lambda: switch(COLLECTOR))
+
+    def collect_results():
+        page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
+        page.open(runner.url(state["dataset_url"]))
+        forms = page.get_collect_forms()
+        if not forms:
+            raise StepFailed("the dataset page offers nothing to collect")
+        page.collect_results(forms[0], state["execution_id"])
+        wait_for_task(page)
+        dismiss_task_modal(page)
+
+    runner.step("Collect the results as the data owner", collect_results)
 
     def submit_result():
         page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)

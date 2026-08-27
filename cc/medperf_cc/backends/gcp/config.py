@@ -13,6 +13,7 @@ class WorkloadIdentityPool(BaseModel):
 
     project_number: str
     wip: str
+    wip_provider: str
 
     @property
     def full_name(self) -> str:
@@ -20,6 +21,17 @@ class WorkloadIdentityPool(BaseModel):
             f"projects/{self.project_number}/locations/global/"
             f"workloadIdentityPools/{self.wip}"
         )
+
+    @property
+    def provider_name(self) -> str:
+        """The provider inside the pool, as STS names it.
+
+        A workload federates against a *provider*, not a pool: this is what
+        goes in the `audience` of an external-account credential, and what the
+        attribute mapping is installed on. The pool alone is only ever an IAM
+        member prefix.
+        """
+        return f"{self.full_name}/providers/{self.wip_provider}"
 
     def principal(self, identity: str) -> str:
         """The IAM member matching one workload identity."""

@@ -17,9 +17,13 @@ from medperf.commands.dataset.set_operational import DatasetSetOperational
 from medperf.commands.dataset.submit import DataCreation
 from medperf.commands.execution.dataset_benchmark_run import DatasetBenchmarkRun
 from medperf.commands.execution.submit import ResultSubmission
-from medperf.commands.execution.utils import filter_latest_executions
+from medperf.commands.execution.utils import (
+    filter_latest_executions,
+    local_executions_of,
+)
 from medperf.commands.cc.dataset_configure_for_cc import DatasetConfigureForCC
 from medperf.commands.cc.dataset_update_cc_policy import DatasetUpdateCCPolicy
+from medperf.commands.cc.download_cc_results import DownloadCCResults
 from medperf.entities.cube import Cube
 from medperf.entities.dataset import Dataset
 from medperf.entities.benchmark import Benchmark
@@ -29,6 +33,7 @@ from medperf.entities.training_exp import TrainingExp
 from medperf.commands.association.utils import get_user_associations
 from medperf.commands.dataset.associate_training import AssociateTrainingDataset
 from medperf.commands.dataset.train import TrainingExecution
+from medperf.cc.collector import collects_results
 from medperf.web_ui.common import (
     templates,
     check_user_ui,
@@ -157,6 +162,18 @@ def dataset_detail_ui(  # noqa
         if benchmark_assocs:
             user_id = user_obj.id
             results = Execution.all(filters={"owner": user_id})
+            if is_owner:
+                # A confidential execution somebody else operated is recorded
+                # as theirs, so it is missing from this listing -- but if its
+                # results were released to this user, they collected them and
+                # they are here. Only for a dataset of their own: that is the
+                # one the server would also let them read every execution of.
+                known = {result.id for result in results}
+                results += [
+                    execution
+                    for execution in local_executions_of(dataset_id)
+                    if execution.id not in known
+                ]
             results = filter_latest_executions(results)
 
         # Fetch models associated with each benchmark
@@ -193,6 +210,16 @@ def dataset_detail_ui(  # noqa
                         reason = ""
                         can_run = True
                     model.cc_run_status = {"can_run": can_run, "reason": reason}
+                    # An execution the model owner operated leaves nothing
+                    # here: its results were sealed for whoever the policies
+                    # release them to, and if that is this user they are the
+                    # only one who can open them.
+                    model.cc_can_collect = collects_results(
+                        my_user_id,
+                        valid_benchmarks[assoc["benchmark"]],
+                        dataset,
+                        model,
+                    )
                 model.result = None
                 for result in results:
                     if (
@@ -201,11 +228,18 @@ def dataset_detail_ui(  # noqa
                         and result.model == model.id
                     ):
                         model.result = result.todict()
-                        model.result["results_exist"] = (
-                            result.is_executed() or result.finalized
-                        )
-                        if model.result["results_exist"]:
-                            model.result["results"] = result.read_results()
+                        ran = result.is_executed() or result.finalized
+                        try:
+                            model.result["results"] = (
+                                result.read_results() if ran else {}
+                            )
+                        except OSError:
+                            model.result["results"] = {}
+                        # A confidential run whose results were released to
+                        # somebody else leaves a finished execution with
+                        # nothing in it, so "there are results" has to mean
+                        # results this user can actually read.
+                        model.result["results_exist"] = bool(model.result["results"])
 
         context.update(
             {
@@ -498,6 +532,36 @@ def run(
         return_response["status"] = "failed"
         return_response["error"] = str(exp)
         notification_message = "Error during execution"
+        logger.exception(exp)
+
+    config.ui.end_task(return_response)
+    reset_state_task(request)
+    config.ui.add_notification(
+        message=notification_message,
+        return_response=return_response,
+        url=f"/datasets/ui/display/{entity_id}",
+    )
+    return return_response
+
+
+@router.post("/download_cc_results", response_class=JSONResponse)
+def download_cc_results(
+    request: Request,
+    entity_id: int = Form(...),
+    execution_id: int = Form(...),
+    current_user: bool = Depends(check_user_api),
+):
+    initialize_state_task(request, task_name="download_cc_results")
+    return_response = {"status": "", "error": ""}
+
+    try:
+        DownloadCCResults.run(execution_id)
+        return_response["status"] = "success"
+        notification_message = "Results successfully collected"
+    except Exception as exp:
+        return_response["status"] = "failed"
+        return_response["error"] = str(exp)
+        notification_message = "Failed to collect results"
         logger.exception(exp)
 
     config.ui.end_task(return_response)

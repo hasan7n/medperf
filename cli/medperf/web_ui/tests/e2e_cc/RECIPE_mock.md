@@ -4,8 +4,8 @@ Run MedPerf's confidential-computing workflow from first click to last through
 the web UI, with the mock CC backends. Three parties, one benchmark, one
 confidential execution, no cloud account.
 
-**Done means:** the run prints `PASSED: 28 steps`, and there is one `run.mp4`
-of the browser doing it.
+**Done means:** the run prints `PASSED: 30 steps` (`PASSED: 33 steps` with
+`-o modelowner`), and there is one `run.mp4` of the browser doing it.
 
 Do the GCP version (`RECIPE_gcp.md`, beside this file) only after this one
 passes. It is the same workflow and it is much cheaper to debug here.
@@ -65,8 +65,9 @@ These must exist:
 
 Check these three:
 
-- `webui_tests_cc.sh` still accepts `-p PORT` and `-H`, and still exports
-  `CC_DATA_PATH`, `CC_LABELS_PATH`, `CC_MODEL_TARBALL`, `WEBUI_ARTIFACTS`.
+- `webui_tests_cc.sh` still accepts `-p PORT`, `-H` and `-o OPERATOR`, and still
+  exports `CC_DATA_PATH`, `CC_LABELS_PATH`, `CC_MODEL_TARBALL`,
+  `WEBUI_ARTIFACTS`, `CC_OPERATOR`.
 - `webui_tests_cc.py` still accepts `--port`, `--artifacts`, `--headed`,
   `--no-record`, `--fps`, and still ends with `PASSED: N steps`.
 - The CC form fields the script fills still exist:
@@ -148,12 +149,31 @@ container, the reference weights and the benchmark → model owner submits the
 weights under test, asks for an association, gets a certificate → data owner
 gets a certificate, submits the dataset, prepares it, marks it operational, asks
 for an association → benchmark owner approves both → model owner and data owner
-each configure their asset for CC and sync its policy → data owner configures
-the collector and the operator → data owner runs the benchmark and submits the
-result.
+each configure their asset for CC and sync its policy → data owner sets up where
+results are received, the operator sets up the machine they run on → the
+operator runs the benchmark → data owner submits the result.
 
 `-H` runs it on your own screen and records nothing — for watching live, not
 for producing the video.
+
+### Both operator scenarios
+
+Who *operates* is a separate question from who the results are for. Both
+policies here release them to the data owner, so:
+
+```bash
+sh cli/webui_tests_cc.sh -p 8200                    # dataowner operates: 30 steps
+sh cli/webui_tests_cc.sh -p 8200 -o modelowner      # modelowner operates: 33 steps
+```
+
+With `-o modelowner` the operator never sees the results — they are sealed for
+the data owner's key. Three extra steps cover that: the model owner's page names
+the execution they have to hand over, the data owner collects it by clicking
+**Collect results** on their dataset page, and the ordinary **Submit** button
+reports it. That is the half `medperf confidential download_cc_results` exists
+for, and the only path where it is exercised.
+
+Run both. They need a fresh database each — see section 2.
 
 ## 5. What you should have at the end
 
