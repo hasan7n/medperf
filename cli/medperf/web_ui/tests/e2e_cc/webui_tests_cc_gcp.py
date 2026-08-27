@@ -1,26 +1,34 @@
-"""The confidential-computing workflow, driven through the web UI.
+"""The confidential-computing workflow on Google Cloud, through the web UI.
 
-A mirror of `cli/cli_tests_cc.sh`: the same three parties, the same mock CC
-backends, the same chest X-ray benchmark, every step taken by clicking rather
-than by calling the CLI. What it exercises that the CLI test does not is the
-web UI's own plumbing -- the forms, the confirmation prompts, and the task
-panel that reports a long-running command back to the browser.
+The cloud counterpart of `webui_tests_cc.py`: the same three parties, the same
+chest X-ray benchmark, the same steps clicked in the same order -- with real
+buckets, a real KMS key, a real workload identity pool and a real Confidential
+Space VM in place of a directory on this machine.
 
-Deliberately not pytest. This is a script: it runs top to bottom, prints each
-step as it happens, and exits non-zero on the first failure with the browser's
-last known state reported. Run it with `cli/webui_tests_cc.sh`, which builds
-the test environment and starts the web UI around it.
+One thing the cloud forces to be different. The mock run is three profiles in
+one web UI, because activating a profile does not change who the process is to
+a cloud provider. A GCP backend authenticates as whatever
+`GOOGLE_APPLICATION_CREDENTIALS` names, once per process, so here each party
+gets a web UI of its own: its own configuration storage, its own credentials,
+its own port. Switching party is switching port rather than activating a
+profile -- which is also what three separate machines look like.
 
-It also records itself. The browser draws on a virtual display and ffmpeg
-records that display for the whole run, captioned with the step it is on --
-see `recorder.py`. A headless run is otherwise invisible.
+Two consequences worth knowing:
 
-Only the `dataowner` operator scenario is covered, because collecting results
-as somebody other than the operator needs `download_cc_results`, which the web
-UI does not expose. The CLI test covers that half.
+- Cookies ignore ports, so the three web UIs on `127.0.0.1` share one
+  `auth_token` cookie while each has a security token of its own. Every switch
+  therefore unlocks the UI it is switching to.
+- Only the `dataowner` operator scenario is covered, as in the mock run: the
+  web UI does not expose `download_cc_results`.
+
+`cli/webui_tests_cc_gcp.sh` builds all of this and describes the parties to this
+script in the JSON file named by `$WEBUI_PARTIES`. Like the mock run, it records
+itself: the browser draws on a virtual display and ffmpeg records that display
+from the first click to the last -- see `recorder.py`.
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -33,10 +41,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from medperf import config as medperf_config
-from medperf.web_ui.tests.pages.base_page import BasePage
 from medperf.web_ui.tests.pages.login_page import LoginPage
-from medperf.web_ui.tests.pages.security_page import SecurityPage
 from medperf.web_ui.tests.pages.settings_page import SettingsPage
 from medperf.web_ui.tests.pages.asset.register_page import RegAssetPage
 from medperf.web_ui.tests.pages.benchmark.details_page import BenchmarkDetailsPage
@@ -57,13 +62,9 @@ from medperf.web_ui.tests.e2e_cc.recorder import (
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
 
-BENCHMARK_OWNER = "testbo@example.com"
-MODEL_OWNER = "testmo@example.com"
-DATA_OWNER = "testdo@example.com"
-
-BMK_PROFILE = "testbenchmark"
-MODEL_PROFILE = "testmodel"
-DATA_PROFILE = "testdata"
+BENCHMARK = "benchmark"
+MODEL = "model"
+DATA = "data"
 
 PREP_NAME = "cc-prep"
 SCRIPT_NAME = "cc-script"
@@ -88,21 +89,20 @@ SCRIPT = ContainerInput(
 DEMO_URL = "https://storage.googleapis.com/medperf-storage/chestxray_tutorial/demo_data.tar.gz"
 CNN_URL = "https://storage.googleapis.com/medperf-storage/chestxray_tutorial/cnn_weights.tar.gz"
 
-CC_BACKEND = "mock"
-CC_MOCK_ROOT = os.environ.get("CC_MOCK_ROOT", "/tmp/medperf_cc_mock")
-
-# Every mock backend takes a root and nothing else.
-CC_SETTINGS = {"root": CC_MOCK_ROOT}
+# `mock` is available here for one reason: it smoke tests what this script adds
+# over the mock run -- three web UIs, three sets of credentials, a party switch
+# that has to unlock the UI it switches to -- without a cloud account. It
+# protects nothing, and a mock run proves nothing about GCP.
+CC_BACKEND = os.environ.get("MPCC_BACKEND", "gcp")
 
 # Both owners release results to the data owner, who is also the operator here.
 COLLECTORS = ["data_owner"]
 
-TASK_TIMEOUT = int(os.environ.get("WEBUI_TASK_TIMEOUT", "1800"))
+# A confidential VM has to boot, pull the workload image and run it, so the
+# ceiling here is a cloud's, not a container's.
+TASK_TIMEOUT = int(os.environ.get("WEBUI_TASK_TIMEOUT", "5400"))
 SHORT_WAIT = 30
 
-# Every step names itself to this, and every waiting loop keeps that name on
-# screen. It stays a no-op until main() decides there is something to record
-# onto, so nothing else has to ask whether there is.
 REC = NullRecorder()
 
 
@@ -110,19 +110,40 @@ class StepFailed(Exception):
     pass
 
 
+class Party:
+    """One party's web UI: where it is, and what unlocks it."""
+
+    def __init__(self, name, spec):
+        self.name = name
+        self.email = spec["email"]
+        self.base_url = f"http://127.0.0.1:{spec['port']}"
+        self.host_props = os.path.join(spec["config_storage"], ".webui_host_props")
+
+    @property
+    def token(self):
+        with open(self.host_props) as f:
+            return yaml.safe_load(f)["security_token"]
+
+
+def load_parties(path):
+    with open(path) as f:
+        described = json.load(f)
+    return {name: Party(name, spec) for name, spec in described.items()}
+
+
 class Runner:
     """Runs the steps, reports them, and stops at the first failure."""
 
-    def __init__(self, driver, base_url, artifacts):
+    def __init__(self, driver, artifacts):
         self.driver = driver
-        self.base_url = base_url
         self.artifacts = artifacts
+        self.party = None
         self.passed = 0
         self.failed = None
         self.started = time.time()
 
     def url(self, path):
-        return self.base_url + path
+        return self.party.base_url + path
 
     def step(self, name, fn):
         if self.failed:
@@ -144,7 +165,6 @@ class Runner:
             print(f"    ok ({time.time() - began:.1f}s)", flush=True)
 
     def _capture(self, name):
-        """A failure in a browser is invisible unless something records it."""
         slug = "".join(c if c.isalnum() else "_" for c in name)[:60]
         try:
             os.makedirs(self.artifacts, exist_ok=True)
@@ -171,7 +191,6 @@ class Runner:
 
 
 def displayed(page, locator):
-    """Whether an element is on screen, tolerating it being swapped out."""
     try:
         return page.driver.find_element(*locator).is_displayed()
     except WebDriverException:
@@ -182,12 +201,9 @@ def wait_for_task(page, timeout=TASK_TIMEOUT, answer=True):
     """Confirms a prompted action and waits for the task to report back.
 
     Two different questions can appear, and conflating them is what makes this
-    hang. The first is the confirmation modal, before anything runs. The second
-    comes from the command itself partway through -- the web UI's equivalent of
-    the CLI's `-y`, asking whether to go ahead now that it has something to
-    show, such as a compatibility test's metrics. A task that is waiting on the
-    second looks exactly like a task that is simply slow, so it has to be
-    answered rather than waited out.
+    hang -- see the mock script for the whole of it. The second one is the web
+    UI's equivalent of the CLI's `-y`, and has to be answered rather than
+    waited out.
     """
     modal = page.find(page.PAGE_MODAL)
     WebDriverWait(page.driver, SHORT_WAIT).until(EC.visibility_of(modal))
@@ -205,8 +221,6 @@ def wait_for_task(page, timeout=TASK_TIMEOUT, answer=True):
             break
         if displayed(page, page.PROMPT_CONTAINER):
             page.click(page.RESPOND_YES if answer else page.RESPOND_NO)
-            # Give the click a moment to land before looking again, or the
-            # same prompt is answered twice.
             time.sleep(1)
         time.sleep(0.3)
     else:
@@ -226,7 +240,6 @@ def wait_for_task(page, timeout=TASK_TIMEOUT, answer=True):
 
 
 def dismiss_task_modal(page):
-    """Lets the result modal go away, however this page chooses to do it."""
     try:
         modal = page.find(page.PAGE_MODAL)
         WebDriverWait(page.driver, SHORT_WAIT).until(EC.staleness_of(modal))
@@ -235,42 +248,33 @@ def dismiss_task_modal(page):
         page.wait_for_presence_selector(page.NAVBAR)
 
 
-def login(runner, email):
+def as_party(runner, party):
+    """Points the browser at one party's web UI and unlocks it.
+
+    Unlocking every time rather than once: the three UIs share a host, cookies
+    are not scoped by port, and each has a security token of its own -- so the
+    last party to unlock is the only one whose cookie is valid."""
+    runner.party = party
+    runner.driver.get(runner.url(f"/security_check?token={party.token}"))
+    WebDriverWait(runner.driver, SHORT_WAIT).until(
+        lambda d: "/security_check" not in d.current_url
+    )
+
+
+def login(runner):
     page = LoginPage(runner.driver)
     page.open(runner.url("/benchmarks/ui"))
 
     if "/medperf_login" not in page.current_url:
-        return  # already logged in on this profile
+        return  # already logged in on this instance
 
-    page.login(email=email)
+    page.login(email=runner.party.email)
     wait_for_task(page)
     dismiss_task_modal(page)
 
     WebDriverWait(runner.driver, SHORT_WAIT).until(
         lambda d: "/medperf_login" not in d.current_url
     )
-
-
-def activate_profile(runner, profile):
-    page = SettingsPage(runner.driver)
-    page.open(runner.url("/settings"))
-
-    if page.get_text(page.CURRENT_PROFILE) == profile.title():
-        return
-
-    page.activate_profile(profile_name=profile.title())
-    wait_for_task(page)
-    dismiss_task_modal(page)
-
-    page.open(runner.url("/settings"))
-    current = page.get_text(page.CURRENT_PROFILE)
-    if current != profile.title():
-        raise StepFailed(f"profile is {current!r}, expected {profile.title()!r}")
-
-
-def as_user(runner, profile, email):
-    activate_profile(runner, profile)
-    login(runner, email)
 
 
 def register_container(runner, container):
@@ -289,14 +293,11 @@ def register_asset(runner, name, url="", path=""):
     dismiss_task_modal(page)
 
 
-def configure_asset_cc(runner, entity_url):
+def configure_asset_cc(runner, entity_url, storage, vault):
     page = AssetCCPage(runner.driver)
     page.open(runner.url(entity_url))
     page.configure(
-        backend=CC_BACKEND,
-        storage=CC_SETTINGS,
-        vault=CC_SETTINGS,
-        collectors=COLLECTORS,
+        backend=CC_BACKEND, storage=storage, vault=vault, collectors=COLLECTORS
     )
     wait_for_task(page)
     dismiss_task_modal(page)
@@ -307,83 +308,46 @@ def configure_asset_cc(runner, entity_url):
     dismiss_task_modal(page)
 
 
-def captured_detail_url(runner, fragment):
-    """Where registering an entity left the browser.
+def client_certificate(runner):
+    page = SettingsPage(runner.driver)
+    page.open(runner.url("/settings"))
+    page.get_client_certificate()
+    wait_for_task(page)
+    dismiss_task_modal(page)
 
-    Registration redirects to the new entity's detail page, so the id comes
-    from the URL rather than from searching a listing for a name -- there is no
-    ambiguity and no dependence on how cards are labelled.
-    """
+    page.open(runner.url("/settings"))
+    page.submit_certificate()
+    wait_for_task(page)
+    dismiss_task_modal(page)
+
+
+def captured_detail_url(runner, fragment):
+    """Where registering an entity left the browser, without the host.
+
+    Stored without it because entity ids come from the server and mean the same
+    thing on every party's web UI."""
     WebDriverWait(runner.driver, SHORT_WAIT).until(EC.url_contains(fragment))
     url = runner.driver.current_url
-    return url[len(runner.base_url):] if url.startswith(runner.base_url) else url
+    base = runner.party.base_url
+    return url[len(base):] if url.startswith(base) else url
 
 
 def build_driver(headless=True):
     options = Options()
     if headless:
         options.add_argument("--headless=new")
-    # Chrome will not start as root, and a small /dev/shm makes it flaky.
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--no-first-run")
     options.add_argument("--no-default-browser-check")
     # Filling the display it was given, so the recording is the browser and
-    # nothing else.
+    # nothing else. The address bar is worth keeping: it is what shows which
+    # party's web UI a step is talking to.
     options.add_argument("--window-position=0,0")
     options.add_argument(f"--window-size={SCREEN[0]},{SCREEN[1]}")
     driver = webdriver.Chrome(options=options)
     driver.set_page_load_timeout(120)
     return driver
-
-
-def security_token():
-    with open(medperf_config.webui_host_props) as f:
-        return yaml.safe_load(f)["security_token"]
-
-
-def main():
-    global REC
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=8200)
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument(
-        "--headed", action="store_true",
-        help="watch it live on this machine's screen, and record nothing",
-    )
-    parser.add_argument(
-        "--artifacts",
-        default=os.environ.get("WEBUI_ARTIFACTS", "/tmp/medperf_webui_cc_artifacts"),
-    )
-    parser.add_argument("--no-record", action="store_true", help="skip the video")
-    parser.add_argument("--fps", type=int, default=int(os.environ.get("WEBUI_FPS", "10")))
-    args = parser.parse_args()
-
-    display, headless = open_display(args, parser)
-    base_url = f"http://{args.host}:{args.port}"
-    driver = build_driver(headless=headless)
-    runner = Runner(driver, base_url, args.artifacts)
-
-    if display:
-        REC = Recorder(
-            driver, display, os.path.join(args.artifacts, "run.mp4"), fps=args.fps
-        )
-        REC.start()
-
-    try:
-        run_workflow(runner)
-    finally:
-        # Stopped before the browser goes: the last thing that happened should
-        # be in the video rather than the moment it disappeared.
-        video = REC.stop()
-        driver.quit()
-        if display:
-            display.stop()
-
-    if video:
-        print(f"\nvideo: {video}", flush=True)
-    return runner.report()
 
 
 def open_display(args, parser):
@@ -407,36 +371,121 @@ def open_display(args, parser):
     return display, False
 
 
-def run_workflow(runner):
+def cc_settings():
+    """What each party puts in the confidential-computing forms.
+
+    Every value is a cloud resource somebody created before this ran; the
+    shell script passes them in, and nothing here invents one. Two asset
+    owners means two of everything: separate buckets, separate keys and
+    separate workload identity pools, so that neither can read the other's
+    asset and neither's policy sync overwrites the other's provider.
+    """
+    env = os.environ
+
+    if CC_BACKEND == "mock":
+        mock = {"root": env.get("CC_MOCK_ROOT", "/tmp/medperf_cc_mock")}
+        return {
+            "model": (mock, mock),
+            "data": (mock, mock),
+            "operator": mock,
+            "collector": mock,
+        }
+
+    def owner(prefix):
+        storage = {
+            "bucket": env[f"{prefix}_BUCKET"],
+            "project_number": env["MPCC_PROJECT_NUMBER"],
+            "wip": env[f"{prefix}_WIP"],
+        }
+        vault = {
+            "project_id": env["MPCC_PROJECT_ID"],
+            "project_number": env["MPCC_PROJECT_NUMBER"],
+            "bucket": env[f"{prefix}_BUCKET"],
+            "keyring_name": env[f"{prefix}_KEYRING"],
+            "key_name": env[f"{prefix}_KEY"],
+            "key_location": env[f"{prefix}_KEY_LOCATION"],
+            "wip": env[f"{prefix}_WIP"],
+            "wip_provider": env[f"{prefix}_WIP_PROVIDER"],
+        }
+        return storage, vault
+
+    return {
+        "model": owner("MPCC_MODEL"),
+        "data": owner("MPCC_DATA"),
+        # Every field the form renders has to be filled or the button stays
+        # disabled, including the one the backend would default.
+        "operator": {
+            "project_id": env["MPCC_PROJECT_ID"],
+            "service_account_name": env["MPCC_WORKLOAD_SA_NAME"],
+            "vm_name": env["MPCC_VM_NAME"],
+            "vm_zone": env["MPCC_VM_ZONE"],
+            "logs_poll_frequency": env.get("MPCC_LOGS_POLL_FREQUENCY", "30"),
+        },
+        "collector": {"bucket": env["MPCC_COLLECTOR_BUCKET"]},
+    }
+
+
+def main():
+    global REC
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--parties", default=os.environ.get("WEBUI_PARTIES"),
+        help="JSON describing each party's web UI",
+    )
+    parser.add_argument(
+        "--headed", action="store_true",
+        help="watch it live on this machine's screen, and record nothing",
+    )
+    parser.add_argument(
+        "--artifacts",
+        default=os.environ.get("WEBUI_ARTIFACTS", "/tmp/medperf_webui_cc_gcp_artifacts"),
+    )
+    parser.add_argument("--no-record", action="store_true", help="skip the video")
+    parser.add_argument("--fps", type=int, default=int(os.environ.get("WEBUI_FPS", "10")))
+    args = parser.parse_args()
+
+    if not args.parties:
+        parser.error("--parties, or $WEBUI_PARTIES, is required")
+
+    parties = load_parties(args.parties)
+    settings = cc_settings()
+
+    display, headless = open_display(args, parser)
+    driver = build_driver(headless=headless)
+    runner = Runner(driver, args.artifacts)
+
+    if display:
+        REC = Recorder(
+            driver, display, os.path.join(args.artifacts, "run.mp4"), fps=args.fps
+        )
+        REC.start()
+
+    try:
+        run_workflow(runner, parties, settings)
+    finally:
+        video = REC.stop()
+        driver.quit()
+        if display:
+            display.stop()
+
+    if video:
+        print(f"\nvideo: {video}", flush=True)
+    return runner.report()
+
+
+def run_workflow(runner, parties, settings):
     state = {}
 
-    # ---------------------------------------------------------------- setup
-    def unlock():
-        page = SecurityPage(runner.driver)
-        page.driver.get(runner.url(f"/security_check?token={security_token()}"))
-        WebDriverWait(runner.driver, SHORT_WAIT).until(
-            lambda d: "/security_check" not in d.current_url
-        )
+    def switch(name):
+        as_party(runner, parties[name])
+        login(runner)
 
-    runner.step("Unlock the web UI with its security token", unlock)
-
-    # cli_tests_cc.sh logs all three in up front, so each profile carries its
-    # own credentials for the rest of the run.
-    for profile, email in (
-        (BMK_PROFILE, BENCHMARK_OWNER),
-        (MODEL_PROFILE, MODEL_OWNER),
-        (DATA_PROFILE, DATA_OWNER),
-    ):
-        runner.step(
-            f"Login {profile}",
-            lambda p=profile, e=email: as_user(runner, p, e),
-        )
+    for name in (BENCHMARK, MODEL, DATA):
+        runner.step(f"Login the {name} owner", lambda n=name: switch(n))
 
     # ------------------------------------------------------- benchmark owner
-    runner.step(
-        "Activate benchmarkowner profile",
-        lambda: as_user(runner, BMK_PROFILE, BENCHMARK_OWNER),
-    )
+    runner.step("Act as the benchmark owner", lambda: switch(BENCHMARK))
     runner.step(
         "Submit data preparation container",
         lambda: register_container(runner, PREP),
@@ -470,14 +519,10 @@ def run_workflow(runner):
     runner.step("Submit the benchmark", submit_benchmark)
 
     # ----------------------------------------------------------- model owner
-    runner.step(
-        "Activate modelowner profile",
-        lambda: as_user(runner, MODEL_PROFILE, MODEL_OWNER),
-    )
+    runner.step("Act as the model owner", lambda: switch(MODEL))
 
     def submit_model():
-        weights = os.environ["CC_MODEL_TARBALL"]
-        register_asset(runner, MODEL_NAME, path=weights)
+        register_asset(runner, MODEL_NAME, path=os.environ["CC_MODEL_TARBALL"])
         state["model_url"] = captured_detail_url(runner, "/models/ui/display/")
 
     runner.step("Submit the model under test", submit_model)
@@ -490,30 +535,11 @@ def run_workflow(runner):
         dismiss_task_modal(page)
 
     runner.step("Associate the model with the benchmark", associate_model)
-
-    def model_certificate():
-        page = SettingsPage(runner.driver)
-        page.open(runner.url("/settings"))
-        page.get_client_certificate()
-        wait_for_task(page)
-        dismiss_task_modal(page)
-
-        page.open(runner.url("/settings"))
-        page.submit_certificate()
-        wait_for_task(page)
-        dismiss_task_modal(page)
-
-    runner.step("Model owner client certificate", model_certificate)
+    runner.step("Model owner client certificate", lambda: client_certificate(runner))
 
     # ------------------------------------------------------------ data owner
-    runner.step(
-        "Activate dataowner profile",
-        lambda: as_user(runner, DATA_PROFILE, DATA_OWNER),
-    )
-    runner.step(
-        "Data owner client certificate",
-        lambda: model_certificate(),
-    )
+    runner.step("Act as the data owner", lambda: switch(DATA))
+    runner.step("Data owner client certificate", lambda: client_certificate(runner))
 
     def submit_dataset():
         page = RegDatasetPage(runner.driver)
@@ -521,8 +547,8 @@ def run_workflow(runner):
         page.register_dataset(
             benchmark=BMK_NAME,
             name=DATASET_NAME,
-            description="cc-mock-dataset-a",
-            location="mock-location-a",
+            description="cc-gcp-dataset-a",
+            location="gcp-location-a",
             data_path=os.environ["CC_DATA_PATH"],
             labels_path=os.environ["CC_LABELS_PATH"],
         )
@@ -532,38 +558,22 @@ def run_workflow(runner):
 
     runner.step("Submit the dataset", submit_dataset)
 
-    def prepare_dataset():
+    def dataset_step(action):
         page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
         page.open(runner.url(state["dataset_url"]))
-        page.prepare_dataset()
+        getattr(page, action)()
         wait_for_task(page)
         dismiss_task_modal(page)
 
-    runner.step("Prepare the dataset", prepare_dataset)
-
-    def set_operational():
-        page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
-        page.open(runner.url(state["dataset_url"]))
-        page.set_operational()
-        wait_for_task(page)
-        dismiss_task_modal(page)
-
-    runner.step("Mark the dataset operational", set_operational)
-
-    def associate_dataset():
-        page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
-        page.open(runner.url(state["dataset_url"]))
-        page.request_association()
-        wait_for_task(page)
-        dismiss_task_modal(page)
-
-    runner.step("Associate the dataset with the benchmark", associate_dataset)
+    runner.step("Prepare the dataset", lambda: dataset_step("prepare_dataset"))
+    runner.step("Mark the dataset operational", lambda: dataset_step("set_operational"))
+    runner.step(
+        "Associate the dataset with the benchmark",
+        lambda: dataset_step("request_association"),
+    )
 
     # --------------------------------------------------- approvals (bmk owner)
-    runner.step(
-        "Activate benchmarkowner profile to approve",
-        lambda: as_user(runner, BMK_PROFILE, BENCHMARK_OWNER),
-    )
+    runner.step("Act as the benchmark owner to approve", lambda: switch(BENCHMARK))
 
     def approvals():
         page = BenchmarkDetailsPage(runner.driver, BMK_NAME, DATASET_NAME)
@@ -581,43 +591,33 @@ def run_workflow(runner):
     runner.step("Approve both associations", approvals)
 
     # ------------------------------------------------------- CC configuration
+    runner.step("Act as the model owner for CC", lambda: switch(MODEL))
     runner.step(
-        "Activate modelowner profile for CC",
-        lambda: as_user(runner, MODEL_PROFILE, MODEL_OWNER),
-    )
-    runner.step(
-        "Configure the model for CC and sync its policy",
-        lambda: configure_asset_cc(runner, state["model_url"]),
+        "Publish the model to the model owner's bucket and key",
+        lambda: configure_asset_cc(runner, state["model_url"], *settings["model"]),
     )
 
+    runner.step("Act as the data owner for CC", lambda: switch(DATA))
     runner.step(
-        "Activate dataowner profile for CC",
-        lambda: as_user(runner, DATA_PROFILE, DATA_OWNER),
-    )
-    runner.step(
-        "Configure the dataset for CC and sync its policy",
-        lambda: configure_asset_cc(runner, state["dataset_url"]),
+        "Publish the dataset to the data owner's bucket and key",
+        lambda: configure_asset_cc(runner, state["dataset_url"], *settings["data"]),
     )
 
     def cc_roles():
         page = SettingsCCPage(runner.driver)
         for section in ("collector", "operator"):
             page.open(runner.url("/settings"))
-            page.configure(section, CC_BACKEND, CC_SETTINGS)
+            page.configure(section, CC_BACKEND, settings[section])
             wait_for_task(page)
             dismiss_task_modal(page)
 
-    runner.step("Set up the CC collector and operator", cc_roles)
+    runner.step("Set up the result bucket and the confidential VM", cc_roles)
 
     # -------------------------------------------------------------- the run
-    def run_benchmark():
-        page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)
-        page.open(runner.url(state["dataset_url"]))
-        page.run_execution()
-        wait_for_task(page)
-        dismiss_task_modal(page)
-
-    runner.step("Run the benchmark (dataowner is operator)", run_benchmark)
+    runner.step(
+        "Run the benchmark in the confidential VM (dataowner is operator)",
+        lambda: dataset_step("run_execution"),
+    )
 
     def submit_result():
         page = DatasetDetailsPage(runner.driver, DATASET_NAME, BMK_NAME)

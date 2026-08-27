@@ -7,9 +7,15 @@
 # medperf/web_ui/tests/e2e_cc/webui_tests_cc.py, which is a plain script and
 # not a pytest suite.
 #
-#   sh cli/webui_tests_cc.sh              headless, port 8200
+#   sh cli/webui_tests_cc.sh              records itself, port 8200
 #   sh cli/webui_tests_cc.sh -p 8300      another port
-#   sh cli/webui_tests_cc.sh -H           show the browser
+#   sh cli/webui_tests_cc.sh -H           watch it live instead of recording
+#
+# By default the browser draws on a virtual display and ffmpeg records that
+# display for the whole run, leaving one mp4 in the artifacts directory.
+#
+# Everything around it -- the server, the database, what to check afterwards --
+# is medperf/web_ui/tests/e2e_cc/RECIPE_mock.md.
 #
 # Kept to POSIX sh, like the other cli_tests_* scripts, so `sh` runs it.
 set -e
@@ -91,8 +97,10 @@ echo "====================================="
 medperf_webui --port "$PORT" > "$WEBUI_LOG" 2>&1 &
 WEBUI_PID=$!
 
+# Any answer means it is serving. Not `curl -f`: whether that page renders is
+# the test's business, not this loop's.
 for _ in $(seq 1 60); do
-    if curl -sf -o /dev/null "http://127.0.0.1:$PORT/security_check"; then
+    if curl -s -m 5 -o /dev/null "http://127.0.0.1:$PORT/security_check"; then
         break
     fi
     if ! kill -0 "$WEBUI_PID" 2>/dev/null; then
@@ -107,9 +115,12 @@ done
 echo "====================================="
 echo "Driving the workflow"
 echo "====================================="
+# Not under `set -e`: a failed run is what the log below is for.
+set +e
 python "$REPO/cli/medperf/web_ui/tests/e2e_cc/webui_tests_cc.py" \
     --port "$PORT" $HEADED
 STATUS=$?
+set -e
 
 if [ "$STATUS" -ne 0 ]; then
     echo

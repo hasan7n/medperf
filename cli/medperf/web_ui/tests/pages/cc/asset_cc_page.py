@@ -34,18 +34,23 @@ class AssetCCPage(BasePage):
             # The toggle itself is sr-only, so its label is what takes a click.
             self.driver.execute_script("arguments[0].click()", element)
 
-    def configure(self, backend, settings, collectors, bind_peer=True):
-        """Fills both services with one backend and applies the form."""
+    def configure(self, backend, storage, vault, collectors, bind_peer=True):
+        """Fills both services with one backend and applies the form.
+
+        Each service gets its own settings: one backend can want different
+        things of the two -- where a bucket is, and which key opens it."""
         self.set_checkbox(self.CONFIGURE_CC, True)
 
-        for prefix, selector in (
-            ("storage_", self.STORAGE_BACKEND),
-            ("vault_", self.VAULT_BACKEND),
+        for prefix, selector, settings in (
+            ("storage_", self.STORAGE_BACKEND, storage),
+            ("vault_", self.VAULT_BACKEND, vault),
         ):
             self.select_by_text(selector, backend)
             for field, value in settings.items():
-                locator = self.backend_field(prefix, backend, field)
-                element = self.find(locator)
+                element = self.find(self.backend_field(prefix, backend, field))
+                # A backend with many settings pushes the last of them off the
+                # screen, and an element off the screen takes no keys.
+                self.ensure_element_ready(element)
                 element.clear()
                 element.send_keys(value)
 

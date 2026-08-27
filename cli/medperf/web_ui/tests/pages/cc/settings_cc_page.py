@@ -44,6 +44,9 @@ class SettingsCCPage(BasePage):
 
         for field, value in settings.items():
             element = self.find(self.backend_field(section, backend, field))
+            # A backend with many settings pushes the last of them off the
+            # screen, and an element off the screen takes no keys.
+            self.ensure_element_ready(element)
             element.clear()
             element.send_keys(value)
 
