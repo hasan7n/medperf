@@ -35,11 +35,8 @@ class Authority:
     def fetch_pki_root(self, timeout: int) -> bytes:
         """The root certificate, in PEM, however this authority publishes it.
 
-        Google's well-known document used to be the PEM itself and is now a
-        JSON pointer to it -- `{"root_ca_uri": "..."}`. Both shapes are
-        accepted, and only one redirection is followed: a document that points
-        at another document that points on is not a certificate chain, it is a
-        loop somebody else controls.
+        Google's well-known document is the PEM itself or a JSON pointer to it,
+        `{"root_ca_uri": "..."}`. One redirection, never a chain of them.
         """
         body = self._get(self.pki_root_url, timeout)
         pointed_at = self._root_ca_uri(body)
@@ -65,11 +62,7 @@ class Authority:
         uri = pointer.get("root_ca_uri") if isinstance(pointer, dict) else None
         if not isinstance(uri, str) or not uri:
             return None
-        # A trust anchor is only worth what the transport carrying it is worth.
-        # Forging the pointer already takes control of the authority's own
-        # endpoint, but a pointer to plaintext would hand the certificate to
-        # anybody on the path instead, and that is a cheaper attack than the
-        # one it takes to write the pointer.
+        # Over plaintext the certificate is anybody's to replace.
         if not uri.startswith("https://"):
             raise ValueError(
                 f"{GOOGLE_PKI_ROOT_URL} points at a root certificate over"

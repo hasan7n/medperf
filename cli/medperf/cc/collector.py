@@ -94,16 +94,9 @@ def collects_results(
 ) -> bool:
     """Whether an execution of this pair would release its results to this user.
 
-    The cheap half of `resolve_collector`: who, without the key and the storage
-    that reaching them needs. Nothing here leaves the process -- it is
-    arithmetic over the two policies and the three owners -- so it is safe to
-    ask about every model on a page.
-
-    An answer of no is not a refusal, only a "not yours to collect". An asset
-    with no policy yet, two owners who have not agreed, and two owners who have
-    agreed on two different people are all the same "no" here; `collector_role`
-    is where those are told apart, and the collection itself is where they are
-    reported.
+    The cheap half of `resolve_collector`, with no network in it, so a page may
+    ask it about every model. Every reason for "no" looks alike here;
+    `collector_role` is where they are told apart.
     """
     try:
         collector_id, _ = collector_role(benchmark, dataset, model)

@@ -75,10 +75,8 @@ class BasePage:
         option.click()
         self.wait.until(lambda _driver: bool(hidden.get_attribute("value")))
 
-    # Opens the running task's log panel, scrolls it into shot and pins it to
-    # the newest line. The panel starts collapsed and below the fold, so a
-    # recording of a long task would otherwise be a spinner and nothing else.
-    # Idempotent: the button is only clicked while it still says Expand.
+    # The panel starts collapsed and below the fold, so a recording of a long
+    # task would otherwise show a spinner and nothing else.
     FOLLOW_LOGS = """
     var section = document.getElementById('log-panel-section');
     if (!section || section.classList.contains('hidden')) { return false; }

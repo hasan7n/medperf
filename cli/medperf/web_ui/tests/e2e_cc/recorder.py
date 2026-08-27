@@ -156,8 +156,7 @@ class Recorder:
                 "-video_size", self.display.geometry,
                 "-framerate", str(self.fps),
                 "-i", self.display.name,
-                # Half size keeps half an hour of browser to a few megabytes and
-                # stays readable; yuv420p is what players outside a browser want.
+                # Half size keeps a long run to a few megabytes.
                 "-vf", "scale=1280:-2,format=yuv420p",
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
                 "-movflags", "+faststart",
@@ -179,10 +178,7 @@ class Recorder:
         self.__show()
 
     def stop(self):
-        """Ends the recording.
-
-        Called while the browser is still up, so that the last thing that
-        happened is in the video rather than the moment it disappeared."""
+        """Ends the recording, while the browser is still up."""
         if not self.process:
             return None
 
@@ -212,14 +208,13 @@ class Recorder:
         try:
             self.driver.execute_script(SHOW, self.text)
         except Exception:
-            # Between two pages, or the browser has gone. The next tick will do.
+            # Between two pages, or the browser has gone.
             pass
 
     def __register(self):
-        """Asks the browser to draw the caption on every page it opens next.
+        """Draws the caption on every page the browser opens next.
 
-        Without this the banner lives only as long as the document it was put
-        in, and most of what the video shows is the page after that."""
+        The banner otherwise lives only as long as its document."""
         try:
             if self.registered:
                 self.driver.execute_cdp_cmd(

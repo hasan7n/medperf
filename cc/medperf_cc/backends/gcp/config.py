@@ -26,10 +26,8 @@ class WorkloadIdentityPool(BaseModel):
     def provider_name(self) -> str:
         """The provider inside the pool, as STS names it.
 
-        A workload federates against a *provider*, not a pool: this is what
-        goes in the `audience` of an external-account credential, and what the
-        attribute mapping is installed on. The pool alone is only ever an IAM
-        member prefix.
+        A workload federates against a provider; the pool alone is only ever an
+        IAM member prefix.
         """
         return f"{self.full_name}/providers/{self.wip_provider}"
 

@@ -26,8 +26,7 @@ class GCPStorageConfig(BaseModel):
     bucket: str
     project_number: str
     wip: str
-    # The workload federates against the pool's provider to read the bucket,
-    # so the provider has to be named here as well as in the vault.
+    # The workload federates against the provider, not the pool.
     wip_provider: str
 
     class Config:

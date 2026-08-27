@@ -17,10 +17,7 @@ from medperf.commands.dataset.set_operational import DatasetSetOperational
 from medperf.commands.dataset.submit import DataCreation
 from medperf.commands.execution.dataset_benchmark_run import DatasetBenchmarkRun
 from medperf.commands.execution.submit import ResultSubmission
-from medperf.commands.execution.utils import (
-    filter_latest_executions,
-    local_executions_of,
-)
+from medperf.commands.execution.utils import filter_latest_executions
 from medperf.commands.cc.dataset_configure_for_cc import DatasetConfigureForCC
 from medperf.commands.cc.dataset_update_cc_policy import DatasetUpdateCCPolicy
 from medperf.commands.cc.download_cc_results import DownloadCCResults
@@ -163,16 +160,13 @@ def dataset_detail_ui(  # noqa
             user_id = user_obj.id
             results = Execution.all(filters={"owner": user_id})
             if is_owner:
-                # A confidential execution somebody else operated is recorded
-                # as theirs, so it is missing from this listing -- but if its
-                # results were released to this user, they collected them and
-                # they are here. Only for a dataset of their own: that is the
-                # one the server would also let them read every execution of.
+                # An execution somebody else operated is listed to them, not
+                # here, but its results may have been collected by this user.
                 known = {result.id for result in results}
                 results += [
                     execution
-                    for execution in local_executions_of(dataset_id)
-                    if execution.id not in known
+                    for execution in Execution.local_all()
+                    if execution.dataset == dataset_id and execution.id not in known
                 ]
             results = filter_latest_executions(results)
 
@@ -210,10 +204,7 @@ def dataset_detail_ui(  # noqa
                         reason = ""
                         can_run = True
                     model.cc_run_status = {"can_run": can_run, "reason": reason}
-                    # An execution the model owner operated leaves nothing
-                    # here: its results were sealed for whoever the policies
-                    # release them to, and if that is this user they are the
-                    # only one who can open them.
+                    # An execution somebody else operated leaves nothing here.
                     model.cc_can_collect = collects_results(
                         my_user_id,
                         valid_benchmarks[assoc["benchmark"]],
@@ -235,10 +226,8 @@ def dataset_detail_ui(  # noqa
                             )
                         except OSError:
                             model.result["results"] = {}
-                        # A confidential run whose results were released to
-                        # somebody else leaves a finished execution with
-                        # nothing in it, so "there are results" has to mean
-                        # results this user can actually read.
+                        # A run released to somebody else leaves a finished
+                        # execution with nothing readable in it.
                         model.result["results_exist"] = bool(model.result["results"])
 
         context.update(

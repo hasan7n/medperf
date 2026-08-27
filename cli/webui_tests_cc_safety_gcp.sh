@@ -12,6 +12,7 @@
 #   bash cli/webui_tests_cc_safety_gcp.sh            records itself, ports 8201..8203
 #   bash cli/webui_tests_cc_safety_gcp.sh -p 8300    another base port
 #   bash cli/webui_tests_cc_safety_gcp.sh -H         watch it live instead of recording
+#   bash cli/webui_tests_cc_safety_gcp.sh -a gpu     run on the H100 VM, not the CPU one
 #
 # Two things have to be handed to it, because neither belongs in a repository:
 #
@@ -33,13 +34,27 @@ set -e
 
 PORT=8201
 HEADED=""
-while getopts p:H flag; do
+# cpu or gpu. The two confidential VMs differ only in which one the operator is
+# pointed at, so this choice is a VM name and a zone and nothing else.
+ACCEL="${MPCC_ACCEL:-cpu}"
+while getopts p:Ha: flag; do
     case "${flag}" in
         p) PORT=${OPTARG} ;;
         H) HEADED="--headed" ;;
-        *) echo "usage: $0 [-p base_port] [-H]" >&2; exit 1 ;;
+        a) ACCEL=${OPTARG} ;;
+        *) echo "usage: $0 [-p base_port] [-H] [-a cpu|gpu]" >&2; exit 1 ;;
     esac
 done
+
+case "$ACCEL" in
+    cpu) ACCEL_VM_NAME="mpcc-e2e-safety-vm";     ACCEL_VM_ZONE="us-west1-b" ;;
+    gpu) ACCEL_VM_NAME="mpcc-e2e-safety-gpu-vm"; ACCEL_VM_ZONE="us-central1-a" ;;
+    *)   echo "-a / MPCC_ACCEL must be cpu or gpu, not '$ACCEL'" >&2; exit 1 ;;
+esac
+# Each accelerator has its own terraform stack and so its own VM. Naming either
+# variable by hand still wins, for a VM built some other way.
+export MPCC_VM_NAME="${MPCC_VM_NAME:-$ACCEL_VM_NAME}"
+export MPCC_VM_ZONE="${MPCC_VM_ZONE:-$ACCEL_VM_ZONE}"
 
 need() {
     if [ -z "${!1:-}" ]; then
@@ -67,7 +82,7 @@ if [ "$MPCC_BACKEND" = "gcp" ]; then
         MPCC_MODEL_WIP MPCC_MODEL_WIP_PROVIDER MPCC_MODEL_ADC \
         MPCC_DATA_BUCKET MPCC_DATA_KEYRING MPCC_DATA_KEY MPCC_DATA_KEY_LOCATION \
         MPCC_DATA_WIP MPCC_DATA_WIP_PROVIDER MPCC_DATA_ADC \
-        MPCC_WORKLOAD_SA_NAME MPCC_VM_NAME MPCC_VM_ZONE MPCC_COLLECTOR_BUCKET
+        MPCC_WORKLOAD_SA_NAME MPCC_COLLECTOR_BUCKET
     do
         need "$name"
     done
@@ -102,6 +117,7 @@ mkdir -p "$SERVE" "$WEBUI_ARTIFACTS"
 
 echo "Test root:  $TEST_ROOT"
 echo "Artifacts:  $WEBUI_ARTIFACTS"
+echo "Operator:   $ACCEL, $MPCC_VM_NAME in $MPCC_VM_ZONE"
 
 PIDS=""
 cleanup() {

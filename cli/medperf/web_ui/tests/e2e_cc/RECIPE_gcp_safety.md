@@ -62,6 +62,10 @@ export SAFETY_MODEL_TARBALL=~/medperf_ws/qwen0.5b.tar.gz   # the weights under t
 # and the MPCC_* names from step 7, when MPCC_BACKEND=gcp
 ```
 
+Its options: `-p` a base port, `-H` to watch it live instead of recording, and
+`-a cpu|gpu` (or `MPCC_ACCEL`) to choose which confidential VM the operator is
+pointed at. See "CPU or GPU" under step 3.
+
 It serves that tarball, and a tarball of `examples/safety_benchmark/demo`, from
 a local HTTP server of its own for the length of the run (see step 5) — so the
 reference-model URL and `--demo-url` need no setting up by hand.
@@ -75,6 +79,8 @@ MPCC_BACKEND=mock bash cli/webui_tests_cc_safety_gcp.sh -p 8201
 ```
 
 Expect `PASSED: 32 steps`. Then reset the database again before the real run.
+`-a` means nothing to it — the mock backend has no VM — so one mock pass covers
+both accelerators.
 
 ## Paths
 
@@ -92,12 +98,14 @@ things differ, because the operator is now the model owner:
 | what | name | note |
 | --- | --- | --- |
 | workload identity (the VM runs as this) | `mpcc-e2e-workload` | already exists |
-| confidential VM | `mpcc-e2e-safety-vm` | **new**, bigger disk |
-| VM zone | `us-west1-b` (CPU) or `us-central1-a` (GPU) | see step 3 |
+| confidential VM, CPU | `mpcc-e2e-safety-vm` in `us-west1-b` | **new**, bigger disk |
+| confidential VM, GPU | `mpcc-e2e-safety-gpu-vm` in `us-central1-a` | **new**, one H100 |
+
+Which of the two a run uses is the driver's `-a cpu|gpu` — see step 3.
 
 A separate VM rather than reusing `mpcc-e2e-vm`: the grader pulls roughly
 16 GB of weights into the boot disk on first start, and the chest X-ray VM's
-100 GB disk is sized for a small CNN. Delete it in step 10 like the other one.
+100 GB disk is sized for a small CNN. Delete it in step 11 like the other one.
 
 Everything else — `mpcc-e2e-model-owner`, `mpcc-e2e-data-owner`,
 `mpcc-e2e-workload`, the three buckets, both keyrings, both pools — is reused
@@ -158,7 +166,12 @@ Three accounts, two keys, two pools, three buckets. If any is missing, run
 
 ## 3. The one new resource: a VM the model owner operates
 
-Copy the operator stack again, to its own directory so it has its own state:
+There are two of these, one per accelerator, and they are independent: each has
+its own directory, its own state and its own VM, so both can exist and applying
+or deleting either leaves the other alone. Build the one you are going to run
+on. **CPU first**, unless you know you need the GPU.
+
+Copy the operator stack, to its own directory so it has its own state:
 
 ```bash
 cp -r $REPO/examples/cc/admin_scripts/terraform/operator_cpu $WORK/terraform/safety_operator
@@ -212,28 +225,59 @@ stack: doing so would take the binding away from the other one.
 
 ### CPU or GPU
 
-CPU, above, is the default here: the prompt set is twelve prompts and the model
-under test is small. It is enough. Measured on `c3-standard-8` on 2026-08-27,
-twelve prompts end to end:
+The GPU stack is a second copy of the same thing, from `operator_gpu`, in its
+own directory:
 
-| | |
-| --- | --- |
-| boot | 27 s |
-| pulling the workload image | 2 min 48 s |
-| the benchmark itself | 5 min 19 s |
-| the run step in the browser, click to result | 12 min 35 s |
+```bash
+cp -r $REPO/examples/cc/admin_scripts/terraform/operator_gpu $WORK/terraform/safety_operator_gpu
+```
 
-Those five minutes cover decrypting both assets, answering twelve prompts with
-Qwen 0.5B, fetching ~13 GB of Llama Guard weights, grading twelve answers, and
-encrypting the results back. Sapphire Rapids does the grading in about three
-minutes; an older CPU is much slower — the same workload took 33 minutes under
-`MPCC_BACKEND=mock` on an eight-core desktop, mostly on the weight fetch and
-the grader. Report what your run took.
+`$WORK/terraform/safety_operator_gpu/config.tf` differs from the CPU one above
+in the VM only. Keep the stack's own `vm_zone`, `machine_type` and disk:
 
-For anything larger than the test-sized set, use `operator_gpu` instead — one
-H100, `a3-highgpu-1g` in `us-central1-a`, 500 GB. Its quota is not granted by
-default, so request it before you plan on it. The key release policy already
-allows GPU confidential mode; nothing else changes.
+```hcl
+  vm_name    = "mpcc-e2e-safety-gpu-vm"
+  vm_zone    = "us-central1-a"
+  machine_type   = "a3-highgpu-1g"   # one H100
+  boot_disk_size = 500
+```
+
+Everything else is the CPU stack's: the same `project_id`, the same model-owner
+`member`, `service_account_name = "mpcc-e2e-workload"` with
+`create_service_account = false`, and `enable_services = false`. Then
+
+```bash
+( cd $WORK/terraform/safety_operator_gpu && terraform init -input=false && terraform apply -auto-approve )
+```
+
+A third state now holds the same two additive project bindings; the note above
+applies to it too. `a3-highgpu-1g` quota is not granted by default — ask for it
+before you plan on a GPU run, because the apply is what discovers you lack it.
+
+The driver picks between them with `-a cpu|gpu` (or `MPCC_ACCEL`), which is a
+VM name and a zone and nothing else — `mpcc-e2e-safety-vm` in `us-west1-b`, or
+`mpcc-e2e-safety-gpu-vm` in `us-central1-a`. Setting `MPCC_VM_NAME` or
+`MPCC_VM_ZONE` by hand still wins, for a VM built some other way. Nothing else
+about the run changes: the key release policy already allows GPU confidential
+mode, and the containers are the same.
+
+**CPU is the default, and for this benchmark it is the right one.** The prompt
+set is twelve prompts and the model under test is small. Both measured on
+2026-08-27, twelve prompts end to end:
+
+| | CPU, `c3-standard-8` | GPU, `a3-highgpu-1g` |
+| --- | --- | --- |
+| boot | 27 s | TBD |
+| pulling the workload image | 2 min 48 s | TBD |
+| the benchmark itself (`workload_execution_sec`) | 5 min 19 s | TBD |
+| the run step in the browser, click to result | 12 min 35 s | TBD |
+
+TBD-COMMENTARY
+
+Sapphire Rapids does the CPU grading in about three minutes; an older CPU is
+much slower — the same workload took 33 minutes under `MPCC_BACKEND=mock` on an
+eight-core desktop, mostly on the weight fetch and the grader. Report what your
+run took.
 
 ## 4. The results bucket, unchanged
 
@@ -285,8 +329,15 @@ the *encrypted* asset from the model owner's bucket.
 
 ```bash
 export MPCC_VM_NAME=mpcc-e2e-safety-vm
-export MPCC_VM_ZONE=us-west1-b            # or us-central1-a for GPU
+export MPCC_VM_ZONE=us-west1-b
+# or, for the GPU stack:
+# export MPCC_VM_NAME=mpcc-e2e-safety-gpu-vm
+# export MPCC_VM_ZONE=us-central1-a
 ```
+
+The preflight reads these two directly, so name them here for whichever VM you
+are about to run on. The driver in step 8 does not need them — its `-a` picks
+the same pair — but it honours them if they are set, so keep the two in step.
 
 and run the **runner** check as the *model* owner rather than the data owner,
 because the model owner is the operator now:
@@ -317,7 +368,14 @@ wrong.
 cd $REPO
 export SAFETY_MODEL_TARBALL=~/medperf_ws/qwen0.5b.tar.gz
 bash cli/webui_tests_cc_safety_gcp.sh -p 8201 2>&1 | tee /tmp/webui_cc_safety_gcp.log
+
+# on the GPU VM instead:
+bash cli/webui_tests_cc_safety_gcp.sh -p 8201 -a gpu 2>&1 | tee /tmp/webui_cc_safety_gcp.log
 ```
+
+It prints which VM it is pointing the operator at on its third line. Check that
+line matches the stack you applied in step 3 — a run against a VM that does not
+exist fails at the run step, twenty minutes in.
 
 Xvfb and ffmpeg have to be there or there is no video — `RECIPE_gcp.md` step 7's
 first block. Without them the run still goes, headless, and says so on the first
@@ -359,8 +417,8 @@ key and pool; release results to **data owner only**; sync the policy.
 releasing to **data owner only**; sync the policy. Then configure the
 **collector** (results bucket) — and *not* the operator.
 
-**Model owner** — configure the **operator** (project, `mpcc-e2e-workload`,
-`mpcc-e2e-safety-vm`, the zone, `logs_poll_frequency` 30). Every field the form
+**Model owner** — configure the **operator** (project, `mpcc-e2e-workload`, the
+VM name and zone `-a` chose, `logs_poll_frequency` 30). Every field the form
 renders must be filled or Configure stays disabled.
 
 **Model owner** — run it, from the *model* detail page's run button, not from
@@ -405,7 +463,7 @@ Report what it says either way. A pass is the first real evidence the integrity
 proof works; a failure is a finding worth more than the run itself.
 
 If the collection step in the browser said the execution left no results, the
-workload failed — go to the serial console of `mpcc-e2e-safety-vm`, not to this
+workload failed — go to the serial console of the VM you ran on, not to this
 command.
 
 ## 10. What you should have
@@ -422,12 +480,18 @@ workload that produced nothing can still be reported.
 ## 11. Clean up
 
 ```bash
-gcloud compute instances delete mpcc-e2e-safety-vm --zone=$MPCC_VM_ZONE --quiet
+gcloud compute instances delete $MPCC_VM_NAME --zone=$MPCC_VM_ZONE --quiet
 ```
+
+Delete whichever VM you ran on, and delete it **promptly** if it was the GPU:
+an idle `a3-highgpu-1g` is by a wide margin the most expensive thing in this
+project. Confirm it went — `gcloud compute instances list` — rather than
+assuming the delete took.
 
 Empty the three buckets as in `RECIPE_gcp.md` step 10. The HTTP server from
 step 5 is the driver's own and goes when the driver does. Keep everything else:
-accounts, keyrings, keys, pools, buckets, and both terraform state directories.
+accounts, keyrings, keys, pools, buckets, and all three terraform state
+directories.
 
 ## What will probably go wrong
 

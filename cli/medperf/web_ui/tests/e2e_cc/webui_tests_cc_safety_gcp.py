@@ -87,23 +87,19 @@ SCRIPT = ContainerInput(
     config=os.path.join(SAFETY, "container_config.yaml"),
 )
 
-# Both are served by the shell script from this machine. The reference model
-# has to be a URL: it runs on the local medium during association, and a
+# Served by the shell script. The reference model has to be a URL: a
 # local-path asset is what makes an asset require CC.
 MODEL_URL = os.environ.get("SAFETY_MODEL_URL", "")
 DEMO_URL = os.environ.get("SAFETY_DEMO_URL", "")
 
-# `mock` smoke tests everything this script does except the cloud: three web
-# UIs, three sets of credentials, the party switch, the operator/collector
-# split. It proves nothing about GCP.
+# `mock` smoke tests everything but the cloud, and proves nothing about GCP.
 CC_BACKEND = os.environ.get("MPCC_BACKEND", "gcp")
 
 # Both owners release results to the data owner -- and only to them. Naming two
 # would be refused: results are encrypted for one key.
 COLLECTORS = ["data_owner"]
 
-# The model owner operates. The data owner collects. Neither can do the other's
-# half, and that is what this run exists to show.
+# The model owner operates, the data owner collects.
 OPERATOR = MODEL
 COLLECTOR = DATA
 

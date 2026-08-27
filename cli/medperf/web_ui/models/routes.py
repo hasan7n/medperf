@@ -92,9 +92,6 @@ def datasets_to_run(
         for dataset in datasets:
             dataset.cc_run_status = cc_run_status(model, dataset, operator)
             # Whether a run of this pair would seal its results for this user.
-            # A run they operated themselves has usually already left them the
-            # results inline; this is the other case, and the one where the
-            # inline collection was interrupted.
             dataset.cc_can_collect = benchmark is not None and collects_results(
                 operator.id, benchmark, dataset, model
             )
@@ -200,9 +197,7 @@ def model_detail_ui(
     cc_initialized = model.is_cc_initialized()
     cc_last_synced = model.get_last_synced()
 
-    # Only a model that runs inside a confidential VM gives its owner anything
-    # to run: the datasets belong to other people, and any other kind of model
-    # is theirs alone to run.
+    # Only a confidential model gives its owner somebody else's dataset to run.
     model._requires_cc = model.requires_cc()
     approved_benchmarks = [
         benchmark_uid

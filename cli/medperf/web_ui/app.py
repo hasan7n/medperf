@@ -91,10 +91,8 @@ def startup_event():
     # List of [schemas.Notification] will appear in the notifications tab
     web_app.state.notifications = []
 
-    # Refreshed by check_user_ui on every authenticated page. Pages that do not
-    # go through it -- the security check, the error page -- render base.html
-    # all the same, and an undefined value there is a 500 instead of the form
-    # telling the user how to get in.
+    # check_user_ui refreshes this; the security check and the error page do
+    # not go through it and render base.html anyway.
     web_app.state.global_events = []
 
     # Container auto grant access initial values
