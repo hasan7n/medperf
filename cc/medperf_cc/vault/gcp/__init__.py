@@ -139,7 +139,9 @@ class GCPVault(AssetVault):
         stable_image = (
             "'STABLE' in assertion.submods.confidential_space.support_attributes"
         )
-        # NOTE: currently it seems that gpu mode is not stable
+        # The cGPU images do not report STABLE yet. Whatever this grants a key
+        # to, `AttestationRequirements.__is_hardened` has to accept a proof
+        # from, or a released key produces results nobody can verify.
         condition += f" && ({gpu_mode} || {stable_image})"
 
         if self.policy.location:

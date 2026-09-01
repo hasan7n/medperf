@@ -23,6 +23,7 @@ GOOGLE_PKI_ROOT_URL = (
 
 CONFIDENTIAL_SPACE_SWNAME = "CONFIDENTIAL_SPACE"
 STABLE_SUPPORT_ATTRIBUTE = "STABLE"
+GPU_CC_MODE_ON = "ON"
 
 
 class TokenType(Enum):
@@ -122,6 +123,11 @@ class AttestationToken:
     @property
     def support_attributes(self) -> List[str]:
         return self.claim("submods.confidential_space.support_attributes", []) or []
+
+    @property
+    def gpu_cc_mode(self) -> Optional[str]:
+        """Whether the GPU ran with its own confidential mode on."""
+        return self.claim("submods.nvidia_gpu.cc_mode")
 
     @property
     def is_debug(self) -> bool:

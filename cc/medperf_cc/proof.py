@@ -79,9 +79,11 @@ class IntegrityProof:
 class ProofExpectations:
     """What the results are supposed to be, according to the caller's records.
 
-    Every field is optional so that a proof can be inspected on its own, but a
-    verification that checks nothing is not a verification: supply what you
-    know. Taking any of these from the proof itself would establish nothing.
+    Taking any of these from the proof itself would establish nothing, so they
+    come from whoever is asking. All but `results_path` are required: a
+    verification missing one of them is refused rather than passed with fewer
+    checks, because "nothing to compare against" is not the same answer as
+    "matches".
     """
 
     script_image_hash: Optional[str] = None
@@ -94,11 +96,18 @@ class ProofExpectations:
     results_path: Optional[str] = None
 
 
+# Everything a verification has to compare the proof against. `results_path` is
+# not here: only whoever ran the workload keeps the output files, and the
+# metrics are checked either way.
+REQUIRED_EXPECTATIONS = ("script_image_hash", "data_hash", "model_hash", "results")
+
+
 @dataclass
 class ProofVerdict:
     verified: bool
     checks: List[str] = field(default_factory=list)
     failures: List[str] = field(default_factory=list)
+    skipped: List[str] = field(default_factory=list)
     token: Optional[AttestationToken] = None
 
     @property
@@ -147,6 +156,7 @@ def verify_proof(
     verdict.checks.append("Attestation token is genuine and signed by the issuer")
     verdict.checks.append("Statement is the one the workload committed to")
 
+    __check_completeness(expectations, verdict)
     __check_statement_version(proof.statement, verdict)
     __check_results(proof.statement, expectations, verdict)
     __check_script(token, expectations, verdict)
@@ -154,6 +164,25 @@ def verify_proof(
 
     verdict.verified = not verdict.failures
     return verdict
+
+
+def __check_completeness(expectations: ProofExpectations, verdict: ProofVerdict):
+    """Refuses a verification that would have nothing to compare against.
+
+    Every check below skips itself when its expectation is absent, so without
+    this a caller supplying none of them would collect no failures and be told
+    the results are backed by a valid proof -- on the strength of the token
+    agreeing with itself.
+    """
+    missing = [
+        name for name in REQUIRED_EXPECTATIONS if getattr(expectations, name) is None
+    ]
+    if missing:
+        verdict.failures.append(
+            "Nothing to check the proof against: no "
+            + ", ".join(name.replace("_", " ") for name in missing)
+            + " was supplied"
+        )
 
 
 def __check_statement_version(statement: dict, verdict: ProofVerdict):
@@ -188,7 +217,11 @@ def __check_results(
                 "Reported metrics are exactly the ones the workload computed"
             )
 
-    if expectations.results_path is not None:
+    if expectations.results_path is None:
+        verdict.skipped.append(
+            "Result files were not checked: no copy of them on this machine"
+        )
+    else:
         attested = statement.get("results_files_sha256")
         actual = results_files_hash(expectations.results_path)
         if actual != attested:

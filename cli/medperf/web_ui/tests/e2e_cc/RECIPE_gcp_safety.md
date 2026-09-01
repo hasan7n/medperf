@@ -267,12 +267,30 @@ set is twelve prompts and the model under test is small. Both measured on
 
 | | CPU, `c3-standard-8` | GPU, `a3-highgpu-1g` |
 | --- | --- | --- |
-| boot | 27 s | TBD |
-| pulling the workload image | 2 min 48 s | TBD |
-| the benchmark itself (`workload_execution_sec`) | 5 min 19 s | TBD |
-| the run step in the browser, click to result | 12 min 35 s | TBD |
+| boot (cloud-init "Up N seconds") | 27 s | 22 s |
+| pulling the workload image | 2 min 48 s | 1 min 55 s |
+| the benchmark itself (`workload_execution_sec`) | 5 min 19 s | 4 min 29 s |
+| the launcher's total, pull included | 8 min 15 s | 6 min 26 s |
+| the run step in the browser, click to result | 12 min 35 s | 11 min 13 s |
+| the whole test | 999 s | 919 s |
 
-TBD-COMMENTARY
+Boot and image pull come from the VM's own log: the `Up N seconds` on
+cloud-init's last line, and from there to the launcher's first
+`successfully refreshed attestation token`. Measure them the same way or the
+comparison means nothing.
+
+The H100 saves **50 seconds** on the benchmark and about 80 on the whole test,
+for roughly fifteen times the price per hour. That is the answer to "should
+this run on a GPU", and it is no.
+
+The reason is in the five minutes themselves: decrypting both assets, fetching
+~13 GB of Llama Guard weights over the network, and encrypting the results back
+are the same work on either machine, and only the answering and the grading get
+faster. Twelve prompts is far too few for that to pay.
+
+It is still worth having the stack. Grading is the part that scales with the
+prompt count and the part the H100 actually accelerates; a real AILuminate set
+is thousands of prompts, not twelve. Expect the gap to widen with the set.
 
 Sapphire Rapids does the CPU grading in about three minutes; an older CPU is
 much slower — the same workload took 33 minutes under `MPCC_BACKEND=mock` on an
@@ -462,6 +480,11 @@ medperf result verify -e <execution id>
 Report what it says either way. A pass is the first real evidence the integrity
 proof works; a failure is a finding worth more than the run itself.
 
+**On CPU this passes (7 checks). On GPU it fails**, on the STABLE-image check,
+for the reason set out at the end of this recipe. That failure is expected as
+of 2026-08-27 and is a product gap, not a broken run — but do not report a GPU
+run as clean until it is resolved.
+
 If the collection step in the browser said the execution left no results, the
 workload failed — go to the serial console of the VM you ran on, not to this
 command.
@@ -495,9 +518,10 @@ directories.
 
 ## What will probably go wrong
 
-The first full run of this recipe, on 2026-08-27, passed 32 steps in 999 s with
-one product fix (`Authority.fetch_pki_root`, below). These are still the places
-to look.
+The first full run of this recipe, on 2026-08-27, passed 32 steps in 999 s on
+CPU with one product fix (`Authority.fetch_pki_root`, below). The first GPU run,
+the same day, passed 32 steps in 919 s but **fails `result verify`** — see the
+GPU rows below, which are the ones to read before planning a GPU run.
 
 | what | where to look |
 | --- | --- |
@@ -508,3 +532,58 @@ to look.
 | compatibility tests ran anyway | Skip was not selected at benchmark registration; it cannot be set afterwards, so re-register |
 | `terraform apply` tries to create `mpcc-e2e-workload` | `create_service_account` is still `true` |
 | results collected but empty | the workload wrote a result file with no metrics — read the serial console before believing the numbers |
+
+Three of these are GPU-only, and all three are real. None is quota.
+
+**`result verify` fails on a GPU run with "Token does not report a STABLE
+Confidential Space image".** Not a flake, and not something to work around. The
+GPU image family is `confidential-space-preview-cgpu`, and its attestation token
+carries `support_attributes: [EXPERIMENTAL]` where the CPU image carries
+`[LATEST STABLE USABLE]`. The two halves of the product disagree about whether
+that is acceptable:
+
+- the key release policy already exempts it — `Vault.__install_attribute_mapping`
+  builds `swname == "CONFIDENTIAL_SPACE" && (nvidia_gpu.cc_mode == "ON" || 'STABLE' in support_attributes)`,
+  with a comment saying GPU mode is not stable yet. That is why the run works
+  at all: the token's `nvidia_gpu.cc_mode` is `ON`, so KMS releases the key.
+- `AttestationVerifier` has no such branch. `require_stable_image` defaults to
+  `True` and no caller overrides it, so it rejects the very run the key policy
+  deliberately allowed.
+
+The run's attestation is sound — confidential mode was genuinely on. The gap is
+that the verifier was never taught the exemption the key policy already makes.
+**Do not "fix" this by relaxing `require_stable_image`**; that is a security
+check, and which of the two halves is right is a product decision. Report it.
+
+**`terraform apply` of the GPU stack fails with "Error changing instance status
+after creation: VM has a Local SSD attached but an undefined value for
+`discard-local-ssd`".** `a3-highgpu-1g` attaches local SSDs the config never
+declares, and the provider's own post-create stop — the stack sets
+`desired_status = "TERMINATED"` so the VM does not bill until MedPerf starts it
+— does not pass that flag. The `scheduling.on_instance_stop_action` block does
+not cover the provider's stop.
+
+The VM *is* created, and left **running and tainted**. Stop it by hand at once,
+then untaint rather than re-applying, or terraform will destroy and recreate a
+running H100 and fail the same way again:
+
+```bash
+gcloud compute instances stop $MPCC_VM_NAME --zone=$MPCC_VM_ZONE --discard-local-ssd=false --quiet
+( cd $WORK/terraform/safety_operator_gpu && terraform untaint 'google_compute_instance.this[0]' )
+```
+
+**Every later plan then wants to replace the instance anyway**, for two reasons
+that both need fixing in the stack's `main.tf` before the remaining resources
+will apply:
+
+- `scratch_disk` — those same undeclared local SSDs read back on refresh. Add
+  `scratch_disk` to the instance's `lifecycle { ignore_changes = [...] }`.
+- `image` — `local.image` is a family alias, which never equals the concrete
+  image the API reports back. Pin it to the resolved image.
+
+With both done, the plan is the one binding the failed apply never reached:
+`google_compute_instance_iam_member.instance_admin`, which is what lets the
+model owner start the VM. Do not skip it — without it the run cannot operate.
+
+MedPerf itself only ever *starts* the VM (the guest shuts itself down), so none
+of this affects the run once the stack is applied.

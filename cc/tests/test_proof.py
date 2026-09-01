@@ -208,6 +208,31 @@ def test_a_proof_can_be_checked_without_the_result_files(authority, results):
     assert verdict.verified, verdict.failures
     assert not any("Result files" in check for check in verdict.checks)
     assert any("Reported metrics" in check for check in verdict.checks)
+    assert any("Result files were not checked" in s for s in verdict.skipped)
+
+
+def test_a_verification_with_nothing_to_compare_against_is_refused(authority, results):
+    """The fail-open case: every check skips itself when its expectation is
+    absent, so without a completeness check this collected no failures and
+    reported the results as backed by a valid proof."""
+    proof = proof_for(authority, statement(results))
+
+    verdict = verify_proof(proof, ProofExpectations())
+
+    assert not verdict.verified
+    assert any("Nothing to check the proof against" in f for f in verdict.failures)
+
+
+@pytest.mark.parametrize(
+    "missing", ["script_image_hash", "data_hash", "model_hash", "results"]
+)
+def test_a_single_missing_expectation_is_refused(authority, results, missing):
+    proof = proof_for(authority, statement(results))
+
+    verdict = verify_proof(proof, expectations(results, **{missing: None}))
+
+    assert not verdict.verified
+    assert any(missing.replace("_", " ") in f for f in verdict.failures)
 
 
 def test_a_reported_metric_that_was_edited_is_caught(authority, results):

@@ -14,6 +14,7 @@ from medperf_cc.attestation import jws
 from medperf_cc.attestation.token import (
     CONFIDENTIAL_SPACE_SWNAME,
     GOOGLE_ISSUER,
+    GPU_CC_MODE_ON,
     STABLE_SUPPORT_ATTRIBUTE,
     AttestationToken,
     TokenType,
@@ -90,7 +91,7 @@ class AttestationRequirements:
         default_factory=lambda: [TokenType.PKI, TokenType.OIDC]
     )
     require_confidential_space: bool = True
-    require_stable_image: bool = True
+    require_hardened_image: bool = True
     allow_debug: bool = False
     zone: Optional[str] = None
     hardware_model: Optional[str] = None
@@ -124,6 +125,19 @@ class AttestationRequirements:
         if self.nonce is not None and self.nonce not in token.nonces:
             raise AttestationError("Token does not carry the expected nonce")
 
+    @staticmethod
+    def __is_hardened(token: AttestationToken) -> bool:
+        """A production image, or a GPU vouching for itself.
+
+        The same disjunction the GCP vault installs on its pool provider: the
+        cGPU images do not report STABLE yet, so requiring it here would refuse
+        every proof of a run whose key that vault released.
+        """
+        return (
+            STABLE_SUPPORT_ATTRIBUTE in token.support_attributes
+            or token.gpu_cc_mode == GPU_CC_MODE_ON
+        )
+
     def __check_environment(self, token: AttestationToken):
         """What the workload must have been running in."""
         if (
@@ -135,12 +149,10 @@ class AttestationRequirements:
                 " not run in Confidential Space"
             )
 
-        if (
-            self.require_stable_image
-            and STABLE_SUPPORT_ATTRIBUTE not in token.support_attributes
-        ):
+        if self.require_hardened_image and not self.__is_hardened(token):
             raise AttestationError(
-                "Token does not report a STABLE Confidential Space image"
+                "Token reports neither a STABLE Confidential Space image nor a"
+                " GPU in confidential mode"
             )
 
         if not self.allow_debug and token.is_debug:

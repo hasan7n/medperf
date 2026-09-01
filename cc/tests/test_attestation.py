@@ -138,6 +138,29 @@ def test_a_non_stable_image_is_refused(authority, anchor):
         verify_token(raw, anchor, AttestationRequirements())
 
 
+def test_a_non_stable_image_with_a_confidential_gpu_is_accepted(authority, anchor):
+    """What the GCP vault releases a key to, this has to accept a proof from.
+
+    The cGPU images report LATEST but not STABLE, so refusing them here would
+    refuse every proof of a GPU run whose key that vault released."""
+    claims = confidential_space_claims()
+    claims["submods"]["confidential_space"]["support_attributes"] = ["LATEST"]
+    claims["submods"]["nvidia_gpu"] = {"cc_mode": "ON"}
+    raw = authority.mint(claims)
+
+    verify_token(raw, anchor, AttestationRequirements())
+
+
+def test_a_non_stable_image_with_the_gpu_mode_off_is_refused(authority, anchor):
+    claims = confidential_space_claims()
+    claims["submods"]["confidential_space"]["support_attributes"] = ["LATEST"]
+    claims["submods"]["nvidia_gpu"] = {"cc_mode": "OFF"}
+    raw = authority.mint(claims)
+
+    with pytest.raises(AttestationError, match="STABLE"):
+        verify_token(raw, anchor, AttestationRequirements())
+
+
 def test_a_nonce_the_token_carries_is_accepted(authority, anchor):
     raw = authority.mint(confidential_space_claims(eat_nonce=["first", "second"]))
 
