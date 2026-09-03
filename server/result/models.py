@@ -25,9 +25,6 @@ class ModelResult(models.Model):
     )
     is_valid = models.BooleanField(default=True)
     model_report = models.JSONField(default=dict, blank=True, null=True)
-    # What a confidential workload attested about these results. A dedicated
-    # field rather than a corner of `metadata`, so an execution without one is
-    # visibly unverified rather than quietly indistinguishable.
     integrity_proof = models.JSONField(default=dict, blank=True, null=True)
     evaluation_report = models.JSONField(default=dict, blank=True, null=True)
     finalized_at = models.DateTimeField(null=True, blank=True)

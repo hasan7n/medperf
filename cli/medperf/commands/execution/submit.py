@@ -111,8 +111,6 @@ class ResultSubmission:
             "metadata": {**self.execution.metadata, "partial": self.partial},
         }
         if self.integrity_proof:
-            # Goes up with the results it is about. Without it the server holds
-            # a number nobody but its collector could ever check.
             body["integrity_proof"] = self.integrity_proof
         config.comms.update_execution(uid, body)
 

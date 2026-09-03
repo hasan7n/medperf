@@ -3,8 +3,6 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-# The asset_url of an asset there is nowhere to fetch from, because it is not
-# public. Whoever needs it has to be given it by its owner.
 LOCAL_ASSET_URL = "local"
 
 
